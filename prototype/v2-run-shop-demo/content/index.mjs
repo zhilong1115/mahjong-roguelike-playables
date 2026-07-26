@@ -1,0 +1,8 @@
+export {
+  DEMO_CONFIG,
+  FORTUNE_GENERALS,
+  ROUND_DEFINITIONS,
+  SCORING_CONFIG,
+  SHOP_ITEMS,
+  TEMPORARY_CHARMS,
+} from './demo-content.mjs';

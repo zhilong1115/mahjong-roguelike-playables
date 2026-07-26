@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#102b25">
+  <title>十四福将 · 门清与开运试作</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="ambient-texture" aria-hidden="true"></div>
+
+  <div id="app">
+    <main class="game-main">
+      <header class="fortune-shelf arcade-panel">
+        <div class="brand-lockup" aria-label="十四福将，门清与开运试作">
+          <span class="brand-seal" aria-hidden="true">福</span>
+          <span class="brand-copy">
+            <strong>十四福将</strong>
+            <small>LUCKY FOURTEEN · V2 试作</small>
+          </span>
+        </div>
+
+        <section class="card-rail" aria-label="整局福将">
+          <span class="rail-label">福将<small>整局</small></span>
+          <div class="mini-card-slots" id="guardian-slots"></div>
+        </section>
+
+        <section class="card-rail charm-rail" aria-label="本副灵签">
+          <span class="rail-label">灵签<small>本副</small></span>
+          <div class="mini-card-slots" id="charm-slots"></div>
+        </section>
+
+        <div class="compact-hud" aria-label="紧凑状态">
+          <span><small>副</small><b id="compact-hand">1/3</b></span>
+          <span><small>分</small><b id="compact-score">0</b></span>
+          <span><small>金</small><b id="compact-coins">2</b></span>
+        </div>
+      </header>
+
+      <section class="table-frame" aria-label="麻将牌桌">
+        <div class="felt-table">
+          <div class="felt-watermark" aria-hidden="true">
+            <span>拾肆</span>
+            <small>LUCKY FOURTEEN</small>
+          </div>
+
+          <section class="reveal-rack" aria-labelledby="reveal-heading">
+            <div class="rack-heading">
+              <span><b id="reveal-heading">亮牌区</b> · 确认后本副不撤回</span>
+              <span id="reveal-counter">0 / 2</span>
+            </div>
+            <div class="revealed-groups" id="revealed-groups"></div>
+          </section>
+
+          <div class="table-message" aria-live="polite">
+            <strong id="event-title">先换一张，凑成完整胡牌</strong>
+            <span id="event-detail">牌型合法后，可以门清胡，也可以亮牌开运</span>
+          </div>
+
+          <section class="hand-section" aria-labelledby="hand-heading">
+            <div class="hand-heading">
+              <span><b id="hand-heading">手牌</b> · 点击选择</span>
+              <span id="hand-route">等待成牌</span>
+            </div>
+            <div class="hand-zone" id="hand-zone"></div>
+          </section>
+
+          <footer class="action-console">
+            <div class="selection-readout" aria-live="polite">
+              <strong id="selection-title">请选择麻将牌</strong>
+              <span id="selection-detail">1 张换牌，2–4 张亮出有效组合</span>
+            </div>
+            <div class="action-buttons">
+              <button class="arcade-button button-slate" id="clear-button" type="button" disabled>取消</button>
+              <button class="arcade-button button-blue" id="action-button" type="button" disabled>选择牌</button>
+              <button class="arcade-button button-gold" id="hu-button" type="button" disabled>胡！</button>
+            </div>
+          </footer>
+        </div>
+      </section>
+    </main>
+
+    <aside class="hud-cabinet" aria-label="本轮状态">
+      <section class="arcade-panel round-panel">
+        <div class="round-chip" id="round-chip">壹</div>
+        <div class="round-copy">
+          <span class="eyebrow">福局 ROUND</span>
+          <strong id="round-name">第一轮 · 试手</strong>
+          <small id="hand-progress-label">第 1 副 / 共 3 副</small>
+        </div>
+        <div class="hand-pips" id="hand-pips" aria-label="三副牌进度"></div>
+      </section>
+
+      <section class="arcade-panel target-panel">
+        <span class="eyebrow">累计目标 SCORE AT LEAST</span>
+        <div class="target-number"><b id="round-score">0</b><i>/</i><strong id="round-target">1100</strong></div>
+        <div class="pixel-meter"><span id="score-meter"></span></div>
+        <small id="target-hint">三副牌全部胡牌后结算</small>
+      </section>
+
+      <section class="arcade-panel score-panel">
+        <span class="eyebrow">本副预计 HU PREVIEW</span>
+        <strong id="hu-name">尚未成牌</strong>
+        <div class="score-equation">
+          <span class="score-box"><small>牌值</small><b id="base-score">0</b></span>
+          <i>×</i>
+          <span class="mult-box"><small>番势</small><b id="score-mult">1</b></span>
+          <i>=</i>
+          <span class="total-box"><small>本副</small><b id="hand-score">0</b></span>
+        </div>
+      </section>
+
+      <section class="arcade-panel resource-panel">
+        <div class="resource-grid">
+          <span><b id="actions-left">5</b><small>行动</small></span>
+          <span><b id="reveals-left">2</b><small>可亮</small></span>
+          <span class="coin-stat"><b id="coin-total">2</b><small>金币</small></span>
+        </div>
+        <div class="route-badge is-clean" id="route-badge">
+          <span class="route-icon">藏</span>
+          <span><b>门清路线</b><small>现在胡：待得 3 金币</small></span>
+        </div>
+      </section>
+
+      <section class="arcade-panel coach-panel">
+        <span class="eyebrow">牌桌提示</span>
+        <p id="coach-copy">先换掉孤张。成牌后，一组不亮直接胡，可以拿到 3 枚金币。</p>
+      </section>
+
+      <div class="cabinet-actions">
+        <button class="arcade-button button-slate button-small" id="help-button" type="button">玩法</button>
+        <button class="arcade-button button-slate button-small" id="restart-button" type="button">重开</button>
+      </div>
+    </aside>
+  </div>
+
+  <div class="toast-stack" id="toast-stack" aria-live="assertive" aria-atomic="true"></div>
+
+  <dialog class="game-dialog" id="hand-result-dialog">
+    <div class="dialog-shell result-shell">
+      <div class="hu-seal" aria-hidden="true">胡</div>
+      <span class="eyebrow">本副结算</span>
+      <h2 id="result-hand-name">屁胡</h2>
+      <div class="result-score" id="result-score">0</div>
+      <div class="result-breakdown" id="result-breakdown"></div>
+      <div class="reward-strip">
+        <span><small>路线</small><b id="result-route">门清</b></span>
+        <span><small>待结算金币</small><b id="result-coins">+3</b></span>
+        <span><small>轮内累计</small><b id="result-round-score">0</b></span>
+      </div>
+      <button class="arcade-button button-blue" id="next-hand-button" type="button">下一副 2/3</button>
+    </div>
+  </dialog>
+
+  <dialog class="game-dialog" id="shop-dialog">
+    <div class="dialog-shell shop-shell">
+      <header class="shop-header">
+        <div>
+          <span class="eyebrow">三副过关 · SHOP</span>
+          <h2>百宝阁</h2>
+          <p>选一位福将，整局持续生效</p>
+        </div>
+        <div class="shop-wallet"><small>现有金币</small><b id="shop-coins">0</b></div>
+      </header>
+      <section class="owned-shelf">
+        <span class="eyebrow">随行福将</span>
+        <div id="shop-owned"></div>
+      </section>
+      <section class="shop-grid" id="shop-grid" aria-label="福将商品"></section>
+      <footer class="shop-footer">
+        <span id="shop-message">点击卡牌购买；本 Demo 不刷新、不出售</span>
+        <button class="arcade-button button-gold" id="leave-shop-button" type="button" disabled>进入第二轮</button>
+      </footer>
+    </div>
+  </dialog>
+
+  <dialog class="game-dialog" id="round-fail-dialog">
+    <div class="dialog-shell fail-shell">
+      <div class="fail-mark" aria-hidden="true">散</div>
+      <h2>本轮未过</h2>
+      <p id="fail-copy">行动耗尽或累计分不足，本轮待结算金币已经作废。</p>
+      <button class="arcade-button button-red" id="retry-round-button" type="button">重试本轮</button>
+    </div>
+  </dialog>
+
+  <dialog class="game-dialog" id="run-summary-dialog">
+    <div class="dialog-shell summary-shell">
+      <div class="hu-seal" aria-hidden="true">成</div>
+      <span class="eyebrow">V2 试玩完成</span>
+      <h2>门清还是开运？</h2>
+      <div class="summary-stats" id="summary-stats"></div>
+      <p>请记住你最想选的路线，以及哪一次灵签或福将触发最有感觉。</p>
+      <button class="arcade-button button-blue" id="replay-run-button" type="button">重新试玩</button>
+    </div>
+  </dialog>
+
+  <dialog class="game-dialog" id="help-dialog">
+    <div class="dialog-shell help-shell">
+      <span class="eyebrow">玩法说明</span>
+      <h2>门清拿钱 · 亮牌开运</h2>
+      <ol>
+        <li><b>选 1 张：</b>换掉并从牌墙摸一张，消耗一次行动。</li>
+        <li><b>选 2–4 张：</b>亮出对子、顺子、刻子或杠，抽一张本副灵签。</li>
+        <li><b>牌型合法：</b>可以随时胡；未亮组合会在结算时自动计算基础分。</li>
+        <li><b>完全门清：</b>胡牌获得 3 金币；亮一组得 1 金，亮两组不再得金。</li>
+        <li><b>三副之后：</b>金币在百宝阁购买整局生效的福将。</li>
+      </ol>
+      <p>本切片支持普通胡、七对、碰碰胡、清一色、一条龙、大三元与大四喜。</p>
+      <button class="arcade-button button-blue" id="close-help-button" type="button">知道了</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="./ui/app.mjs"></script>
+</body>
+</html>

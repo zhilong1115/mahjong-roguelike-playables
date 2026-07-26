@@ -1,0 +1,2524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>麻将小丑牌 MAHJONGTRO</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=Noto+Sans+SC:wght@700;900&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   麻将小丑牌 — 样式 (小丑牌 Balatro 风格)
+   ========================================================= */
+:root{
+  --bg1:#1d3a33; --bg2:#123028;
+  --panel:#33404f; --panel2:#2a3542; --panel3:#404e5e;
+  --edge:#151d26;
+  --chip:#0e93e8; --chipL:#59c4ff;
+  --mult:#fe5f55; --multL:#ff8b83;
+  --gold:#f0c04a; --goldD:#c99527;
+  --txt:#f2efe4; --dim:#9daab8;
+  --red:#e0453a; --green:#3fae74; --blue:#4a90d9; --purple:#a06bd6;
+  --tile-w:62px; --tile-h:84px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{
+  background:
+    radial-gradient(circle at 50% 40%, #2b5648 0%, var(--bg1) 45%, var(--bg2) 100%);
+  font-family:'Silkscreen','Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+  color:var(--txt);
+  overflow:hidden;
+  user-select:none;
+  -webkit-font-smoothing:none;
+  image-rendering:pixelated;
+}
+body::before{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,.10) 0px, rgba(0,0,0,.10) 1px, transparent 1px, transparent 3px);
+  opacity:.5;
+}
+body::after{
+  content:'';position:fixed;inset:0;pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%);
+}
+canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
+
+/* ---------- 布局 ---------- */
+#app{position:relative;z-index:2;display:flex;height:100vh;width:100vw;padding:8px;gap:8px;}
+#side{width:246px;flex:0 0 246px;display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden;}
+#main{flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;}
+
+.panel{
+  background:var(--panel);border:3px solid var(--edge);border-radius:8px;
+  box-shadow:0 4px 0 rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.07);
+  padding:8px;
+}
+.panel.dark{background:var(--panel2);}
+.panel.deep{background:#212a34;}
+
+.lbl{font-size:10px;letter-spacing:.5px;color:var(--dim);text-transform:uppercase;}
+.cn{font-family:'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif;font-weight:800;}
+.sh{text-shadow:2px 2px 0 rgba(0,0,0,.6);}
+
+/* ---------- 盲注信息 ---------- */
+#blindInfo{display:flex;gap:8px;align-items:center;}
+#blindChip{
+  width:64px;height:64px;flex:0 0 64px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+  border:3px solid var(--edge);box-shadow:inset 0 -4px 0 rgba(0,0,0,.3);
+  font-size:26px;font-weight:900;font-family:'Noto Sans SC',sans-serif;color:#fff;text-shadow:2px 2px 0 rgba(0,0,0,.5);
+}
+#blindMeta{flex:1;min-width:0;}
+#blindName{font-size:15px;font-weight:900;line-height:1.15;}
+#blindNameEn{font-size:9px;color:var(--dim);}
+#blindDesc{font-size:10px;color:#ffd7a0;line-height:1.3;margin-top:3px;}
+#targetBox{margin-top:6px;background:#1b232c;border-radius:6px;padding:5px 8px;border:2px solid #10161d;}
+#targetVal{min-height:26px;display:flex;align-items:center;}
+#rewardVal{color:var(--gold);font-size:11px;font-weight:900;}
+
+/* ---------- 分数 ---------- */
+#roundScoreBox{display:flex;align-items:center;gap:8px;}
+#roundScoreBox .lbl{writing-mode:vertical-rl;text-orientation:upright;font-size:9px;letter-spacing:2px;}
+#roundScore{
+  flex:1;min-width:0;background:#151d26;border-radius:6px;padding:7px 6px;text-align:center;
+  border:2px solid #0c1218;display:flex;align-items:center;justify-content:center;min-height:42px;
+}
+
+/* ---------- 计分显示 ---------- */
+#scoreArea{background:var(--panel2);}
+#handName{text-align:center;font-size:16px;font-weight:900;min-height:20px;}
+#handNameEn{text-align:center;font-size:9px;color:var(--dim);min-height:11px;margin-bottom:4px;}
+#handLevel{display:inline-block;background:#5b4a8a;color:#e6d9ff;font-size:9px;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle;}
+#calcRow{display:flex;align-items:stretch;gap:4px;margin-top:2px;}
+.calcBox{
+  flex:1;min-width:0;border-radius:6px;padding:7px 3px;text-align:center;
+  border:2px solid rgba(0,0,0,.45);overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:38px;
+}
+#chipsBox{background:var(--chip);}
+#multBox{background:var(--mult);}
+#xSign{align-self:center;font-size:18px;font-weight:900;color:#e7e0cf;}
+.pulse{animation:pulse .28s ease-out;}
+@keyframes pulse{0%{transform:scale(1);}40%{transform:scale(1.16);}100%{transform:scale(1);}}
+
+/* ---------- 状态栏 ---------- */
+#statRow{display:flex;gap:6px;}
+.stat{flex:1;background:#1b232c;border:2px solid #10161d;border-radius:6px;text-align:center;padding:4px 2px;}
+.stat .v{min-height:24px;display:flex;align-items:center;justify-content:center;}
+.stat .n{font-size:8px;color:var(--dim);}
+#handsV{color:var(--chipL);} #discV{color:var(--red);}
+#moneyBox{background:#2b2416;border-color:#171208;}
+#moneyV{}
+#anteRow{display:flex;gap:6px;}
+
+/* ---------- 福神 / 消耗 ---------- */
+#topRow{display:flex;gap:6px;}
+#jokerBar,#consBar{
+  display:flex;gap:5px;align-items:center;min-height:96px;padding:6px;
+  background:rgba(0,0,0,.22);border:3px solid var(--edge);border-radius:8px;
+}
+#jokerBar{flex:1;}
+#consBar{flex:0 0 auto;}
+.slotCount{font-size:9px;color:var(--dim);position:absolute;right:6px;bottom:2px;}
+.barWrap{position:relative;}
+
+.jcard{
+  width:64px;height:88px;border-radius:7px;border:3px solid var(--edge);
+  background:linear-gradient(180deg,#4a5a6b,#3a4653);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+  padding:4px 2px;cursor:pointer;position:relative;flex:0 0 auto;
+  box-shadow:0 3px 0 rgba(0,0,0,.4);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.jcard:hover{transform:translateY(-8px) rotate(-2deg);box-shadow:0 9px 0 rgba(0,0,0,.4);z-index:20;}
+.jcard .icon{margin-top:2px;}
+.jcard .jn{font-size:8px;text-align:center;line-height:1.1;margin-top:3px;font-weight:800;
+  font-family:'Noto Sans SC',sans-serif;padding:0 1px;}
+.jcard.r-common{background:linear-gradient(180deg,#4d6a8e,#38516d);}
+.jcard.r-uncommon{background:linear-gradient(180deg,#3f7d63,#2c5c48);}
+.jcard.r-rare{background:linear-gradient(180deg,#8e4b47,#6b3532);}
+.jcard.r-legendary{background:linear-gradient(180deg,#6d4b96,#4c3370);}
+.jcard.k-manual{background:linear-gradient(180deg,#6a5c8e,#4b406b);}
+.jcard.k-destiny{background:linear-gradient(180deg,#8a6a3e,#63492a);}
+.jcard.k-voucher{background:linear-gradient(180deg,#3f6f8e,#2c516b);}
+.jcard.k-pack{background:linear-gradient(180deg,#8a4a6d,#63314d);}
+.jcard.sel{outline:3px solid var(--gold);outline-offset:1px;transform:translateY(-8px);}
+.jcard .price, .bigCard .price{
+  position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+  background:var(--gold);color:#3a2c06;font-size:10px;font-weight:900;padding:0 5px;border-radius:4px;
+  border:2px solid #0f1319;
+}
+.jcard .dyn{font-size:7px;color:#ffe9a8;text-align:center;line-height:1.05;margin-top:2px;font-family:'Noto Sans SC',sans-serif;}
+.jcard.trig{animation:trig .35s ease;}
+@keyframes trig{0%{transform:translateY(0) scale(1);}35%{transform:translateY(-16px) scale(1.12);}100%{transform:translateY(0) scale(1);}}
+
+/* ---------- 出牌区 ---------- */
+#playArea{
+  flex:1;display:flex;align-items:center;justify-content:center;position:relative;min-height:0;
+  background:radial-gradient(ellipse at 50% 45%, rgba(90,175,140,.16) 0%, rgba(0,0,0,0) 62%);
+  border-radius:14px;
+}
+#playArea::before{
+  content:'';position:absolute;inset:6px;border:3px dashed rgba(255,255,255,.06);border-radius:14px;pointer-events:none;
+}
+#playedZone{display:flex;gap:8px;align-items:flex-end;justify-content:center;min-height:138px;flex-wrap:wrap;position:relative;z-index:2;}
+#tableMark{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  opacity:.10;pointer-events:none;z-index:1;gap:6px;}
+#tableMark .mk{font-family:'Noto Sans SC',sans-serif;font-weight:900;font-size:150px;line-height:1;color:#eafff4;}
+#tableMark .mk2{font-family:'Noto Sans SC',sans-serif;font-weight:900;font-size:20px;letter-spacing:8px;color:#eafff4;}
+#handZone{display:flex;justify-content:center;align-items:flex-end;gap:4px;padding:10px 4px 6px;flex-wrap:wrap;min-height:100px;}
+
+.tile{
+  position:relative;flex:0 0 auto;cursor:pointer;
+  transition:transform .13s cubic-bezier(.34,1.56,.64,1), filter .13s;
+  filter:drop-shadow(0 4px 0 rgba(0,0,0,.45));
+}
+.tile:hover{transform:translateY(-10px) scale(1.04);z-index:10;}
+.tile.sel{transform:translateY(-28px);}
+.tile.sel:hover{transform:translateY(-32px) scale(1.04);}
+.tile.debuff{filter:drop-shadow(0 4px 0 rgba(0,0,0,.45)) grayscale(.85) brightness(.7);}
+.tile.debuff::after{
+  content:'';position:absolute;inset:0;background:rgba(180,20,20,.28);border-radius:5px;pointer-events:none;
+}
+.tile .enhTag{
+  position:absolute;top:-7px;right:-5px;font-size:12px;font-weight:900;width:20px;height:20px;line-height:17px;
+  text-align:center;border-radius:5px;border:2px solid #0f1319;color:#171008;
+  font-family:'Noto Sans SC',sans-serif;box-shadow:0 2px 0 rgba(0,0,0,.5);
+}
+.tile.scoring{animation:score .38s ease;}
+@keyframes score{0%{transform:translateY(0);}40%{transform:translateY(-26px) scale(1.1);}100%{transform:translateY(0);}}
+
+.float{
+  position:absolute;font-size:15px;font-weight:900;pointer-events:none;z-index:50;white-space:nowrap;
+  text-shadow:2px 2px 0 rgba(0,0,0,.7);animation:floatUp .85s ease-out forwards;
+  font-family:'Noto Sans SC',sans-serif;
+}
+@keyframes floatUp{0%{opacity:0;transform:translateY(6px) scale(.7);}
+ 18%{opacity:1;transform:translateY(-6px) scale(1.15);}
+ 70%{opacity:1;transform:translateY(-24px) scale(1);}
+ 100%{opacity:0;transform:translateY(-40px) scale(.9);}}
+
+/* ---------- 按钮 ---------- */
+.btn{
+  font-family:inherit;font-weight:900;border:3px solid var(--edge);border-radius:8px;cursor:pointer;
+  color:#fff;text-shadow:2px 2px 0 rgba(0,0,0,.45);padding:8px 14px;font-size:14px;
+  box-shadow:0 4px 0 rgba(0,0,0,.45);transition:transform .08s, box-shadow .08s, filter .12s;
+}
+.btn:hover{filter:brightness(1.12);}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.45);}
+.btn:disabled{filter:grayscale(.7) brightness(.6);cursor:default;}
+.btn.play{background:var(--chip);} .btn.disc{background:var(--red);}
+.btn.gold{background:var(--goldD);} .btn.grey{background:#5a6775;}
+.btn.green{background:#2f9e63;} .btn.purple{background:#7b52b5;}
+.btn.sm{font-size:11px;padding:5px 9px;border-width:2px;}
+
+#actionRow{display:flex;align-items:center;justify-content:center;gap:10px;padding-bottom:6px;}
+#sortBtns{display:flex;flex-direction:column;gap:3px;}
+#deckInfo{position:absolute;right:10px;bottom:6px;text-align:center;font-size:10px;color:var(--dim);}
+#deckInfo b{color:var(--txt);font-size:14px;}
+
+/* ---------- 屏幕/弹窗 ---------- */
+.screen{
+  position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;flex-direction:column;
+  background:rgba(6,14,12,.82);gap:14px;padding:20px;
+}
+.screenBox{
+  background:var(--panel);border:4px solid var(--edge);border-radius:12px;padding:18px 22px;
+  box-shadow:0 8px 0 rgba(0,0,0,.5);max-width:min(920px,94vw);max-height:92vh;overflow:auto;
+}
+.title{font-size:30px;font-weight:900;text-align:center;text-shadow:3px 3px 0 rgba(0,0,0,.6);}
+.subtitle{font-size:12px;color:var(--dim);text-align:center;margin-bottom:10px;}
+
+/* 盲注选择 */
+#blindPick{display:flex;gap:14px;justify-content:center;align-items:stretch;flex-wrap:wrap;}
+.blindCard{
+  width:210px;background:var(--panel);border:4px solid var(--edge);border-radius:10px;padding:12px;
+  display:flex;flex-direction:column;align-items:center;gap:6px;box-shadow:0 6px 0 rgba(0,0,0,.45);
+  transition:transform .15s;
+}
+.blindCard.cur{transform:translateY(-10px);border-color:var(--gold);}
+.blindCard.done{filter:grayscale(.7) brightness(.62);}
+.blindCard .bigChip{width:76px;height:76px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+  font-size:34px;font-weight:900;border:3px solid var(--edge);font-family:'Noto Sans SC',sans-serif;
+  text-shadow:2px 2px 0 rgba(0,0,0,.5);}
+.blindCard h3{font-size:16px;}
+.blindCard .tgt{font-size:11px;color:var(--dim);}
+.blindCard .tgtv{font-size:22px;color:var(--red);font-weight:900;}
+.blindCard .rw{font-size:12px;color:var(--gold);}
+.blindCard .bd{font-size:10px;color:#ffd7a0;text-align:center;min-height:26px;line-height:1.3;}
+
+/* 商店 */
+#shopGrid{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
+.shopSlot{display:flex;flex-direction:column;align-items:center;gap:5px;}
+.shopSection{background:rgba(0,0,0,.25);border:3px solid var(--edge);border-radius:8px;padding:10px;}
+.bigCard{
+  width:104px;height:156px;border-radius:9px;border:3px solid var(--edge);
+  display:flex;flex-direction:column;align-items:center;padding:6px 4px;position:relative;cursor:pointer;
+  box-shadow:0 4px 0 rgba(0,0,0,.4);transition:transform .12s;
+}
+.bigCard:hover{transform:translateY(-6px);}
+.bigCard .bn{font-size:10px;max-height:26px;overflow:hidden;font-weight:900;text-align:center;margin-top:4px;font-family:'Noto Sans SC',sans-serif;line-height:1.15;}
+.bigCard .bd2{font-size:8px;text-align:center;color:#e4e0d2;line-height:1.25;margin-top:3px;font-family:'Noto Sans SC',sans-serif;
+  max-height:52px;overflow:hidden;padding:0 2px;}
+.bigCard .rar{position:absolute;bottom:2px;font-size:7px;color:#0006;background:#ffffff88;padding:0 4px;border-radius:3px;}
+
+/* 提示框 */
+#tip{
+  position:fixed;z-index:200;pointer-events:none;max-width:240px;background:#12181f;color:var(--txt);
+  border:3px solid #000;border-radius:8px;padding:7px 9px;font-size:11px;line-height:1.35;
+  box-shadow:0 5px 0 rgba(0,0,0,.5);display:none;font-family:'Noto Sans SC',sans-serif;
+}
+#tip .tn{font-size:13px;font-weight:900;margin-bottom:3px;}
+#tip .te{font-size:9px;color:var(--dim);margin-bottom:4px;}
+#tip .td{color:#ffe9a8;}
+#tip .td2{color:#9fd8ff;font-size:10px;margin-top:3px;}
+
+/* 番种表 */
+#miniHands{font-size:9px;width:100%;border-collapse:collapse;font-family:'Noto Sans SC',sans-serif;}
+#miniHands td{padding:0 3px;line-height:1.45;border-bottom:1px solid #ffffff10;white-space:nowrap;}
+#miniHands tr.act{background:#ffffff14;}
+#miniHands .c{color:var(--chipL);font-weight:900;text-align:right;}
+#miniHands .m{color:var(--multL);font-weight:900;text-align:right;}
+#miniHands .l{color:#c9a6ff;font-size:8px;}
+#handTable{width:100%;border-collapse:collapse;font-size:11px;}
+#handTable td{padding:3px 6px;border-bottom:1px solid #ffffff14;}
+#handTable .hc{color:var(--chipL);font-weight:900;}
+#handTable .hm{color:var(--multL);font-weight:900;}
+#handTable .lv{color:#c9a6ff;font-size:9px;}
+
+.rowBtns{display:flex;gap:10px;justify-content:center;margin-top:12px;flex-wrap:wrap;}
+.moneyLine{display:flex;justify-content:space-between;gap:20px;font-size:13px;padding:3px 0;}
+.moneyLine .m{color:var(--gold);font-weight:900;}
+.coin{display:inline-block;width:12px;height:12px;background:var(--gold);border:2px solid #7a5c10;border-radius:50%;vertical-align:-2px;}
+
+#toast{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:300;display:flex;flex-direction:column;gap:5px;align-items:center;pointer-events:none;}
+.toastItem{background:#12181f;border:3px solid #000;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:900;
+  box-shadow:0 4px 0 rgba(0,0,0,.5);animation:tin .3s ease, tout .3s ease 1.8s forwards;font-family:'Noto Sans SC',sans-serif;}
+@keyframes tin{from{opacity:0;transform:translateY(-14px);}to{opacity:1;transform:none;}}
+@keyframes tout{to{opacity:0;transform:translateY(-14px);}}
+
+.hint{font-size:10px;color:var(--dim);text-align:center;}
+.scrollY{overflow-y:auto;}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-track{background:#1a222b;}
+::-webkit-scrollbar-thumb{background:#4d5b6b;border:2px solid #1a222b;border-radius:4px;}
+
+@media (max-width:1180px){
+  #side{width:206px;flex:0 0 206px;}
+  #blindChip{width:52px;height:52px;flex:0 0 52px;font-size:22px;}
+  .jcard{width:58px;height:80px;}
+  #jokerBar,#consBar{min-height:88px;}
+}
+@media (max-height:820px){
+  .panel{padding:6px;}
+  #app{padding:6px;gap:6px;}
+  #side{gap:5px;}
+  #blindChip{width:52px;height:52px;flex:0 0 52px;font-size:22px;}
+  #jokerBar,#consBar{min-height:84px;}
+  .jcard{width:58px;height:78px;}
+  #playedZone{min-height:100px;}
+  #handZone{min-height:80px;padding:6px 4px 4px;}
+  #actionRow{padding-bottom:2px;}
+  .btn{padding:6px 12px;font-size:13px;}
+  #tableMark .mk{font-size:110px;}
+}
+@media (max-height:760px){
+  #miniHandsBox,#miniHandsLbl{display:none;}
+  #tableMark .mk{font-size:86px;}
+  #sideBtns{flex-direction:row;}
+  #sideBtns .btn{flex:1;font-size:9px;padding:5px 2px;}
+  #blindDesc{font-size:9px;}
+}
+#sidePanel{flex:1;display:flex;flex-direction:column;gap:5px;min-height:0;}
+#miniHandsBox{flex:1;min-height:0;}
+#sideBtns{display:flex;flex-direction:column;gap:5px;flex:0 0 auto;}
+
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <div class="panel" id="blindPanel">
+      <div id="blindInfo">
+        <div id="blindChip"></div>
+        <div id="blindMeta">
+          <div id="blindName" class="sh"></div>
+          <div id="blindNameEn"></div>
+          <div id="blindDesc" class="cn"></div>
+        </div>
+      </div>
+      <div id="targetBox">
+        <div class="lbl">目标分数 SCORE AT LEAST</div>
+        <div id="targetVal"></div>
+        <div id="rewardVal"></div>
+      </div>
+    </div>
+
+    <div class="panel dark">
+      <div id="roundScoreBox">
+        <div class="lbl">得分</div>
+        <div id="roundScore" class="sh">0</div>
+      </div>
+    </div>
+
+    <div class="panel" id="scoreArea">
+      <div id="handName" class="sh"></div>
+      <div id="handNameEn"></div>
+      <div id="calcRow">
+        <div class="calcBox" id="chipsBox">0</div>
+        <div id="xSign">×</div>
+        <div class="calcBox" id="multBox">0</div>
+      </div>
+    </div>
+
+    <div class="panel deep">
+      <div id="statRow">
+        <div class="stat"><div class="v" id="handsV">0</div><div class="n cn">出牌 HANDS</div></div>
+        <div class="stat"><div class="v" id="discV">0</div><div class="n cn">弃牌 DISCARDS</div></div>
+      </div>
+      <div id="anteRow" style="margin-top:6px">
+        <div class="stat" id="moneyBox"><div class="v" id="moneyV">$0</div><div class="n cn">资金 MONEY</div></div>
+        <div class="stat"><div class="v" id="anteV">1/8</div><div class="n cn">底注 ANTE</div></div>
+        <div class="stat"><div class="v" id="roundV">0</div><div class="n cn">回合 ROUND</div></div>
+      </div>
+    </div>
+
+    <div class="panel deep" id="sidePanel">
+      <div class="lbl cn" id="miniHandsLbl">番种 HAND TYPES</div>
+      <div id="miniHandsBox" class="scrollY"></div>
+      <div id="sideBtns">
+        <button class="btn grey sm" id="btnHands">番种表 HANDS</button>
+        <button class="btn grey sm" id="btnDeck">牌库 DECK</button>
+        <button class="btn grey sm" id="btnMenu">重新开始 RESTART</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="topRow">
+      <div class="barWrap" style="flex:1">
+        <div id="jokerBar"></div>
+        <span class="slotCount" id="jokerCount"></span>
+      </div>
+      <div class="barWrap">
+        <div id="consBar"></div>
+        <span class="slotCount" id="consCount"></span>
+      </div>
+    </div>
+
+    <div id="playArea">
+      <div id="tableMark"><div class="mk">麻</div><div class="mk2">MAHJONGTRO</div></div>
+      <div id="playedZone"></div>
+      <div id="deckInfo"></div>
+    </div>
+
+    <div id="handZone"></div>
+
+    <div id="actionRow">
+      <button class="btn play" id="playBtn">出牌 PLAY</button>
+      <div id="sortBtns">
+        <button class="btn grey sm" data-sort="rank">按点数</button>
+        <button class="btn grey sm" data-sort="suit">按花色</button>
+      </div>
+      <button class="btn disc" id="discBtn">弃牌 DISCARD</button>
+    </div>
+  </div>
+</div>
+
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+/* =========================================================
+   麻将小丑牌 MAHJONGTRO  —  数据表 DATA TABLES
+   ========================================================= */
+
+const SUITS = {
+  man:  { key:'man',   cn:'万', en:'Characters', color:'#1f4fa8' },
+  pin:  { key:'pin',   cn:'筒', en:'Dots',       color:'#1a7f4b' },
+  sou:  { key:'sou',   cn:'条', en:'Bamboo',     color:'#0f7d6d' },
+  honor:{ key:'honor', cn:'字', en:'Honors',     color:'#8a2b2b' }
+};
+
+const HONOR_NAMES = [
+  null,
+  { cn:'東', en:'East',  full:'东风' },
+  { cn:'南', en:'South', full:'南风' },
+  { cn:'西', en:'West',  full:'西风' },
+  { cn:'北', en:'North', full:'北风' },
+  { cn:'中', en:'Red',   full:'红中' },
+  { cn:'發', en:'Green', full:'发财' },
+  { cn:'白', en:'White', full:'白板' }
+];
+
+/* ---------- 牌面强化 Enhancements ---------- */
+const ENHANCE = {
+  none:   { key:'none',   cn:'普通',   en:'Normal' },
+  jade:   { key:'jade',   cn:'玉',     en:'Jade',    desc:'计分时 +40 筹码', descEn:'+40 Chips when scored', tint:'#4fd6a0' },
+  cinna:  { key:'cinna',  cn:'朱砂',   en:'Cinnabar',desc:'计分时 +5 倍率',  descEn:'+5 Mult when scored',  tint:'#ff6b5e' },
+  gold:   { key:'gold',   cn:'金',     en:'Gold',    desc:'计分时 +$4',      descEn:'+$4 when scored',      tint:'#f5c542' },
+  lucky:  { key:'lucky',  cn:'幸运',   en:'Lucky',   desc:'1/4 概率 +25 倍率，1/6 概率 +$5', descEn:'1 in 4 for +25 Mult, 1 in 6 for $5', tint:'#c58cff' },
+  stone:  { key:'stone',  cn:'石',     en:'Stone',   desc:'+60 筹码，无花色点数', descEn:'+60 Chips, no suit/rank', tint:'#9aa4b0' },
+  glass:  { key:'glass',  cn:'琉璃',   en:'Glass',   desc:'倍率 ×2，1/5 概率碎裂', descEn:'X2 Mult, 1 in 5 to shatter', tint:'#7fd4ff' }
+};
+
+/* ---------- 番种 Hand Types ----------
+   base: 基础筹码/倍率   lvlChips/lvlMult: 每级成长 */
+const HANDS = {
+  five:      { key:'five',      cn:'五同',    en:'Five of a Kind', chips:180, mult:18, lvlChips:80, lvlMult:12, order:12 },
+  flushHouse:{ key:'flushHouse',cn:'清刻将',  en:'Flush House',    chips:160, mult:15, lvlChips:70, lvlMult:10, order:11 },
+  pureRun:   { key:'pureRun',   cn:'清龙',    en:'Pure Straight',  chips:130, mult:10, lvlChips:60, lvlMult:8,  order:10 },
+  allHonor:  { key:'allHonor',  cn:'字一色',  en:'All Honors',     chips:100, mult:9,  lvlChips:55, lvlMult:7,  order:9  },
+  kong:      { key:'kong',      cn:'杠',      en:'Kong',           chips:90,  mult:8,  lvlChips:50, lvlMult:7,  order:8  },
+  fullHouse: { key:'fullHouse', cn:'刻将',    en:'Full House',     chips:60,  mult:5,  lvlChips:45, lvlMult:5,  order:7  },
+  flush:     { key:'flush',     cn:'清一色',  en:'Flush',          chips:55,  mult:5,  lvlChips:40, lvlMult:5,  order:6  },
+  pung:      { key:'pung',      cn:'刻子',    en:'Pung',           chips:45,  mult:4,  lvlChips:35, lvlMult:4,  order:5  },
+  chow:      { key:'chow',      cn:'顺子',    en:'Chow',           chips:40,  mult:4,  lvlChips:32, lvlMult:4,  order:4  },
+  twoPair:   { key:'twoPair',   cn:'两对',    en:'Two Pair',       chips:35,  mult:3,  lvlChips:28, lvlMult:3,  order:3  },
+  pair:      { key:'pair',      cn:'对子',    en:'Pair',           chips:20,  mult:2,  lvlChips:20, lvlMult:2,  order:2  },
+  high:      { key:'high',      cn:'单张',    en:'High Tile',      chips:15,  mult:2,  lvlChips:14, lvlMult:2,  order:1  }
+};
+const HAND_ORDER = Object.values(HANDS).sort((a,b)=>b.order-a.order).map(h=>h.key);
+
+/* ---------- 盲注 Blinds ---------- */
+const ANTE_BASE = [0, 240, 640, 1500, 3200, 6600, 12500, 21000, 33000];
+
+const BOSSES = [
+  { key:'blank',  cn:'白板',   en:'The Blank',    icon:'白', desc:'字牌不计分',            descEn:'Honor tiles score no chips', minAnte: 1 },
+  { key:'cut',    cn:'断幺',   en:'The Cutter',   icon:'断', desc:'1 与 9 不计分',          descEn:'1s and 9s score no chips',   minAnte: 2 },
+  { key:'lack',   cn:'缺一门', en:'The Void',     icon:'缺', desc:'随机一门花色被封锁',      descEn:'One random suit is debuffed', minAnte: 2 },
+  { key:'solo',   cn:'独钓',   en:'Lone Angler',  icon:'独', desc:'每次最多打出 3 张牌',     descEn:'Play at most 3 tiles',       minAnte: 2 },
+  { key:'miser',  cn:'铁公鸡', en:'The Miser',    icon:'铁', desc:'本关不获得金钱奖励',      descEn:'No money reward this blind',  minAnte: 1 },
+  { key:'hook',   cn:'钩子',   en:'The Hook',     icon:'钩', desc:'每次出牌后随机弃 2 张手牌', descEn:'Discards 2 random tiles per hand', minAnte: 3 },
+  { key:'gale',   cn:'疾风',   en:'The Gale',     icon:'风', desc:'出牌次数 -1',            descEn:'-1 Hand',                    minAnte: 3 },
+  { key:'mount',  cn:'大山',   en:'The Mountain', icon:'山', desc:'手牌上限 -3',            descEn:'-3 hand size',               minAnte: 4 },
+  { key:'eye',    cn:'天眼',   en:'The Eye',      icon:'眼', desc:'每种番种只能打出一次',    descEn:'Each hand type once only',    minAnte: 4 },
+  { key:'wall',   cn:'铜墙',   en:'The Wall',     icon:'墙', desc:'目标分数额外 ×1.6',      descEn:'Extra large blind (x1.6)',   minAnte: 5 },
+  { key:'fog',    cn:'迷雾',   en:'The Fog',      icon:'雾', desc:'手牌全部背面朝上直到选中', descEn:'Tiles are face down',        minAnte: 5 },
+  { key:'tax',    cn:'税吏',   en:'The Taxman',   icon:'税', desc:'开局失去一半金钱',        descEn:'Lose half your money',       minAnte: 6 },
+  { key:'slow',   cn:'慢手',   en:'Slow Hand',    icon:'慢', desc:'弃牌次数 -2',            descEn:'-2 Discards',                minAnte: 1 },
+  { key:'petty',  cn:'小气',   en:'Petty',        icon:'气', desc:'手牌上限 -2',            descEn:'-2 hand size',               minAnte: 1 }
+];
+
+/* ---------- 跳过标签 Skip Tags ---------- */
+const TAGS = [
+  { key:'gold',   cn:'金元宝',  en:'Gold Tag',    desc:'立即获得 $6',        descEn:'Gain $6' },
+  { key:'joker',  cn:'福星',    en:'Fortune Tag', desc:'立即获得 1 张福神牌', descEn:'Gain a random Fortune' },
+  { key:'manual', cn:'典籍',    en:'Manual Tag',  desc:'立即获得 1 本秘籍',   descEn:'Gain a random Manual' },
+  { key:'destiny',cn:'签筒',    en:'Destiny Tag', desc:'立即获得 1 张天命牌', descEn:'Gain a random Destiny' },
+  { key:'boost',  cn:'加注',    en:'Boost Tag',   desc:'下一关出牌次数 +1',   descEn:'+1 Hand next round' }
+];
+
+/* ---------- 福神牌 Fortunes (小丑牌) ----------
+   hooks:
+     onScoreTile(ctx, tile)   每张计分牌
+     onHandPlayed(ctx)        番种确定后，一次
+     onIndependent(ctx)       所有牌算完后
+     onDiscard(ctx)           弃牌时
+     onRoundEnd(ctx)          回合结束
+     onHeld(ctx, tile)        手牌中保留的牌
+*/
+const FORTUNES = [
+  // ---- 常见 Common ----
+  { key:'caishen', cn:'小财神', en:'Lil Fortune', rarity:'common', cost:4, icon:'財',
+    desc:'+4 倍率', descEn:'+4 Mult',
+    onHandPlayed:(c)=>c.addMult(4) },
+  { key:'sparrow', cn:'麻雀', en:'Sparrow', rarity:'common', cost:4, icon:'雀',
+    desc:'+40 筹码', descEn:'+40 Chips',
+    onHandPlayed:(c)=>c.addChips(40) },
+  { key:'wanshi', cn:'万事如意', en:'Ten Thousand', rarity:'common', cost:5, icon:'萬',
+    desc:'每张计分的「万」+3 倍率', descEn:'Each scored Character tile: +3 Mult',
+    onScoreTile:(c,t)=>{ if(t.suit==='man') c.addMult(3,t); } },
+  { key:'yuanman', cn:'圆满', en:'Full Circle', rarity:'common', cost:5, icon:'筒',
+    desc:'每张计分的「筒」+35 筹码', descEn:'Each scored Dot tile: +35 Chips',
+    onScoreTile:(c,t)=>{ if(t.suit==='pin') c.addChips(35,t); } },
+  { key:'zhubao', cn:'竹报平安', en:'Bamboo Peace', rarity:'common', cost:5, icon:'条',
+    desc:'每张计分的「条」+3 倍率', descEn:'Each scored Bamboo tile: +3 Mult',
+    onScoreTile:(c,t)=>{ if(t.suit==='sou') c.addMult(3,t); } },
+  { key:'shunfeng', cn:'一帆风顺', en:'Tailwind', rarity:'common', cost:5, icon:'順',
+    desc:'打出顺子时 +14 倍率', descEn:'+14 Mult if hand is a Chow',
+    onHandPlayed:(c)=>{ if(c.handKey==='chow'||c.handKey==='pureRun') c.addMult(14); } },
+  { key:'pengpeng', cn:'碰碰胡', en:'All Pungs', rarity:'common', cost:5, icon:'碰',
+    desc:'打出刻子/杠时 +14 倍率', descEn:'+14 Mult if hand is a Pung or Kong',
+    onHandPlayed:(c)=>{ if(['pung','kong','fullHouse','flushHouse','five'].includes(c.handKey)) c.addMult(14); } },
+  { key:'duiduipeng', cn:'对对碰', en:'Pair Up', rarity:'common', cost:4, icon:'對',
+    desc:'打出对子/两对时 +10 倍率', descEn:'+10 Mult if hand contains a Pair',
+    onHandPlayed:(c)=>{ if(['pair','twoPair','fullHouse','flushHouse'].includes(c.handKey)) c.addMult(10); } },
+  { key:'qingfeng', cn:'清风明月', en:'Clear Wind', rarity:'common', cost:6, icon:'清',
+    desc:'打出清一色时 +18 倍率', descEn:'+18 Mult if hand is a Flush',
+    onHandPlayed:(c)=>{ if(['flush','flushHouse','pureRun'].includes(c.handKey)) c.addMult(18); } },
+  { key:'yaojiu', cn:'幺九', en:'Terminals', rarity:'common', cost:5, icon:'幺',
+    desc:'每张计分的 1 或 9 +30 筹码', descEn:'Each scored 1 or 9: +30 Chips',
+    onScoreTile:(c,t)=>{ if(t.suit!=='honor' && (t.num===1||t.num===9)) c.addChips(30,t); } },
+  { key:'zhongzhang', cn:'中张', en:'Simples', rarity:'common', cost:5, icon:'中',
+    desc:'每张计分的 2~8 +2 倍率', descEn:'Each scored 2-8: +2 Mult',
+    onScoreTile:(c,t)=>{ if(t.suit!=='honor' && t.num>=2 && t.num<=8) c.addMult(2,t); } },
+  { key:'fengpai', cn:'四方风', en:'Four Winds', rarity:'common', cost:5, icon:'風',
+    desc:'每张计分的字牌 +45 筹码', descEn:'Each scored Honor: +45 Chips',
+    onScoreTile:(c,t)=>{ if(t.suit==='honor') c.addChips(45,t); } },
+  { key:'suanpan', cn:'算盘', en:'Abacus', rarity:'common', cost:4, icon:'算',
+    desc:'+60 筹码', descEn:'+60 Chips',
+    onHandPlayed:(c)=>c.addChips(60) },
+  { key:'shuangxi', cn:'双喜', en:'Double Joy', rarity:'common', cost:6, icon:'囍',
+    desc:'恰好打出 2 张牌时 倍率 ×3', descEn:'X3 Mult if exactly 2 tiles played',
+    onIndependent:(c)=>{ if(c.played.length===2) c.xMult(3); } },
+  { key:'dudiao', cn:'独钓寒江', en:'Lone Angler', rarity:'common', cost:6, icon:'獨',
+    desc:'只打出 1 张牌时 +30 倍率', descEn:'+30 Mult if exactly 1 tile played',
+    onIndependent:(c)=>{ if(c.played.length===1) c.addMult(30); } },
+  { key:'mantang', cn:'满堂彩', en:'Full Table', rarity:'common', cost:6, icon:'滿',
+    desc:'打出 5 张牌时 +12 倍率', descEn:'+12 Mult if 5 tiles played',
+    onIndependent:(c)=>{ if(c.played.length>=5) c.addMult(12); } },
+  { key:'shoupai', cn:'守株待兔', en:'Patience', rarity:'common', cost:5, icon:'守',
+    desc:'每张留在手牌的牌 +2 倍率', descEn:'+2 Mult per tile held in hand',
+    onHeld:(c,t)=>c.addMult(2,t) },
+  { key:'jinsuanpan', cn:'金算盘', en:'Golden Abacus', rarity:'common', cost:6, icon:'金',
+    desc:'回合结束获得 $4', descEn:'Earn $4 at end of round',
+    onRoundEnd:(c)=>c.addMoney(4) },
+  { key:'xipai', cn:'洗牌客', en:'Shuffler', rarity:'common', cost:5, icon:'洗',
+    desc:'每次弃牌获得 $2', descEn:'Earn $2 per discard',
+    onDiscard:(c)=>c.addMoney(2) },
+  { key:'shaizi', cn:'摇骰子', en:'Dice Roll', rarity:'common', cost:5, icon:'骰',
+    desc:'1/4 概率 倍率 ×4', descEn:'1 in 4 chance for X4 Mult',
+    onIndependent:(c)=>{ if(c.chance(1,4)) c.xMult(4); } },
+
+  // ---- 稀有 Uncommon ----
+  { key:'bubu', cn:'步步高升', en:'Rising Step', rarity:'uncommon', cost:7, icon:'升', counter:0,
+    desc:'每打出一次不含字牌的牌 +1 倍率（永久）', descEn:'Gains +1 Mult per hand with no Honors',
+    dyn:(j)=>`当前 +${j.counter} 倍率`, dynEn:(j)=>`Currently +${j.counter} Mult`,
+    onHandPlayed:(c)=>{ c.addMult(c.self.counter); if(!c.played.some(t=>t.suit==='honor')){ c.self.counter++; c.flash('+1 倍率'); } } },
+  { key:'jubaopen', cn:'聚宝盆', en:'Treasure Bowl', rarity:'uncommon', cost:7, icon:'寶',
+    desc:'每持有 $5 则 +1 倍率', descEn:'+1 Mult per $5 you hold',
+    dyn:(j,g)=>`当前 +${Math.floor(g.money/5)} 倍率`, dynEn:(j,g)=>`Currently +${Math.floor(g.money/5)} Mult`,
+    onHandPlayed:(c)=>c.addMult(Math.floor(c.game.money/5)) },
+  { key:'lianzhuang', cn:'连庄', en:'Dealer Streak', rarity:'uncommon', cost:7, icon:'莊',
+    desc:'本回合每出一次牌 +5 倍率（累计）', descEn:'+5 Mult per hand played this round',
+    dyn:(j,g)=>`当前 +${(g.handsPlayedThisRound||0)*5} 倍率`, dynEn:(j,g)=>`Currently +${(g.handsPlayedThisRound||0)*5} Mult`,
+    onHandPlayed:(c)=>c.addMult((c.game.handsPlayedThisRound||0)*5) },
+  { key:'yitiaolong', cn:'一条龙', en:'Dragon', rarity:'uncommon', cost:8, icon:'龍',
+    desc:'打出的牌同时含 1 和 9 时 倍率 ×2.5', descEn:'X2.5 Mult if played tiles contain a 1 and a 9',
+    onIndependent:(c)=>{ const n=c.played.filter(t=>t.suit!=='honor');
+      if(n.some(t=>t.num===1)&&n.some(t=>t.num===9)) c.xMult(2.5); } },
+  { key:'sanyuan', cn:'三元牌', en:'Three Dragons', rarity:'uncommon', cost:8, icon:'元',
+    desc:'打出中/發/白时 每张 倍率 ×1.5', descEn:'X1.5 Mult per scored Dragon tile',
+    onScoreTile:(c,t)=>{ if(t.suit==='honor'&&t.num>=5) c.xMult(1.5,t); } },
+  { key:'mopai', cn:'摸牌高手', en:'Deft Draw', rarity:'uncommon', cost:7, icon:'摸',
+    desc:'手牌上限 +2', descEn:'+2 hand size',
+    passive:{ handSize:2 } },
+  { key:'laoqian', cn:'老千', en:'Cheater', rarity:'uncommon', cost:7, icon:'千',
+    desc:'弃牌次数 +1', descEn:'+1 Discard',
+    passive:{ discards:1 } },
+  { key:'shenshou', cn:'快手', en:'Quick Hands', rarity:'uncommon', cost:9, icon:'手',
+    desc:'出牌次数 +1', descEn:'+1 Hand',
+    passive:{ hands:1 } },
+  { key:'tianhe', cn:'天和', en:'Heavenly Hand', rarity:'uncommon', cost:8, icon:'天',
+    desc:'本回合第一次出牌 倍率 ×3', descEn:'X3 Mult on first hand of round',
+    onIndependent:(c)=>{ if((c.game.handsPlayedThisRound||0)===0) c.xMult(3); } },
+  { key:'zuihou', cn:'背水一战', en:'Last Stand', rarity:'uncommon', cost:8, icon:'背',
+    desc:'最后一次出牌机会时 倍率 ×3', descEn:'X3 Mult on final hand of round',
+    onIndependent:(c)=>{ if(c.game.hands===1) c.xMult(3); } },
+  { key:'yubi', cn:'玉璧', en:'Jade Disc', rarity:'uncommon', cost:7, icon:'玉',
+    desc:'每张计分的强化牌 +25 筹码 +2 倍率', descEn:'Each scored enhanced tile: +25 Chips, +2 Mult',
+    onScoreTile:(c,t)=>{ if(t.enh&&t.enh!=='none'){ c.addChips(25,t); c.addMult(2,t);} } },
+  { key:'gangkai', cn:'杠上开花', en:'Kong Bloom', rarity:'uncommon', cost:8, icon:'杠',
+    desc:'打出杠时 倍率 ×3 并获得 $5', descEn:'X3 Mult and $5 if hand is a Kong',
+    onIndependent:(c)=>{ if(c.handKey==='kong'||c.handKey==='five'){ c.xMult(3); c.addMoney(5);} } },
+  { key:'qiandai', cn:'钱袋子', en:'Money Bag', rarity:'uncommon', cost:6, icon:'袋',
+    desc:'每张计分牌 +$1（上限 $5/回合）', descEn:'+$1 per scored tile (max $5 per round)',
+    onScoreTile:(c,t)=>{ if(c.self.paid===undefined) c.self.paid=0;
+      if(c.self.paid<5){ c.self.paid++; c.addMoney(1,t);} } },
+  { key:'sifang', cn:'四方来财', en:'Four Corners', rarity:'uncommon', cost:8, icon:'方',
+    desc:'打出的牌含 3 种以上花色时 +25 倍率', descEn:'+25 Mult if played tiles have 3+ suits',
+    onIndependent:(c)=>{ const s=new Set(c.played.map(t=>t.suit)); if(s.size>=3) c.addMult(25); } },
+  { key:'wugu', cn:'五谷丰登', en:'Bountiful', rarity:'uncommon', cost:8, icon:'豐',
+    desc:'每张计分牌 +12 筹码 +1 倍率', descEn:'Each scored tile: +12 Chips, +1 Mult',
+    onScoreTile:(c,t)=>{ c.addChips(12,t); c.addMult(1,t); } },
+  { key:'zhaocai', cn:'招财猫', en:'Lucky Cat', rarity:'uncommon', cost:7, icon:'貓',
+    desc:'回合结束时，每 $10 额外获得 $1（上限 $6）', descEn:'End of round: +$1 per $10 held (max $6)',
+    onRoundEnd:(c)=>c.addMoney(Math.min(6, Math.floor(c.game.money/10))) },
+  { key:'huanpai', cn:'换牌师', en:'Swapper', rarity:'uncommon', cost:7, icon:'換',
+    desc:'弃牌时 +3 倍率（本回合累计）', descEn:'+3 Mult per discard this round',
+    dyn:(j,g)=>`当前 +${(g.discardsThisRound||0)*3} 倍率`, dynEn:(j,g)=>`Currently +${(g.discardsThisRound||0)*3} Mult`,
+    onHandPlayed:(c)=>c.addMult((c.game.discardsThisRound||0)*3) },
+
+  // ---- 珍稀 Rare ----
+  { key:'majiang', cn:'麻将之神', en:'Mahjong God', rarity:'rare', cost:12, icon:'神',
+    desc:'倍率 ×1.6', descEn:'X1.6 Mult',
+    onIndependent:(c)=>c.xMult(1.6) },
+  { key:'jiuliandeng', cn:'九莲灯', en:'Nine Lanterns', rarity:'rare', cost:12, icon:'蓮', counter:0,
+    desc:'每打出一次清一色 倍率 +0.3（永久）', descEn:'Gains X0.3 Mult per Flush played',
+    dyn:(j)=>`当前 ×${(1+j.counter*0.3).toFixed(1)} 倍率`, dynEn:(j)=>`Currently X${(1+j.counter*0.3).toFixed(1)}`,
+    onIndependent:(c)=>{ c.xMult(1+c.self.counter*0.3);
+      if(['flush','flushHouse','pureRun'].includes(c.handKey)){ c.self.counter++; c.flash('×0.3'); } } },
+  { key:'baopai', cn:'宝牌指示', en:'Dora Marker', rarity:'rare', cost:11, icon:'寶',
+    desc:'随机指定一种点数，计分时该点数 +80 筹码 +6 倍率', descEn:'One random rank scores +80 Chips, +6 Mult',
+    init:(j,rng)=>{ j.dora = 1+Math.floor(rng()*9); },
+    dyn:(j)=>`宝牌：${j.dora}`, dynEn:(j)=>`Dora: ${j.dora}`,
+    onScoreTile:(c,t)=>{ if(t.suit!=='honor'&&t.num===c.self.dora){ c.addChips(80,t); c.addMult(6,t);} } },
+  { key:'lvyise', cn:'绿一色', en:'All Green', rarity:'rare', cost:11, icon:'綠',
+    desc:'打出的牌全为「条」或「發」时 倍率 ×4', descEn:'X4 Mult if all played tiles are Bamboo or Green Dragon',
+    onIndependent:(c)=>{ if(c.played.length>0 && c.played.every(t=>t.suit==='sou'||(t.suit==='honor'&&t.num===6))) c.xMult(4); } },
+  { key:'shisanyao', cn:'十三幺', en:'Thirteen Orphans', rarity:'rare', cost:12, icon:'幺',
+    desc:'打出的牌全为幺九/字牌时 倍率 ×3.5', descEn:'X3.5 Mult if all played tiles are terminals or honors',
+    onIndependent:(c)=>{ if(c.played.length>0 && c.played.every(t=>t.suit==='honor'||t.num===1||t.num===9)) c.xMult(3.5); } },
+  { key:'zimo', cn:'自摸', en:'Self Draw', rarity:'rare', cost:10, icon:'摸',
+    desc:'每张计分牌 倍率 ×1.25', descEn:'X1.25 Mult per scored tile',
+    onScoreTile:(c,t)=>c.xMult(1.25,t) },
+  { key:'wanzi', cn:'万子归一', en:'Myriad', rarity:'rare', cost:11, icon:'歸',
+    desc:'打出的牌全为同一花色时 筹码 +150', descEn:'+150 Chips if all played tiles share a suit',
+    onHandPlayed:(c)=>{ const s=new Set(c.played.map(t=>t.suit)); if(s.size===1) c.addChips(150); } },
+  { key:'guanyin', cn:'观音', en:'Guanyin', rarity:'rare', cost:12, icon:'觀',
+    desc:'失去所有金钱；每失去 $1 获得 +0.05 倍率（永久）', descEn:'Lose all money; gain X0.05 Mult per $1 lost',
+    counter:0, init:(j,rng,g)=>{ j.counter = g? g.money:0; },
+    dyn:(j)=>`当前 ×${(1+j.counter*0.05).toFixed(2)} 倍率`, dynEn:(j)=>`Currently X${(1+j.counter*0.05).toFixed(2)}`,
+    onBuy:(j,g)=>{ j.counter = g.money; g.money = 0; },
+    onIndependent:(c)=>c.xMult(1+c.self.counter*0.05) },
+
+  // ---- 传说 Legendary ----
+  { key:'tianhu', cn:'天胡', en:'Blessing of Heaven', rarity:'legendary', cost:20, icon:'胡',
+    desc:'倍率 ×3，且回合结束获得 $6', descEn:'X3 Mult, and earn $6 each round',
+    onIndependent:(c)=>c.xMult(3), onRoundEnd:(c)=>c.addMoney(6) },
+  { key:'siwang', cn:'四喜临门', en:'Four Blessings', rarity:'legendary', cost:20, icon:'喜',
+    desc:'出牌次数 +1，弃牌次数 +1，手牌上限 +1，+40 倍率', descEn:'+1 Hand, +1 Discard, +1 hand size, +40 Mult',
+    passive:{ hands:1, discards:1, handSize:1 },
+    onHandPlayed:(c)=>c.addMult(40) },
+// ---- 追加：成长与倍率系 ----
+  { key:'hunyise', cn:'混一色', en:'Half Flush', rarity:'uncommon', cost:8, icon:'混',
+    desc:'打出的牌仅含一种数牌花色（可带字牌）时 倍率 ×2.5', descEn:'X2.5 Mult if played tiles use one suit plus honors',
+    onIndependent:(c)=>{ const s=new Set(c.played.filter(t=>t.suit!=='honor').map(t=>t.suit));
+      if(s.size===1 && c.played.some(t=>t.suit==='honor')) c.xMult(2.5); } },
+  { key:'fanshu', cn:'番数簿', en:'Fan Ledger', rarity:'uncommon', cost:9, icon:'番', counter:0,
+    desc:'每通过一个盲注 倍率 +0.25（永久）', descEn:'Gains X0.25 Mult per blind defeated',
+    dyn:(j)=>`当前 ×${(1+j.counter*0.25).toFixed(2)} 倍率`, dynEn:(j)=>`Currently X${(1+j.counter*0.25).toFixed(2)}`,
+    onIndependent:(c)=>c.xMult(1+c.self.counter*0.25),
+    onRoundEnd:(c)=>{ c.self.counter++; } },
+  { key:'paishan', cn:'牌山', en:'The Wall', rarity:'uncommon', cost:7, icon:'山',
+    desc:'牌库每剩 12 张 +2 倍率', descEn:'+2 Mult per 12 tiles left in deck',
+    dyn:(j,g)=>`当前 +${Math.floor((g.deck?g.deck.length:0)/12)*2} 倍率`, dynEn:(j,g)=>`Currently +${Math.floor((g.deck?g.deck.length:0)/12)*2} Mult`,
+    onHandPlayed:(c)=>c.addMult(Math.floor(c.game.deck.length/12)*2) },
+  { key:'tingpai', cn:'听牌', en:'Ready Hand', rarity:'uncommon', cost:8, icon:'聽',
+    desc:'出牌后手牌被清空时 倍率 ×3', descEn:'X3 Mult if this empties your hand',
+    onIndependent:(c)=>{ const left=c.game.hand.filter(t=>!c.played.includes(t)).length; if(left===0) c.xMult(3); } },
+  { key:'yiman', cn:'役满', en:'Yakuman', rarity:'rare', cost:12, icon:'役',
+    desc:'打出杠/五同/清刻将/清龙 时 倍率 ×4', descEn:'X4 Mult on Kong, Five of a Kind, Flush House or Pure Straight',
+    onIndependent:(c)=>{ if(['kong','five','flushHouse','pureRun'].includes(c.handKey)) c.xMult(4); } },
+  { key:'sigang', cn:'四杠子', en:'Four Kongs', rarity:'rare', cost:12, icon:'四', counter:0,
+    desc:'每打出一次刻子或杠 倍率 +0.4（永久）', descEn:'Gains X0.4 Mult per Pung or Kong played',
+    dyn:(j)=>`当前 ×${(1+j.counter*0.4).toFixed(1)} 倍率`, dynEn:(j)=>`Currently X${(1+j.counter*0.4).toFixed(1)}`,
+    onIndependent:(c)=>{ c.xMult(1+c.self.counter*0.4);
+      if(['pung','kong','fullHouse','flushHouse','five'].includes(c.handKey)){ c.self.counter++; c.flash('×0.4'); } } },
+  { key:'liuju', cn:'流局满贯', en:'Abortive Draw', rarity:'uncommon', cost:8, icon:'流',
+    desc:'每有一次未使用的弃牌 +6 倍率', descEn:'+6 Mult per unused discard',
+    dyn:(j,g)=>`当前 +${(g.discards||0)*6} 倍率`, dynEn:(j,g)=>`Currently +${(g.discards||0)*6} Mult`,
+    onHandPlayed:(c)=>c.addMult(c.game.discards*6) },
+  { key:'dongfeng', cn:'东风局', en:'East Round', rarity:'common', cost:4, icon:'東',
+    desc:'+6 倍率', descEn:'+6 Mult',
+    onHandPlayed:(c)=>c.addMult(6) },
+  { key:'baopaijia', cn:'宝牌架', en:'Dora Rack', rarity:'common', cost:5, icon:'架',
+    desc:'+90 筹码', descEn:'+90 Chips',
+    onHandPlayed:(c)=>c.addChips(90) },
+  { key:'hedi', cn:'河底捞月', en:'Moon Scoop', rarity:'rare', cost:11, icon:'月',
+    desc:'牌库少于 20 张时 倍率 ×3.5', descEn:'X3.5 Mult while fewer than 20 tiles remain in deck',
+    onIndependent:(c)=>{ if(c.game.deck.length<20) c.xMult(3.5); } }
+
+];
+
+const RARITY = {
+  common:    { cn:'常见', en:'Common',    color:'#6ea8fe', weight:70 },
+  uncommon:  { cn:'稀有', en:'Uncommon',  color:'#4fd6a0', weight:24 },
+  rare:      { cn:'珍稀', en:'Rare',      color:'#ff6b5e', weight:5  },
+  legendary: { cn:'传说', en:'Legendary', color:'#c58cff', weight:1  }
+};
+
+/* ---------- 秘籍 Manuals（升番种等级） ---------- */
+const MANUALS = Object.values(HANDS).map(h=>({
+  key:'m_'+h.key, hand:h.key, cn:'《'+h.cn+'谱》', en:h.en+' Manual',
+  cost:3, icon:'籍', type:'manual',
+  desc:`升级「${h.cn}」等级`, descEn:`Level up ${h.en}`
+}));
+
+/* ---------- 天命牌 Destiny (塔罗) ---------- */
+const DESTINIES = [
+  { key:'d_jade',  cn:'玉衡',   en:'Jade',       icon:'玉', cost:3, select:[1,1], desc:'将 1 张牌变为「玉」牌', descEn:'Convert 1 tile to Jade',
+    apply:(g,sel)=>{ sel.forEach(t=>t.enh='jade'); } },
+  { key:'d_cinna', cn:'朱雀',   en:'Cinnabar',   icon:'朱', cost:3, select:[1,1], desc:'将 1 张牌变为「朱砂」牌', descEn:'Convert 1 tile to Cinnabar',
+    apply:(g,sel)=>{ sel.forEach(t=>t.enh='cinna'); } },
+  { key:'d_gold',  cn:'点石成金', en:'Midas',     icon:'金', cost:3, select:[1,1], desc:'将 1 张牌变为「金」牌', descEn:'Convert 1 tile to Gold',
+    apply:(g,sel)=>{ sel.forEach(t=>t.enh='gold'); } },
+  { key:'d_lucky', cn:'福签',   en:'Fortune Slip',icon:'福', cost:3, select:[1,2], desc:'将至多 2 张牌变为「幸运」牌', descEn:'Convert up to 2 tiles to Lucky',
+    apply:(g,sel)=>{ sel.forEach(t=>t.enh='lucky'); } },
+  { key:'d_glass', cn:'琉璃盏', en:'Glass Cup',  icon:'璃', cost:3, select:[1,1], desc:'将 1 张牌变为「琉璃」牌', descEn:'Convert 1 tile to Glass',
+    apply:(g,sel)=>{ sel.forEach(t=>t.enh='glass'); } },
+  { key:'d_stone', cn:'磐石',   en:'Boulder',    icon:'石', cost:3, select:[1,1], desc:'将 1 张牌变为「石」牌', descEn:'Convert 1 tile to Stone',
+    apply:(g,sel)=>{ sel.forEach(t=>{t.enh='stone';}); } },
+  { key:'d_up',    cn:'节节高', en:'Ascend',     icon:'升', cost:3, select:[1,3], desc:'至多 3 张数牌点数 +1', descEn:'Up to 3 number tiles: rank +1',
+    apply:(g,sel)=>{ sel.forEach(t=>{ if(t.suit!=='honor') t.num=Math.min(9,t.num+1); }); } },
+  { key:'d_down',  cn:'落花',   en:'Descend',    icon:'落', cost:3, select:[1,3], desc:'至多 3 张数牌点数 -1', descEn:'Up to 3 number tiles: rank -1',
+    apply:(g,sel)=>{ sel.forEach(t=>{ if(t.suit!=='honor') t.num=Math.max(1,t.num-1); }); } },
+  { key:'d_man',   cn:'化万',   en:'To Characters', icon:'萬', cost:3, select:[1,3], desc:'至多 3 张牌变为「万」', descEn:'Up to 3 tiles become Characters',
+    apply:(g,sel)=>{ sel.forEach(t=>{ if(t.suit==='honor'){t.suit='man';t.num=1+(t.num%9);} else t.suit='man'; }); } },
+  { key:'d_pin',   cn:'化筒',   en:'To Dots',    icon:'筒', cost:3, select:[1,3], desc:'至多 3 张牌变为「筒」', descEn:'Up to 3 tiles become Dots',
+    apply:(g,sel)=>{ sel.forEach(t=>{ if(t.suit==='honor'){t.suit='pin';t.num=1+(t.num%9);} else t.suit='pin'; }); } },
+  { key:'d_sou',   cn:'化条',   en:'To Bamboo',  icon:'条', cost:3, select:[1,3], desc:'至多 3 张牌变为「条」', descEn:'Up to 3 tiles become Bamboo',
+    apply:(g,sel)=>{ sel.forEach(t=>{ if(t.suit==='honor'){t.suit='sou';t.num=1+(t.num%9);} else t.suit='sou'; }); } },
+  { key:'d_copy',  cn:'双生',   en:'Twin',       icon:'雙', cost:3, select:[1,1], desc:'复制 1 张牌加入牌库', descEn:'Duplicate 1 tile into your deck',
+    apply:(g,sel)=>{ sel.forEach(t=>g.addTileCopy(t)); } },
+  { key:'d_burn',  cn:'焚牌',   en:'Burn',       icon:'焚', cost:3, select:[1,2], desc:'销毁至多 2 张牌', descEn:'Destroy up to 2 tiles',
+    apply:(g,sel)=>{ g.destroyTiles(sel); } },
+  { key:'d_same',  cn:'易容',   en:'Mimic',      icon:'易', cost:3, select:[2,2], desc:'选 2 张：第 2 张变成第 1 张', descEn:'Select 2: 2nd becomes a copy of the 1st',
+    apply:(g,sel)=>{ if(sel.length===2){ sel[1].suit=sel[0].suit; sel[1].num=sel[0].num; sel[1].enh=sel[0].enh; } } },
+  { key:'d_money', cn:'招财进宝', en:'Windfall',  icon:'財', cost:3, select:[0,0], desc:'立即获得 $12', descEn:'Gain $12 immediately',
+    apply:(g)=>{ g.money += 12; } },
+  { key:'d_fate',  cn:'天命',   en:'Fate',       icon:'命', cost:4, select:[0,0], desc:'生成 1 张随机福神牌', descEn:'Create a random Fortune',
+    apply:(g)=>{ g.grantRandomFortune(); } },
+  { key:'d_wisdom',cn:'顿悟',   en:'Insight',    icon:'悟', cost:4, select:[0,0], desc:'随机升级 2 个番种等级', descEn:'Level up 2 random hand types',
+    apply:(g)=>{ for(let i=0;i<2;i++){ const k=HAND_ORDER[Math.floor(g.rng()*HAND_ORDER.length)]; g.levelUp(k);} } }
+];
+
+/* ---------- 优惠券 Vouchers ---------- */
+const VOUCHERS = [
+  { key:'v_hand',   cn:'多打一张', en:'Extra Hand',  cost:10, icon:'打', desc:'每回合出牌次数 +1', descEn:'+1 Hand each round', apply:(g)=>g.base.hands++ },
+  { key:'v_disc',   cn:'多弃一张', en:'Extra Discard',cost:10,icon:'弃', desc:'每回合弃牌次数 +1', descEn:'+1 Discard each round', apply:(g)=>g.base.discards++ },
+  { key:'v_size',   cn:'宽台',    en:'Wide Table',  cost:8,  icon:'台', desc:'手牌上限 +1', descEn:'+1 hand size', apply:(g)=>g.base.handSize++ },
+  { key:'v_shop',   cn:'大商铺',  en:'Big Shop',    cost:10, icon:'铺', desc:'商店多 1 个商品位', descEn:'+1 shop slot', apply:(g)=>g.base.shopSlots++ },
+  { key:'v_disc2',  cn:'熟客',    en:'Regular',     cost:10, icon:'客', desc:'商店所有商品 8 折', descEn:'All shop items 20% off', apply:(g)=>g.base.discount*=0.8 },
+  { key:'v_slot',   cn:'福位',    en:'Fortune Slot',cost:12, icon:'位', desc:'福神牌栏位 +1', descEn:'+1 Fortune slot', apply:(g)=>g.base.jokerSlots++ },
+  { key:'v_cons',   cn:'锦囊',    en:'Pouch',       cost:10, icon:'囊', desc:'消耗牌栏位 +1', descEn:'+1 consumable slot', apply:(g)=>g.base.consumableSlots++ },
+  { key:'v_int',    cn:'钱庄',    en:'Bank',        cost:10, icon:'庄', desc:'利息上限 +$5', descEn:'+$5 interest cap', apply:(g)=>g.base.interestCap+=5 },
+  { key:'v_reroll', cn:'常客',    en:'Rerollster',  cost:8,  icon:'滚', desc:'刷新费用 -$2', descEn:'Rerolls cost $2 less', apply:(g)=>g.base.rerollBase=Math.max(1,g.base.rerollBase-2) },
+  { key:'v_seed',   cn:'播种',    en:'Seeding',     cost:12, icon:'种', desc:'开局牌库 +8 张随机牌', descEn:'Add 8 random tiles to deck', apply:(g)=>g.addRandomTiles(8) }
+];
+
+/* ---------- 卡包 Booster Packs ---------- */
+const PACKS = [
+  { key:'p_fortune', cn:'福神包',  en:'Fortune Pack',  cost:5, kind:'fortune', size:2, pick:1, icon:'神' },
+  { key:'p_fortune2',cn:'大福神包',en:'Jumbo Fortune', cost:7, kind:'fortune', size:3, pick:1, icon:'神' },
+  { key:'p_manual',  cn:'秘籍包',  en:'Manual Pack',   cost:4, kind:'manual',  size:3, pick:1, icon:'籍' },
+  { key:'p_destiny', cn:'天命包',  en:'Destiny Pack',  cost:4, kind:'destiny', size:3, pick:1, icon:'命' },
+  { key:'p_destiny2',cn:'大天命包',en:'Jumbo Destiny', cost:6, kind:'destiny', size:4, pick:2, icon:'命' },
+  { key:'p_tile',    cn:'麻将包',  en:'Tile Pack',     cost:4, kind:'tile',    size:3, pick:1, icon:'牌' }
+];
+
+/* ---------- 文案 i18n ---------- */
+const T = {
+  play:['出牌','PLAY'], discard:['弃牌','DISCARD'], sort:['排序','SORT'],
+  sortRank:['按点数','BY RANK'], sortSuit:['按花色','BY SUIT'],
+  round:['回合','ROUND'], ante:['底注','ANTE'], hands:['出牌','HANDS'], discards:['弃牌','DISCARDS'],
+  score:['得分','SCORE'], target:['目标','TARGET'], reward:['奖励','REWARD'],
+  deck:['牌库','DECK'], shop:['商店','SHOP'], next:['下一关','NEXT ROUND'],
+  reroll:['刷新','REROLL'], skip:['跳过','SKIP'], select:['选择','SELECT'],
+  smallBlind:['小盲注','Small Blind'], bigBlind:['大盲注','Big Blind'], bossBlind:['首领盲注','Boss Blind'],
+  cashOut:['领取奖励','CASH OUT'], run:['局','RUN']
+};
+
+</script>
+<script>
+/* =========================================================
+   像素绘制 PIXEL RENDERING
+   低分辨率 canvas + alpha 阈值化 => 真·像素画，放大后锐利
+   ========================================================= */
+
+const PX = {
+  W: 34, H: 46,            // 牌面原始像素尺寸
+  cache: new Map()
+};
+
+/* --- 将 canvas 上的抗锯齿文字硬化为 1-bit 像素 --- */
+function crispify(ctx, w, h, threshold = 140) {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i + 3] === 0) continue;
+    if (d[i + 3] < threshold) { d[i + 3] = 0; }
+    else { d[i + 3] = 255; }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/* --- 在临时 canvas 上画硬边文字，再贴到目标 --- */
+function pixelGlyph(ctx, text, x, y, size, color, weight = 'bold', family = '"Noto Sans SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif') {
+  const pad = 4;
+  const w = Math.ceil(size * (text.length + 1)) + pad * 2;
+  const h = Math.ceil(size * 1.6) + pad * 2;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.font = `${weight} ${size}px ${family}`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = '#000';
+  g.fillText(text, w / 2, h / 2);
+  crispify(g, w, h, 120);
+  // 上色
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = color;
+  g.fillRect(0, 0, w, h);
+  ctx.drawImage(c, Math.round(x - w / 2), Math.round(y - h / 2));
+}
+
+function px(ctx, x, y, w, h, color) {
+  ctx.fillStyle = color;
+  ctx.fillRect(x | 0, y | 0, w | 0, h | 0);
+}
+
+/* --- 圆点（筒）--- */
+function pixelDot(ctx, cx, cy, r, outer, inner) {
+  // 用像素方式画一个小圆
+  for (let dy = -r; dy <= r; dy++) {
+    for (let dx = -r; dx <= r; dx++) {
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d <= r + 0.2) {
+        px(ctx, cx + dx, cy + dy, 1, 1, d > r - 1.1 ? outer : inner);
+      }
+    }
+  }
+}
+
+/* --- 竹子（条）--- */
+function pixelBamboo(ctx, x, y, w, h, color, dark) {
+  px(ctx, x, y, w, h, color);
+  px(ctx, x, y, 1, h, dark);
+  px(ctx, x, y + ((h / 2) | 0), w, 1, dark);
+  px(ctx, x, y, w, 1, dark);
+  px(ctx, x, y + h - 1, w, 1, dark);
+}
+
+/* --- 一条：孔雀（像素精灵）--- */
+const BIRD_SPRITE = [
+  '........RRR.........',
+  '.......RRRRR........',
+  '......GGGGGGG.......',
+  '.....GGGGGGGGG......',
+  '....GGKKGGGGGGG.....',
+  '..YYGGKKGGGGGGGG....',
+  '..YYYGGGGGGGGGGG....',
+  '....GGGGGGGGGGGGD...',
+  '.....GGGGGGGGGGDDD..',
+  '....GGGGGGGGGGGDDDD.',
+  '...GGGGDDDDGGGGDDDD.',
+  '...GGGGDDDDDGGGGDDD.',
+  '..GGGGGDDDDDGGGGGDD.',
+  '..GGGGGGDDDDGGGGGDD.',
+  '..GGGGGGGDDGGGGGGDD.',
+  '...GGGGGGGGGGGGGDDD.',
+  '...GGGGGGGGGGGGDDDD.',
+  '....GGGGGGGGGGDDDD..',
+  '.....GGGGGGGGDDDD...',
+  '......GGGGGGDDD.....',
+  '.......GGGGDD.......',
+  '........GGD.........',
+  '.......YY...........',
+  '......YY............'
+];
+function pixelBird(ctx, cx, cy) {
+  const pal = { G: '#1e8a55', D: '#0d5c37', R: '#c0392b', Y: '#e0a02e', K: '#101318' };
+  const w = BIRD_SPRITE[0].length, h = BIRD_SPRITE.length;
+  const ox = cx - (w >> 1), oy = cy - (h >> 1);
+  for (let y = 0; y < h; y++) {
+    const row = BIRD_SPRITE[y];
+    for (let x = 0; x < w; x++) {
+      const ch = row[x];
+      if (ch && ch !== '.') px(ctx, ox + x, oy + y, 1, 1, pal[ch]);
+    }
+  }
+}
+
+/* --- 牌背 --- */
+function drawTileBack(ctx, w, h) {
+  px(ctx, 0, 0, w, h, '#1d3f6e');
+  px(ctx, 1, 1, w - 2, h - 2, '#2f5f9e');
+  px(ctx, 2, 2, w - 4, h - 4, '#25508a');
+  for (let y = 4; y < h - 4; y += 4) {
+    for (let x = 4; x < w - 4; x += 4) {
+      px(ctx, x, y, 2, 2, '#3b76bd');
+    }
+  }
+  px(ctx, 1, h - 3, w - 2, 2, '#132b4d');
+}
+
+/* --- 牌底（象牙白牌身 + 立体边）--- */
+function drawTileBody(ctx, w, h, dim) {
+  const face = dim ? '#b9b2a4' : '#f6f1e2';
+  const hi = dim ? '#cdc6b6' : '#fffdf4';
+  const lo = dim ? '#8e887c' : '#c9c0aa';
+  const edge = dim ? '#5a564d' : '#8a7f66';
+  px(ctx, 0, 0, w, h, '#2a2118');
+  px(ctx, 1, 1, w - 2, h - 2, edge);
+  px(ctx, 1, 1, w - 2, h - 3, face);
+  px(ctx, 1, 1, w - 2, 1, hi);
+  px(ctx, 1, 1, 1, h - 3, hi);
+  px(ctx, w - 2, 2, 1, h - 4, lo);
+  px(ctx, 1, h - 3, w - 2, 1, lo);
+  px(ctx, 1, h - 2, w - 2, 1, '#6d6252');
+}
+
+/* --- 主入口：绘制一张牌的像素画布 --- */
+function renderTileCanvas(tile, opts = {}) {
+  const w = PX.W, h = PX.H;
+  const key = `${tile.suit}|${tile.num}|${tile.enh || 'none'}|${opts.dim ? 1 : 0}|${opts.back ? 1 : 0}`;
+  if (PX.cache.has(key)) return PX.cache.get(key);
+
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+
+  if (opts.back) { drawTileBack(ctx, w, h); PX.cache.set(key, c); return c; }
+
+  drawTileBody(ctx, w, h, opts.dim);
+
+  const enh = tile.enh || 'none';
+  const cx = (w / 2) | 0, cy = ((h - 2) / 2) | 0;
+
+  if (enh === 'stone') {
+    // 石牌：整块灰石
+    px(ctx, 2, 2, w - 4, h - 5, '#8d97a3');
+    px(ctx, 3, 3, w - 6, h - 7, '#a4aeba');
+    px(ctx, 5, 8, 4, 3, '#8d97a3');
+    px(ctx, 22, 16, 5, 4, '#8d97a3');
+    px(ctx, 11, 26, 6, 3, '#7d8794');
+    PX.cache.set(key, c);
+    return c;
+  }
+
+  if (enh !== 'none') {
+    const tint = ENHANCE[enh].tint;
+    // 内衬彩色底
+    ctx.globalAlpha = enh === 'glass' ? 0.30 : 0.42;
+    px(ctx, 2, 2, w - 4, h - 5, tint);
+    ctx.globalAlpha = 1;
+    px(ctx, 2, 2, w - 4, 1, tint);
+    px(ctx, 2, h - 4, w - 4, 1, tint);
+  }
+
+  if (tile.suit === 'man') {
+    const num = '一二三四五六七八九'[tile.num - 1];
+    pixelGlyph(ctx, num, cx, 13, 13, '#16233a');
+    pixelGlyph(ctx, '萬', cx, 31, 14, '#b02a2a');
+  } else if (tile.suit === 'honor') {
+    const hn = HONOR_NAMES[tile.num];
+    if (tile.num === 7) { // 白板：空框
+      px(ctx, 7, 9, w - 14, 1, '#1b3f7a');
+      px(ctx, 7, h - 13, w - 14, 1, '#1b3f7a');
+      px(ctx, 7, 9, 1, h - 22, '#1b3f7a');
+      px(ctx, w - 8, 9, 1, h - 22, '#1b3f7a');
+    } else {
+      const col = tile.num === 5 ? '#c0322b' : (tile.num === 6 ? '#1a7f4b' : '#16233a');
+      pixelGlyph(ctx, hn.cn, cx, cy, 22, col);
+    }
+  } else if (tile.suit === 'pin') {
+    drawDots(ctx, tile.num, w, h);
+  } else { // sou
+    drawBamboo(ctx, tile.num, w, h);
+  }
+
+  if (enh === 'glass') { // 高光
+    px(ctx, 4, 4, 2, 8, '#ffffff');
+    px(ctx, 6, 4, 1, 5, '#ffffff');
+  }
+  if (enh === 'gold') {
+    px(ctx, w - 8, 4, 3, 1, '#fff3c4'); px(ctx, w - 7, 5, 1, 2, '#fff3c4');
+  }
+
+  PX.cache.set(key, c);
+  return c;
+}
+
+/* --- 筒子布局 --- */
+function drawDots(ctx, n, w, h) {
+  const B = '#1b4f9c', BI = '#3a7fd4';   // 蓝
+  const R = '#b02a2a', RI = '#dd5a52';   // 红
+  const G = '#1a7f4b', GI = '#3fae74';   // 绿
+  const put = (x, y, r, o, i) => pixelDot(ctx, x, y, r, o, i);
+  const cx = (w / 2) | 0, cy = ((h - 2) / 2) | 0;
+  const layouts = {
+    1: () => { pixelDot(ctx, cx, cy, 9, R, '#f0f0f0');
+               pixelDot(ctx, cx, cy, 6, B, '#f6f1e2');
+               pixelDot(ctx, cx, cy, 3, R, RI); },
+    2: () => { put(cx, cy - 8, 4, B, BI); put(cx, cy + 8, 4, G, GI); },
+    3: () => { put(cx - 8, cy - 9, 3, B, BI); put(cx, cy, 3, R, RI); put(cx + 8, cy + 9, 3, G, GI); },
+    4: () => { put(cx - 7, cy - 8, 3, B, BI); put(cx + 7, cy - 8, 3, G, GI);
+               put(cx - 7, cy + 8, 3, G, GI); put(cx + 7, cy + 8, 3, B, BI); },
+    5: () => { put(cx - 7, cy - 9, 3, B, BI); put(cx + 7, cy - 9, 3, G, GI);
+               put(cx, cy, 3, R, RI);
+               put(cx - 7, cy + 9, 3, G, GI); put(cx + 7, cy + 9, 3, B, BI); },
+    6: () => { for (let i = 0; i < 3; i++) { put(cx - 7, cy - 10 + i * 10, 3, G, GI); put(cx + 7, cy - 10 + i * 10, 3, R, RI); } },
+    7: () => { put(cx - 8, cy - 12, 2.6, G, GI); put(cx, cy - 12, 2.6, G, GI); put(cx + 8, cy - 12, 2.6, G, GI);
+               for (let i = 0; i < 2; i++) for (let j = 0; j < 2; j++) put(cx - 6 + j * 12, cy - 1 + i * 10, 2.8, R, RI); },
+    8: () => { for (let i = 0; i < 4; i++) { put(cx - 7, cy - 13 + i * 9, 2.6, B, BI); put(cx + 7, cy - 13 + i * 9, 2.6, B, BI); } },
+    9: () => { for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+                 const col = i === 0 ? [B, BI] : (i === 1 ? [G, GI] : [R, RI]);
+                 put(cx - 9 + j * 9, cy - 12 + i * 12, 2.8, col[0], col[1]); } }
+  };
+  (layouts[n] || layouts[1])();
+}
+
+/* --- 条子布局 --- */
+function drawBamboo(ctx, n, w, h) {
+  const G = '#1e8a55', D = '#0e5c37', R = '#b02a2a', DR = '#7d1f1c';
+  const cx = (w / 2) | 0, cy = ((h - 2) / 2) | 0;
+  const stick = (x, y, col, dark) => pixelBamboo(ctx, x - 2, y - 5, 5, 11, col, dark);
+  if (n === 1) { pixelBird(ctx, cx, cy); return; }
+  const rows = {
+    2: [[cx, cy - 7], [cx, cy + 7]],
+    3: [[cx, cy - 10], [cx - 7, cy + 4], [cx + 7, cy + 4]],
+    4: [[cx - 7, cy - 7], [cx + 7, cy - 7], [cx - 7, cy + 7], [cx + 7, cy + 7]],
+    5: [[cx - 8, cy - 8], [cx + 8, cy - 8], [cx, cy], [cx - 8, cy + 8], [cx + 8, cy + 8]],
+    6: [[cx - 8, cy - 8], [cx, cy - 8], [cx + 8, cy - 8], [cx - 8, cy + 8], [cx, cy + 8], [cx + 8, cy + 8]],
+    7: [[cx, cy - 13], [cx - 8, cy - 2], [cx, cy - 2], [cx + 8, cy - 2], [cx - 8, cy + 10], [cx, cy + 10], [cx + 8, cy + 10]],
+    8: [[cx - 5, cy - 13], [cx + 5, cy - 13], [cx - 8, cy - 1], [cx, cy - 1], [cx + 8, cy - 1], [cx - 8, cy + 11], [cx, cy + 11], [cx + 8, cy + 11]],
+    9: [[cx - 8, cy - 13], [cx, cy - 13], [cx + 8, cy - 13], [cx - 8, cy], [cx, cy], [cx + 8, cy], [cx - 8, cy + 13], [cx, cy + 13], [cx + 8, cy + 13]]
+  };
+  const list = rows[n] || rows[2];
+  list.forEach((p, i) => {
+    const isRed = (n === 5 && i === 2) || (n === 7 && i === 0) || (n === 9 && i >= 3 && i <= 5) || (n === 2 && false);
+    stick(p[0], p[1], isRed ? R : G, isRed ? DR : D);
+  });
+}
+
+/* --- 福神/消耗牌图标画布 --- */
+function renderIconCanvas(ch, color, bg) {
+  const key = 'icon|' + ch + '|' + color + '|' + bg;
+  if (PX.cache.has(key)) return PX.cache.get(key);
+  const w = 24, h = 24;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  // 圆角底
+  px(ctx, 2, 0, w - 4, h, bg);
+  px(ctx, 0, 2, w, h - 4, bg);
+  px(ctx, 1, 1, w - 2, h - 2, bg);
+  px(ctx, 2, 1, w - 4, 1, '#ffffff44');
+  px(ctx, 2, h - 2, w - 4, 1, '#00000044');
+  pixelGlyph(ctx, ch, w / 2, h / 2, 17, color);
+  PX.cache.set(key, c);
+  return c;
+}
+
+/* --- 生成 <canvas> DOM 并按倍数放大 --- */
+function pixelImg(source, scale) {
+  const c = document.createElement('canvas');
+  c.width = source.width * scale;
+  c.height = source.height * scale;
+  c.className = 'pxc';
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = false;
+  g.drawImage(source, 0, 0, c.width, c.height);
+  return c;
+}
+
+/* --- 像素文字：紧凑测量 + 1-bit 硬化 + 整数倍放大 --- */
+const PXFONT = "900 %spx 'Noto Sans SC','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif";
+let _meas = null;
+function glyphMask(text, size) {
+  if (!_meas) _meas = document.createElement('canvas').getContext('2d');
+  const font = PXFONT.replace('%s', size);
+  _meas.font = font;
+  const w = Math.max(2, Math.ceil(_meas.measureText(text).width) + 2);
+  const h = Math.ceil(size * 1.42) + 2;
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#000';
+  g.fillText(text, w / 2, h / 2);
+  crispify(g, w, h, 115);
+  return c;
+}
+function tintMask(mask, color) {
+  const c = document.createElement('canvas');
+  c.width = mask.width; c.height = mask.height;
+  const g = c.getContext('2d');
+  g.drawImage(mask, 0, 0);
+  g.globalCompositeOperation = 'source-in';
+  g.fillStyle = color;
+  g.fillRect(0, 0, c.width, c.height);
+  return c;
+}
+/* size: 原始像素字号（8~18）  fitW: 可用宽度，自动挑选 1~3 倍整数缩放 */
+function pxText(text, size, color, shadow, fitW, maxScale) {
+  const mask = glyphMask(String(text), size);
+  const off = shadow ? 1 : 0;
+  const c = document.createElement('canvas');
+  c.width = mask.width + off; c.height = mask.height + off;
+  const g = c.getContext('2d');
+  if (shadow) g.drawImage(tintMask(mask, shadow), off, off);
+  g.drawImage(tintMask(mask, color), 0, 0);
+  let scale = maxScale || 3;
+  if (fitW) scale = Math.max(1, Math.min(scale, Math.floor(fitW / c.width)));
+  return pixelImg(c, scale);
+}
+function setPx(node, text, size, color, shadow, maxScale) {
+  if (!node) return;
+  const w = node.clientWidth - 4;
+  node.innerHTML = '';
+  const img = pxText(text, size, color, shadow, w > 8 ? w : 0, maxScale);
+  img.style.margin = '0 auto';
+  node.appendChild(img);
+}
+function pixelTitle(text, size, color, shadow) {
+  return pxText(text, Math.round(size / 3), color, shadow, 0, 3);
+}
+
+</script>
+<script>
+/* =========================================================
+   引擎 ENGINE — 牌库 / 番种识别 / 计分管线 / 流程
+   ========================================================= */
+
+/* ---------- 随机 ---------- */
+function makeRng(seed) {
+  let s = seed >>> 0 || 1;
+  return function () {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+}
+function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+function shuffle(rng, arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/* ---------- 牌 ---------- */
+let TILE_UID = 1;
+function makeTile(suit, num, enh) {
+  return { uid: TILE_UID++, suit, num, enh: enh || 'none' };
+}
+function tileChips(t) {
+  if (t.enh === 'stone') return 0;
+  if (t.suit === 'honor') return 16;
+  return t.num * 2 + 2;
+}
+function tileName(t, en) {
+  if (t.enh === 'stone') return en ? 'Stone Tile' : '石牌';
+  if (t.suit === 'honor') return en ? HONOR_NAMES[t.num].en : HONOR_NAMES[t.num].full;
+  return en ? t.num + ' ' + SUITS[t.suit].en : t.num + SUITS[t.suit].cn;
+}
+function tileKey(t) { return t.enh === 'stone' ? 'stone_' + t.uid : t.suit + t.num; }
+
+function buildStandardDeck() {
+  const deck = [];
+  ['man', 'pin', 'sou'].forEach(s => {
+    for (let n = 1; n <= 9; n++) for (let k = 0; k < 4; k++) deck.push(makeTile(s, n));
+  });
+  for (let n = 1; n <= 7; n++) for (let k = 0; k < 4; k++) deck.push(makeTile('honor', n));
+  return deck; // 136 张
+}
+
+/* ---------- 番种识别 ----------
+   优先级严格按「基础筹码 × 倍率」从高到低：
+   五同 > 清刻将 > 清龙 > 字一色 > 杠 > 刻将 > 清一色 > 刻子 > 顺子 > 两对 > 对子 > 单张 */
+function evalHand(tiles) {
+  const real = tiles.filter(t => t.enh !== 'stone');
+  const counts = {};
+  real.forEach(t => { const k = tileKey(t); (counts[k] = counts[k] || []).push(t); });
+  const groups = Object.values(counts).sort((a, b) => b.length - a.length);
+  const suits = new Set(real.map(t => t.suit));
+  const n = tiles.length;
+
+  const findRun = (len) => {
+    for (const s of ['man', 'pin', 'sou']) {
+      const byNum = {};
+      real.filter(t => t.suit === s).forEach(t => { if (!byNum[t.num]) byNum[t.num] = t; });
+      for (let start = 1; start + len - 1 <= 9; start++) {
+        let ok = true; const out = [];
+        for (let i = 0; i < len; i++) { if (!byNum[start + i]) { ok = false; break; } out.push(byNum[start + i]); }
+        if (ok) return out;
+      }
+    }
+    return null;
+  };
+
+  const g0 = groups[0] || [];
+  const pairs = groups.filter(g => g.length >= 2);
+  const allHonor = real.length >= 5 && real.every(t => t.suit === 'honor');
+  const oneSuit = real.length >= 5 && suits.size === 1 && !suits.has('honor');
+
+  // 刻将组合（刻子 + 另一对）
+  let house = null;
+  if (g0.length >= 3 && pairs.length >= 2) {
+    const other = pairs.find(g => g !== g0);
+    if (other) house = g0.slice(0, 3).concat(other.slice(0, 2));
+  }
+  const houseOneSuit = house && new Set(house.map(t => t.suit)).size === 1 && house[0].suit !== 'honor';
+
+  if (g0.length >= 5) return { key: 'five', tiles: g0.slice(0, 5) };
+  if (house && houseOneSuit) return { key: 'flushHouse', tiles: house };
+  const run5 = findRun(5);
+  if (run5) return { key: 'pureRun', tiles: run5 };
+  if (allHonor) return { key: 'allHonor', tiles: tiles.slice(0, 5) };
+  if (g0.length >= 4) return { key: 'kong', tiles: g0.slice(0, 4) };
+  if (house) return { key: 'fullHouse', tiles: house };
+  if (oneSuit) return { key: 'flush', tiles: tiles.slice(0, 5) };
+  if (g0.length >= 3) return { key: 'pung', tiles: g0.slice(0, 3) };
+  const run3 = findRun(3);
+  if (run3) return { key: 'chow', tiles: run3 };
+  if (pairs.length >= 2) return { key: 'twoPair', tiles: pairs[0].slice(0, 2).concat(pairs[1].slice(0, 2)) };
+  if (pairs.length >= 1) return { key: 'pair', tiles: pairs[0].slice(0, 2) };
+  if (real.length) {
+    let best = real[0];
+    real.forEach(t => { if (tileChips(t) > tileChips(best)) best = t; });
+    return { key: 'high', tiles: [best] };
+  }
+  return { key: 'high', tiles: tiles.slice(0, 1) };
+}
+
+/* ---------- 游戏状态 ---------- */
+class Game {
+  constructor(seed) {
+    this.seed = seed || (Math.random() * 1e9) | 0;
+    this.rng = makeRng(this.seed);
+    this.base = {
+      hands: 4, discards: 4, handSize: 10, jokerSlots: 5, consumableSlots: 2,
+      shopSlots: 2, discount: 1, interestCap: 5, rerollBase: 5
+    };
+    this.money = 6;
+    this.ante = 1;
+    this.round = 0;
+    this.blindIdx = 0;          // 0 small, 1 big, 2 boss
+    this.levels = {};           // 番种等级
+    HAND_ORDER.forEach(k => this.levels[k] = 1);
+    this.handStats = {};
+    HAND_ORDER.forEach(k => this.handStats[k] = 0);
+    this.fortunes = [];
+    this.consumables = [];
+    this.vouchers = [];
+    this.fullDeck = buildStandardDeck();
+    this.deck = []; this.hand = []; this.discardPile = [];
+    this.selected = [];
+    this.score = 0; this.target = 0;
+    this.hands = 0; this.discards = 0;
+    this.handsPlayedThisRound = 0; this.discardsThisRound = 0;
+    this.usedHandTypes = new Set();
+    this.boss = null; this.bossData = null;
+    this.state = 'blindSelect';
+    this.nextRoundBonusHands = 0;
+    this.won = false;
+    this.log = [];
+    this.bossPool = shuffle(this.rng, BOSSES.slice());
+    this.pendingBosses = {};
+  }
+
+  /* --- 派生值 --- */
+  get maxHands() {
+    let v = this.base.hands + this.nextRoundBonusHands;
+    this.fortunes.forEach(j => { if (j.def.passive && j.def.passive.hands) v += j.def.passive.hands; });
+    if (this.bossActive('gale')) v -= 1;
+    return Math.max(1, v);
+  }
+  get maxDiscards() {
+    let v = this.base.discards;
+    this.fortunes.forEach(j => { if (j.def.passive && j.def.passive.discards) v += j.def.passive.discards; });
+    if (this.bossActive('slow')) v -= 2;
+    return Math.max(0, v);
+  }
+  get handSize() {
+    let v = this.base.handSize;
+    this.fortunes.forEach(j => { if (j.def.passive && j.def.passive.handSize) v += j.def.passive.handSize; });
+    if (this.bossActive('mount')) v -= 3;
+    if (this.bossActive('petty')) v -= 2;
+    return Math.max(3, v);
+  }
+  get maxPlay() { return this.bossActive('solo') ? 3 : 5; }
+  get jokerSlots() { return this.base.jokerSlots; }
+  get consumableSlots() { return this.base.consumableSlots; }
+
+  bossActive(key) { return !!(this.boss && this.boss.key === key); }
+
+  blindName() {
+    if (this.blindIdx === 0) return T.smallBlind;
+    if (this.blindIdx === 1) return T.bigBlind;
+    return [this.boss ? this.boss.cn : '首领', this.boss ? this.boss.en : 'Boss'];
+  }
+  blindMult() { return this.blindIdx === 0 ? 1 : this.blindIdx === 1 ? 1.5 : 2; }
+  blindTarget(idx) {
+    const i = idx === undefined ? this.blindIdx : idx;
+    const base = ANTE_BASE[Math.min(this.ante, 8)] * (this.ante > 8 ? Math.pow(1.6, this.ante - 8) : 1);
+    let m = i === 0 ? 1 : i === 1 ? 1.5 : 2;
+    if (i === 2) {
+      const b = this.currentBoss();
+      if (b && b.key === 'wall') m *= 1.6;
+    }
+    return Math.round(base * m);
+  }
+  blindReward(idx) {
+    const i = idx === undefined ? this.blindIdx : idx;
+    return i === 0 ? 3 : i === 1 ? 4 : 5;
+  }
+  currentBoss() {
+    if (!this.pendingBosses[this.ante]) {
+      const avail = BOSSES.filter(b => b.minAnte <= this.ante);
+      this.pendingBosses[this.ante] = pick(this.rng, avail);
+    }
+    return this.pendingBosses[this.ante];
+  }
+
+  /* --- 番种数值 --- */
+  handValue(key) {
+    const h = HANDS[key];
+    const lv = this.levels[key] || 1;
+    return {
+      chips: h.chips + (lv - 1) * h.lvlChips,
+      mult: h.mult + (lv - 1) * h.lvlMult,
+      level: lv
+    };
+  }
+  levelUp(key) { this.levels[key] = (this.levels[key] || 1) + 1; }
+
+  /* --- 牌库操作 --- */
+  addTileCopy(t) { this.fullDeck.push(makeTile(t.suit, t.num, t.enh)); }
+  destroyTiles(list) {
+    const ids = new Set(list.map(t => t.uid));
+    this.fullDeck = this.fullDeck.filter(t => !ids.has(t.uid));
+    this.hand = this.hand.filter(t => !ids.has(t.uid));
+    this.deck = this.deck.filter(t => !ids.has(t.uid));
+  }
+  addRandomTiles(n) {
+    for (let i = 0; i < n; i++) {
+      const s = pick(this.rng, ['man', 'pin', 'sou', 'honor']);
+      const num = s === 'honor' ? 1 + Math.floor(this.rng() * 7) : 1 + Math.floor(this.rng() * 9);
+      this.fullDeck.push(makeTile(s, num));
+    }
+  }
+
+  /* --- 福神 --- */
+  grantRandomFortune(rarity) {
+    if (this.fortunes.length >= this.jokerSlots) return null;
+    const owned = new Set(this.fortunes.map(f => f.def.key));
+    let pool = FORTUNES.filter(f => !owned.has(f.key) && f.rarity !== 'legendary');
+    if (rarity) pool = pool.filter(f => f.rarity === rarity);
+    if (!pool.length) pool = FORTUNES.filter(f => !owned.has(f.key));
+    if (!pool.length) return null;
+    const def = this.weightedFortune(pool);
+    return this.addFortune(def);
+  }
+  weightedFortune(pool) {
+    const total = pool.reduce((s, f) => s + RARITY[f.rarity].weight, 0);
+    let r = this.rng() * total;
+    for (const f of pool) { r -= RARITY[f.rarity].weight; if (r <= 0) return f; }
+    return pool[pool.length - 1];
+  }
+  addFortune(def) {
+    if (this.fortunes.length >= this.jokerSlots) return null;
+    const j = { def, counter: def.counter || 0, uid: TILE_UID++ };
+    if (def.init) def.init(j, this.rng, this);
+    if (def.onBuy) def.onBuy(j, this);
+    this.fortunes.push(j);
+    return j;
+  }
+  sellValue(item) { return Math.max(1, Math.floor((item.def.cost || 3) / 2)); }
+
+  /* --- 回合流程 --- */
+  startRound() {
+    this.round++;
+    this.boss = this.blindIdx === 2 ? this.currentBoss() : null;
+    this.state = 'playing';
+    this.target = this.blindTarget();
+    this.score = 0;
+    this.usedHandTypes = new Set();
+    this.handsPlayedThisRound = 0;
+    this.discardsThisRound = 0;
+    this.lackSuit = null;
+    if (this.boss && this.boss.key === 'lack') this.lackSuit = pick(this.rng, ['man', 'pin', 'sou']);
+    if (this.boss && this.boss.key === 'tax') this.money = Math.floor(this.money / 2);
+    this.hands = this.maxHands;
+    this.discards = this.maxDiscards;
+    this.nextRoundBonusHands = 0;
+    this.deck = shuffle(this.rng, this.fullDeck.map(t => t));
+    this.hand = [];
+    this.discardPile = [];
+    this.selected = [];
+    this.fortunes.forEach(j => { j.paid = undefined; });
+    this.draw(this.handSize);
+    this.sortHand(this.sortMode || 'suit');
+  }
+  draw(n) {
+    for (let i = 0; i < n; i++) {
+      if (!this.deck.length) break;
+      this.hand.push(this.deck.pop());
+    }
+  }
+  sortHand(mode) {
+    this.sortMode = mode;
+    const suitOrder = { man: 0, pin: 1, sou: 2, honor: 3 };
+    if (mode === 'suit') {
+      this.hand.sort((a, b) => suitOrder[a.suit] - suitOrder[b.suit] || a.num - b.num);
+    } else {
+      this.hand.sort((a, b) => a.num - b.num || suitOrder[a.suit] - suitOrder[b.suit]);
+    }
+  }
+  isDebuffed(t) {
+    if (!this.boss) return false;
+    if (this.boss.key === 'lack' && t.suit === this.lackSuit) return true;
+    return false;
+  }
+  /* 该牌是否计分为 0 */
+  tileNullified(t) {
+    if (!this.boss) return false;
+    if (this.boss.key === 'blank' && t.suit === 'honor') return true;
+    if (this.boss.key === 'cut' && t.suit !== 'honor' && (t.num === 1 || t.num === 9)) return true;
+    if (this.boss.key === 'lack' && t.suit === this.lackSuit) return true;
+    return false;
+  }
+
+  canPlay() {
+    if (!this.selected.length || this.selected.length > this.maxPlay) return false;
+    if (this.hands <= 0) return false;
+    if (this.boss && this.boss.key === 'eye') {
+      const ev = evalHand(this.selected);
+      if (this.usedHandTypes.has(ev.key)) return false;
+    }
+    return true;
+  }
+
+  /* --- 计分 --- */
+  computeScore(tiles, opts = {}) {
+    const events = [];
+    const ev = evalHand(tiles);
+    const hv = this.handValue(ev.key);
+    const scoringIds = new Set(ev.tiles.map(t => t.uid));
+    const state = { chips: hv.chips, mult: hv.mult, money: 0 };
+    const game = this;
+
+    const ctx = {
+      game, handKey: ev.key, played: tiles, scoring: ev.tiles, self: null,
+      addChips(v, t) { if (!v) return; state.chips += v; events.push({ type: 'chips', v, tile: t, src: ctx.self }); },
+      addMult(v, t) { if (!v) return; state.mult += v; events.push({ type: 'mult', v, tile: t, src: ctx.self }); },
+      xMult(v, t) { if (v === 1) return; state.mult *= v; events.push({ type: 'xmult', v, tile: t, src: ctx.self }); },
+      addMoney(v, t) { if (!v) return; state.money += v; events.push({ type: 'money', v, tile: t, src: ctx.self }); },
+      flash(msg) { events.push({ type: 'flash', msg, src: ctx.self }); },
+      chance(a, b) { return game.rng() * b < a; }
+    };
+
+    // 1. 每张计分牌
+    ev.tiles.forEach(t => {
+      if (this.tileNullified(t)) { events.push({ type: 'null', tile: t }); return; }
+      const base = tileChips(t);
+      if (base) { state.chips += base; events.push({ type: 'chips', v: base, tile: t, base: true }); }
+      // 强化
+      switch (t.enh) {
+        case 'jade': ctx.self = null; ctx.addChips(40, t); break;
+        case 'cinna': ctx.addMult(5, t); break;
+        case 'gold': ctx.addMoney(4, t); break;
+        case 'stone': ctx.addChips(60, t); break;
+        case 'glass': ctx.xMult(2, t); if (!opts.preview && ctx.chance(1, 5)) events.push({ type: 'shatter', tile: t }); break;
+        case 'lucky':
+          if (!opts.preview) {
+            if (ctx.chance(1, 4)) ctx.addMult(25, t);
+            if (ctx.chance(1, 6)) ctx.addMoney(5, t);
+          }
+          break;
+      }
+      // 福神 onScoreTile
+      this.fortunes.forEach(j => {
+        if (j.def.onScoreTile) { ctx.self = j; j.def.onScoreTile(ctx, t); ctx.self = null; }
+      });
+    });
+
+    // 2. 手牌保留触发
+    const held = this.hand.filter(t => !scoringIds.has(t.uid) && !tiles.includes(t));
+    this.fortunes.forEach(j => {
+      if (j.def.onHeld) { ctx.self = j; held.forEach(t => j.def.onHeld(ctx, t)); ctx.self = null; }
+    });
+
+    // 3. 番种级 / 独立效果
+    this.fortunes.forEach(j => {
+      if (j.def.onHandPlayed) { ctx.self = j; j.def.onHandPlayed(ctx); ctx.self = null; }
+    });
+    this.fortunes.forEach(j => {
+      if (j.def.onIndependent) { ctx.self = j; j.def.onIndependent(ctx); ctx.self = null; }
+    });
+
+    const total = Math.round(state.chips * state.mult);
+    return { ev, hv, chips: state.chips, mult: state.mult, money: state.money, total, events, scoringIds };
+  }
+
+  previewScore(tiles) {
+    if (!tiles.length) return null;
+    const saveRng = this.rng;
+    this.rng = makeRng(12345);
+    const r = this.computeScore(tiles, { preview: true });
+    this.rng = saveRng;
+    return r;
+  }
+
+  /* --- 执行出牌 --- */
+  playHand() {
+    const tiles = this.selected.slice();
+    const res = this.computeScore(tiles);
+    this.score += res.total;
+    this.money += res.money;
+    this.handStats[res.ev.key] = (this.handStats[res.ev.key] || 0) + 1;
+    this.usedHandTypes.add(res.ev.key);
+    this.hands--;
+    this.handsPlayedThisRound++;
+    // 移除牌
+    const ids = new Set(tiles.map(t => t.uid));
+    this.hand = this.hand.filter(t => !ids.has(t.uid));
+    this.discardPile.push(...tiles);
+    this.selected = [];
+    // 碎裂
+    res.events.filter(e => e.type === 'shatter').forEach(e => this.destroyTiles([e.tile]));
+    // Boss: 钩子
+    if (this.boss && this.boss.key === 'hook') {
+      for (let i = 0; i < 2 && this.hand.length; i++) {
+        const idx = Math.floor(this.rng() * this.hand.length);
+        this.discardPile.push(this.hand[idx]);
+        this.hand.splice(idx, 1);
+      }
+    }
+    this.draw(this.handSize - this.hand.length);
+    this.sortHand(this.sortMode);
+    return res;
+  }
+
+  discardSelected() {
+    if (!this.selected.length || this.discards <= 0) return false;
+    const ctx = { game: this, addMoney: (v) => { this.money += v; }, self: null };
+    this.fortunes.forEach(j => { if (j.def.onDiscard) { ctx.self = j; j.def.onDiscard(ctx); } });
+    const ids = new Set(this.selected.map(t => t.uid));
+    this.hand = this.hand.filter(t => !ids.has(t.uid));
+    this.discardPile.push(...this.selected);
+    this.selected = [];
+    this.discards--;
+    this.discardsThisRound++;
+    this.draw(this.handSize - this.hand.length);
+    this.sortHand(this.sortMode);
+    return true;
+  }
+
+  roundWon() { return this.score >= this.target; }
+  roundLost() { return this.hands <= 0 && this.score < this.target; }
+
+  cashOut() {
+    let money = this.blindReward();
+    if (this.boss && this.boss.key === 'miser') money = 0;
+    const handBonus = this.hands;
+    const interest = Math.min(this.base.interestCap, Math.floor(this.money / 5));
+    const ctx = { game: this, addMoney: (v) => { this._endBonus = (this._endBonus || 0) + v; }, self: null };
+    this._endBonus = 0;
+    this.fortunes.forEach(j => { if (j.def.onRoundEnd) { ctx.self = j; j.def.onRoundEnd(ctx); } });
+    const jokerMoney = this._endBonus;
+    const total = money + handBonus + interest + jokerMoney;
+    this.money += total;
+    return { blind: money, hands: handBonus, interest, jokers: jokerMoney, total };
+  }
+
+  advance() {
+    this.boss = null;
+    if (this.blindIdx === 2) {
+      this.ante++;
+      this.blindIdx = 0;
+      if (this.ante > 8) { this.won = true; }
+    } else {
+      this.blindIdx++;
+    }
+  }
+
+  skipBlind() {
+    const tag = pick(this.rng, TAGS);
+    switch (tag.key) {
+      case 'gold': this.money += 6; break;
+      case 'joker': this.grantRandomFortune(); break;
+      case 'manual': this.addConsumable(pick(this.rng, MANUALS), 'manual'); break;
+      case 'destiny': this.addConsumable(pick(this.rng, DESTINIES), 'destiny'); break;
+      case 'boost': this.nextRoundBonusHands += 1; break;
+    }
+    this.blindIdx++;
+    return tag;
+  }
+
+  addConsumable(def, kind) {
+    if (this.consumables.length >= this.consumableSlots) return false;
+    this.consumables.push({ def, kind, uid: TILE_UID++ });
+    return true;
+  }
+
+  /* --- 商店 --- */
+  buildShop() {
+    this.shop = { items: [], packs: [], voucher: null, rerolls: 0 };
+    const slots = this.base.shopSlots;
+    for (let i = 0; i < slots; i++) this.shop.items.push(this.rollShopItem());
+    const packPool = shuffle(this.rng, PACKS.slice());
+    this.shop.packs = packPool.slice(0, 2).map(p => ({ def: p, kind: 'pack', uid: TILE_UID++ }));
+    const ownedV = new Set(this.vouchers.map(v => v.key));
+    const vpool = VOUCHERS.filter(v => !ownedV.has(v.key));
+    if (vpool.length && this.blindIdx === 0) this.shop.voucher = { def: pick(this.rng, vpool), kind: 'voucher', uid: TILE_UID++ };
+    this.shop.bought = new Set();
+  }
+  rollShopItem() {
+    const r = this.rng();
+    if (r < 0.55) {
+      const owned = new Set(this.fortunes.map(f => f.def.key));
+      const pool = FORTUNES.filter(f => !owned.has(f.key));
+      if (pool.length) return { def: this.weightedFortune(pool), kind: 'fortune', uid: TILE_UID++ };
+    }
+    if (r < 0.80) return { def: pick(this.rng, MANUALS), kind: 'manual', uid: TILE_UID++ };
+    return { def: pick(this.rng, DESTINIES), kind: 'destiny', uid: TILE_UID++ };
+  }
+  rerollCost() { return this.base.rerollBase + (this.shop ? this.shop.rerolls * 1 : 0); }
+  reroll() {
+    const cost = this.rerollCost();
+    if (this.money < cost) return false;
+    this.money -= cost;
+    this.shop.rerolls++;
+    this.shop.items = this.shop.items.map(() => this.rollShopItem());
+    return true;
+  }
+  priceOf(item) {
+    let c = item.def.cost || 3;
+    if (item.kind === 'fortune') c = item.def.cost;
+    return Math.max(1, Math.round(c * this.base.discount));
+  }
+
+  /* --- 卡包内容 --- */
+  openPack(packDef) {
+    const out = [];
+    for (let i = 0; i < packDef.size; i++) {
+      if (packDef.kind === 'fortune') {
+        const owned = new Set(this.fortunes.map(f => f.def.key).concat(out.map(o => o.def.key)));
+        const pool = FORTUNES.filter(f => !owned.has(f.key));
+        out.push({ def: this.weightedFortune(pool.length ? pool : FORTUNES), kind: 'fortune', uid: TILE_UID++ });
+      } else if (packDef.kind === 'manual') {
+        out.push({ def: pick(this.rng, MANUALS), kind: 'manual', uid: TILE_UID++ });
+      } else if (packDef.kind === 'destiny') {
+        out.push({ def: pick(this.rng, DESTINIES), kind: 'destiny', uid: TILE_UID++ });
+      } else {
+        const s = pick(this.rng, ['man', 'pin', 'sou', 'honor']);
+        const num = s === 'honor' ? 1 + Math.floor(this.rng() * 7) : 1 + Math.floor(this.rng() * 9);
+        const t = makeTile(s, num);
+        if (this.rng() < 0.5) t.enh = pick(this.rng, ['jade', 'cinna', 'gold', 'lucky', 'glass', 'stone']);
+        out.push({ def: t, kind: 'tile', uid: TILE_UID++ });
+      }
+    }
+    return out;
+  }
+}
+
+</script>
+<script>
+/* =========================================================
+   界面 UI
+   ========================================================= */
+let G = null;
+let busy = false;
+const $ = (s) => document.querySelector(s);
+const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
+const fmt = (n) => { n = Math.round(n); return n >= 1e6 ? (n / 1e6).toFixed(n >= 1e7 ? 0 : 2) + 'M' : n.toLocaleString('en-US'); };
+const fmtM = (n) => (Math.round(n * 100) / 100).toString();
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+/* ---------- 音效 ---------- */
+let AC = null;
+function beep(freq, dur, type, vol) {
+  try {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type || 'square'; o.frequency.value = freq;
+    g.gain.value = (vol === undefined ? 0.045 : vol);
+    o.connect(g); g.connect(AC.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + (dur || .08));
+    o.stop(AC.currentTime + (dur || .08));
+  } catch (e) { }
+}
+const sfxClick = () => beep(520, .05);
+const sfxSel = () => beep(760, .04);
+const sfxChip = (i) => beep(420 + Math.min(i, 12) * 45, .07);
+const sfxMult = (i) => beep(300 + Math.min(i, 10) * 40, .08, 'triangle', .07);
+const sfxBig = () => { beep(523, .1); setTimeout(() => beep(659, .1), 90); setTimeout(() => beep(784, .18), 180); };
+const sfxBad = () => { beep(180, .18, 'sawtooth', .05); setTimeout(() => beep(120, .3, 'sawtooth', .05), 140); };
+const sfxCoin = () => { beep(1046, .05); setTimeout(() => beep(1318, .07), 45); };
+
+/* ---------- 提示 ---------- */
+function toast(msg) {
+  const t = $('#toast'); const e = el('div', 'toastItem', msg);
+  t.appendChild(e); setTimeout(() => e.remove(), 2200);
+}
+function showTip(e, data) {
+  const tip = $('#tip');
+  tip.innerHTML = '';
+  tip.appendChild(el('div', 'tn', data.name));
+  if (data.en) tip.appendChild(el('div', 'te', data.en));
+  if (data.desc) tip.appendChild(el('div', 'td', data.desc));
+  if (data.desc2) tip.appendChild(el('div', 'td2', data.desc2));
+  if (data.extra) tip.appendChild(el('div', 'td2', data.extra));
+  tip.style.display = 'block';
+  const r = e.getBoundingClientRect();
+  let x = r.left + r.width / 2 - tip.offsetWidth / 2;
+  let y = r.top - tip.offsetHeight - 8;
+  if (y < 4) y = r.bottom + 8;
+  x = Math.max(4, Math.min(window.innerWidth - tip.offsetWidth - 4, x));
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+}
+function hideTip() { $('#tip').style.display = 'none'; }
+function bindTip(node, data) {
+  node.addEventListener('mouseenter', () => showTip(node, typeof data === 'function' ? data() : data));
+  node.addEventListener('mouseleave', hideTip);
+}
+
+/* ---------- 浮动数字 ---------- */
+function floatText(target, text, color) {
+  if (!target) return;
+  const r = target.getBoundingClientRect();
+  const f = el('div', 'float', text);
+  f.style.color = color;
+  f.style.left = (r.left + r.width / 2) + 'px';
+  f.style.top = Math.max(24, r.top - 6) + 'px';
+  f.style.transform = 'translateX(-50%)';
+  document.body.appendChild(f);
+  setTimeout(() => f.remove(), 900);
+}
+
+/* =========================================================
+   渲染
+   ========================================================= */
+function tileNode(t, opts = {}) {
+  const faceDown = opts.faceDown;
+  const debuff = G && G.tileNullified(t);
+  const node = el('div', 'tile' + (opts.sel ? ' sel' : '') + (debuff && !faceDown ? ' debuff' : ''));
+  node.appendChild(pixelImg(renderTileCanvas(t, { back: faceDown }), opts.scale || 3));
+  if (!faceDown && t.enh && t.enh !== 'none') {
+    const tag = el('div', 'enhTag', ENHANCE[t.enh].cn[0]);
+    tag.style.background = ENHANCE[t.enh].tint;
+    node.appendChild(tag);
+  }
+  node.dataset.uid = t.uid;
+  if (!faceDown) {
+    bindTip(node, () => ({
+      name: tileName(t) + (t.enh !== 'none' ? ` · ${ENHANCE[t.enh].cn}` : ''),
+      en: tileName(t, true) + (t.enh !== 'none' ? ` · ${ENHANCE[t.enh].en}` : ''),
+      desc: `+${tileChips(t)} 筹码`,
+      desc2: t.enh !== 'none' ? ENHANCE[t.enh].desc : (debuff ? '⚠ 被首领盲注封锁，不计分' : '')
+    }));
+  }
+  return node;
+}
+
+/* 根据可用宽高自动选择整数倍像素缩放，保证锐利 */
+function tileScale(count) {
+  const zone = $('#handZone');
+  const avail = (zone ? zone.clientWidth : window.innerWidth - 280) - 12;
+  const per = avail / Math.max(1, count);
+  let s = Math.floor((per - 5) / PX.W);
+  if (window.innerHeight < 780) s = Math.min(s, 2);
+  if (window.innerHeight < 620) s = Math.min(s, 1);
+  return Math.max(1, Math.min(3, s));
+}
+
+function renderHand() {
+  const z = $('#handZone'); z.innerHTML = '';
+  const fog = G.bossActive('fog');
+  const scale = tileScale(G.hand.length);
+  G.hand.forEach(t => {
+    const sel = G.selected.includes(t);
+    const n = tileNode(t, { sel, faceDown: fog && !sel, scale });
+    n.addEventListener('click', () => {
+      if (busy) return;
+      if (G.pendingSelect) return toggleForConsumable(t, n);
+      const i = G.selected.indexOf(t);
+      if (i >= 0) G.selected.splice(i, 1);
+      else {
+        if (G.selected.length >= G.maxPlay) return;
+        G.selected.push(t);
+      }
+      sfxSel(); renderHand(); renderScoreArea();
+    });
+    z.appendChild(n);
+  });
+  $('#deckInfo').innerHTML = `<b>${G.deck.length}</b>/${G.fullDeck.length}<br>牌库 DECK`;
+}
+
+function renderJokers() {
+  const bar = $('#jokerBar'); bar.innerHTML = '';
+  G.fortunes.forEach(j => bar.appendChild(jokerNode(j)));
+  for (let i = G.fortunes.length; i < G.jokerSlots; i++) {
+    const e = el('div', 'jcard'); e.style.opacity = '.22'; e.style.cursor = 'default'; bar.appendChild(e);
+  }
+  $('#jokerCount').textContent = `${G.fortunes.length}/${G.jokerSlots}`;
+
+  const cb = $('#consBar'); cb.innerHTML = '';
+  G.consumables.forEach(c => cb.appendChild(consNode(c)));
+  for (let i = G.consumables.length; i < G.consumableSlots; i++) {
+    const e = el('div', 'jcard'); e.style.opacity = '.22'; e.style.cursor = 'default'; cb.appendChild(e);
+  }
+  $('#consCount').textContent = `${G.consumables.length}/${G.consumableSlots}`;
+}
+
+function jokerNode(j) {
+  const d = j.def;
+  const n = el('div', 'jcard r-' + d.rarity);
+  n.dataset.uid = j.uid;
+  n.appendChild(pixelImg(renderIconCanvas(d.icon, '#fff8e6', RARITY[d.rarity].color), 2));
+  n.appendChild(el('div', 'jn', d.cn));
+  if (d.dyn) n.appendChild(el('div', 'dyn', d.dyn(j, G)));
+  bindTip(n, () => ({
+    name: d.cn, en: d.en, desc: d.desc,
+    desc2: d.descEn,
+    extra: `【${RARITY[d.rarity].cn}】 售价 $${G.sellValue(j)}　右键出售`
+  }));
+  n.addEventListener('contextmenu', (ev) => {
+    ev.preventDefault();
+    if (busy) return;
+    G.money += G.sellValue(j);
+    G.fortunes = G.fortunes.filter(f => f !== j);
+    sfxCoin(); hideTip(); renderAll();
+  });
+  return n;
+}
+
+function consNode(c) {
+  const d = c.def;
+  const n = el('div', 'jcard k-' + c.kind);
+  n.appendChild(pixelImg(renderIconCanvas(d.icon, '#fff8e6', c.kind === 'manual' ? '#8a72c9' : '#c9913f'), 2));
+  n.appendChild(el('div', 'jn', d.cn));
+  bindTip(n, () => ({
+    name: d.cn, en: d.en,
+    desc: c.kind === 'manual' ? `${d.desc}（当前 ${G.levels[d.hand]} 级 → ${G.levels[d.hand] + 1} 级）` : d.desc,
+    desc2: d.descEn, extra: '左键使用　右键出售 $' + G.sellValue(c)
+  }));
+  n.addEventListener('click', () => { if (!busy) useConsumable(c); });
+  n.addEventListener('contextmenu', (ev) => {
+    ev.preventDefault(); if (busy) return;
+    G.money += G.sellValue(c);
+    G.consumables = G.consumables.filter(x => x !== c);
+    sfxCoin(); hideTip(); renderAll();
+  });
+  return n;
+}
+
+function renderScoreArea(anim) {
+  const hv = anim ? anim.hv : null;
+  let key = null, chips = 0, mult = 0;
+  if (anim) { key = anim.key; chips = anim.chips; mult = anim.mult; }
+  else if (G.selected.length) {
+    const ev = evalHand(G.selected);
+    const v = G.handValue(ev.key);
+    key = ev.key; chips = v.chips; mult = v.mult;
+  }
+  if (key) {
+    const h = HANDS[key];
+    $('#handName').innerHTML = `<span class="cn">${h.cn}</span><span id="handLevel">Lv.${G.levels[key]}</span>`;
+    $('#handNameEn').textContent = h.en;
+  } else {
+    $('#handName').innerHTML = '<span style="color:#5f6d7c">选择麻将牌</span>';
+    $('#handNameEn').textContent = 'SELECT TILES';
+  }
+  setPx($('#chipsBox'), key ? fmt(chips) : '0', 13, '#ffffff', '#0a3d63');
+  setPx($('#multBox'), key ? fmtM(mult) : '0', 13, '#ffffff', '#7a221c');
+  setPx($('#roundScore'), fmt(G.score), 14, '#ffffff', '#000000');
+  $('#playBtn').disabled = !G.canPlay();
+  $('#discBtn').disabled = !(G.selected.length && G.discards > 0);
+  renderMiniHands(key);
+}
+
+function renderMiniHands(active) {
+  const box = $('#miniHandsBox'); if (!box) return;
+  let t = $('#miniHands');
+  if (!t) { t = el('table'); t.id = 'miniHands'; box.appendChild(t); }
+  t.innerHTML = '';
+  HAND_ORDER.forEach(k => {
+    const h = HANDS[k], v = G.handValue(k);
+    const tr = el('tr', k === active ? 'act' : '');
+    tr.innerHTML = `<td>${h.cn}</td><td class="l">Lv.${v.level}</td>
+      <td class="c">${fmt(v.chips)}</td><td style="color:#8b97a4">×</td><td class="m">${fmtM(v.mult)}</td>`;
+    t.appendChild(tr);
+  });
+}
+
+function renderSide() {
+  const bn = G.blindName();
+  const isBoss = G.blindIdx === 2;
+  const chip = $('#blindChip');
+  chip.textContent = isBoss ? (G.currentBoss().icon) : (G.blindIdx === 0 ? '小' : '大');
+  chip.style.background = isBoss ? '#8e2f2f' : (G.blindIdx === 0 ? '#3f6f8e' : '#8e6a2f');
+  $('#blindName').innerHTML = `<span class="cn">${bn[0]}</span>`;
+  $('#blindNameEn').textContent = bn[1];
+  const b = isBoss ? G.currentBoss() : null;
+  $('#blindDesc').textContent = b ? b.desc + (G.lackSuit && b.key === 'lack' ? `（${SUITS[G.lackSuit].cn}）` : '') : '';
+  setPx($('#targetVal'), fmt(G.target || G.blindTarget()), 13, '#ff5f55', '#000000');
+  $('#rewardVal').innerHTML = '奖励 ' + '<span class="coin"></span>'.repeat(G.blindReward());
+  setPx($('#handsV'), String(G.hands), 13, '#59c4ff', '#0a2b45', 2);
+  setPx($('#discV'), String(G.discards), 13, '#ff6b5e', '#4a1512', 2);
+  setPx($('#moneyV'), String(G.money), 13, '#f0c04a', '#4a3708', 2);
+  setPx($('#anteV'), `${G.ante}/8`, 13, '#f2efe4', '#000000', 2);
+  setPx($('#roundV'), String(G.round), 13, '#f2efe4', '#000000', 2);
+}
+
+function renderAll() { renderSide(); renderJokers(); renderHand(); renderScoreArea(); }
+
+/* =========================================================
+   出牌流程
+   ========================================================= */
+async function doPlay() {
+  if (busy || !G.canPlay()) return;
+  busy = true; hideTip();
+  const played = G.selected.slice();
+  const res = G.playHand();
+  // 显示打出的牌
+  const pz = $('#playedZone'); pz.innerHTML = '';
+  const nodeMap = {};
+  const pscale = tileScale(Math.max(6, played.length));
+  played.forEach(t => {
+    const n = tileNode(t, { sel: false, scale: pscale });
+    n.style.transform = 'translateY(0)';
+    pz.appendChild(n); nodeMap[t.uid] = n;
+  });
+  renderHand(); renderSide();
+  const jokerMap = {};
+  [...$('#jokerBar').children].forEach(c => { if (c.dataset.uid) jokerMap[c.dataset.uid] = c; });
+
+  const anim = { key: res.ev.key, chips: res.hv.chips, mult: res.hv.mult };
+  renderScoreArea(anim);
+  beep(660, .06);
+  await sleep(260);
+
+  // 高亮计分牌
+  played.forEach(t => { if (!res.scoringIds.has(t.uid)) nodeMap[t.uid].style.opacity = '.4'; });
+  await sleep(180);
+
+  let i = 0;
+  for (const ev of res.events) {
+    const tgt = ev.tile ? (nodeMap[ev.tile.uid] || null) : null;
+    const jn = ev.src ? jokerMap[ev.src.uid] : null;
+    const anchor = tgt || jn;
+    if (jn) { jn.classList.add('trig'); setTimeout(() => jn.classList.remove('trig'), 360); }
+    if (tgt) { tgt.classList.add('scoring'); setTimeout(() => tgt.classList.remove('scoring'), 400); }
+    switch (ev.type) {
+      case 'chips': anim.chips += ev.v; floatText(anchor, '+' + ev.v, '#59c4ff'); sfxChip(i); break;
+      case 'mult': anim.mult += ev.v; floatText(anchor, '+' + ev.v, '#ff8b83'); sfxMult(i); break;
+      case 'xmult': anim.mult *= ev.v; floatText(anchor, '×' + ev.v, '#ff5f55'); sfxMult(i + 4); break;
+      case 'money': floatText(anchor, '+$' + ev.v, '#f0c04a'); sfxCoin(); break;
+      case 'null': floatText(anchor, '封锁', '#ff5f55'); beep(150, .1, 'sawtooth', .04); break;
+      case 'shatter': floatText(anchor, '碎裂!', '#7fd4ff'); beep(1200, .12, 'triangle', .05); break;
+      case 'flash': floatText(anchor, ev.msg, '#ffe9a8'); break;
+    }
+    renderScoreArea(anim);
+    $('#chipsBox').classList.add('pulse'); $('#multBox').classList.add('pulse');
+    setTimeout(() => { $('#chipsBox').classList.remove('pulse'); $('#multBox').classList.remove('pulse'); }, 260);
+    i++;
+    await sleep(ev.type === 'flash' ? 130 : 175);
+  }
+
+  await sleep(200);
+  // 结算总分
+  sfxBig();
+  const start = G.score - res.total;
+  const steps = 18;
+  for (let s = 1; s <= steps; s++) {
+    $('#roundScore').textContent = fmt(start + res.total * (s / steps));
+    $('#roundScore').classList.add('pulse');
+    await sleep(18);
+  }
+  $('#roundScore').textContent = fmt(G.score);
+  await sleep(300);
+  pz.innerHTML = '';
+  renderAll();
+  busy = false;
+
+  if (G.roundWon()) { await sleep(250); showCashOut(); }
+  else if (G.roundLost()) { await sleep(400); showGameOver(); }
+}
+
+async function doDiscard() {
+  if (busy || !G.selected.length || G.discards <= 0) return;
+  busy = true; hideTip();
+  beep(240, .09, 'sawtooth', .05);
+  G.discardSelected();
+  renderAll();
+  busy = false;
+}
+
+/* =========================================================
+   消耗牌
+   ========================================================= */
+function useConsumable(c) {
+  hideTip();
+  if (c.kind === 'manual') {
+    G.levelUp(c.def.hand);
+    G.consumables = G.consumables.filter(x => x !== c);
+    toast(`「${HANDS[c.def.hand].cn}」升至 Lv.${G.levels[c.def.hand]}`);
+    sfxBig(); renderAll(); return;
+  }
+  const need = c.def.select || [0, 0];
+  if (need[1] === 0) {
+    c.def.apply(G, []);
+    G.consumables = G.consumables.filter(x => x !== c);
+    sfxCoin(); toast(`使用了「${c.def.cn}」`); renderAll(); return;
+  }
+  if (G.state !== 'playing') { toast('该天命牌需在回合中选择麻将牌使用'); return; }
+  G.pendingSelect = { cons: c, need, chosen: [] };
+  G.selected = [];
+  renderHand();
+  showSelectBar();
+}
+
+function toggleForConsumable(t, node) {
+  const ps = G.pendingSelect;
+  const i = ps.chosen.indexOf(t);
+  if (i >= 0) ps.chosen.splice(i, 1);
+  else { if (ps.chosen.length >= ps.need[1]) return; ps.chosen.push(t); }
+  sfxSel();
+  [...$('#handZone').children].forEach(n => {
+    const tt = G.hand.find(x => x.uid == n.dataset.uid);
+    n.classList.toggle('sel', ps.chosen.includes(tt));
+  });
+  updateSelectBar();
+}
+
+function showSelectBar() {
+  let bar = $('#selBar');
+  if (!bar) {
+    bar = el('div', 'panel'); bar.id = 'selBar';
+    bar.style.cssText = 'position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:80;display:flex;gap:10px;align-items:center;';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = '';
+  const info = el('div', 'cn'); info.id = 'selInfo'; info.style.fontSize = '13px';
+  bar.appendChild(info);
+  const ok = el('button', 'btn green sm', '使用 USE'); ok.id = 'selOk';
+  ok.onclick = () => {
+    const ps = G.pendingSelect;
+    if (ps.chosen.length < ps.need[0]) return;
+    ps.cons.def.apply(G, ps.chosen.slice());
+    G.consumables = G.consumables.filter(x => x !== ps.cons);
+    G.pendingSelect = null; bar.remove();
+    PX.cache.clear();
+    sfxBig(); toast(`使用了「${ps.cons.def.cn}」`); renderAll();
+  };
+  const cancel = el('button', 'btn grey sm', '取消');
+  cancel.onclick = () => { G.pendingSelect = null; bar.remove(); renderAll(); };
+  bar.appendChild(ok); bar.appendChild(cancel);
+  updateSelectBar();
+}
+function updateSelectBar() {
+  const ps = G.pendingSelect; if (!ps) return;
+  $('#selInfo').textContent = `${ps.cons.def.cn}：选择 ${ps.need[0]}~${ps.need[1]} 张（已选 ${ps.chosen.length}）`;
+  $('#selOk').disabled = ps.chosen.length < ps.need[0];
+}
+
+/* =========================================================
+   屏幕
+   ========================================================= */
+function closeScreen() { const s = $('#screen'); if (s) s.remove(); }
+function makeScreen(cls) {
+  closeScreen();
+  const s = el('div', 'screen'); s.id = 'screen';
+  if (cls) s.classList.add(cls);
+  document.body.appendChild(s);
+  return s;
+}
+
+/* ---------- 盲注选择 ---------- */
+function showBlindSelect() {
+  G.state = 'blindSelect';
+  hideTip();
+  const s = makeScreen();
+  s.appendChild(el('div', 'title cn', `底注 ${G.ante} / 8　ANTE ${G.ante}`));
+  s.appendChild(el('div', 'subtitle', `选择盲注 · CHOOSE YOUR BLIND　　资金 $${G.money}`));
+  const wrap = el('div', ''); wrap.id = 'blindPick';
+  [0, 1, 2].forEach(i => {
+    const card = el('div', 'blindCard' + (i === G.blindIdx ? ' cur' : '') + (i < G.blindIdx ? ' done' : ''));
+    const boss = i === 2 ? G.currentBoss() : null;
+    const chip = el('div', 'bigChip', i === 2 ? boss.icon : (i === 0 ? '小' : '大'));
+    chip.style.background = i === 2 ? '#8e2f2f' : (i === 0 ? '#3f6f8e' : '#8e6a2f');
+    card.appendChild(chip);
+    const nm = i === 0 ? T.smallBlind : i === 1 ? T.bigBlind : [boss.cn, boss.en];
+    card.appendChild(el('h3', 'cn', nm[0]));
+    card.appendChild(el('div', 'tgt', nm[1]));
+    card.appendChild(el('div', 'bd cn', i === 2 ? boss.desc : (i === 0 ? '普通盲注' : '注码提高')));
+    card.appendChild(el('div', 'tgt', '目标分数 SCORE'));
+    card.appendChild(el('div', 'tgtv', fmt(G.blindTarget(i))));
+    card.appendChild(el('div', 'rw', '奖励 ' + '<span class="coin"></span>'.repeat(G.blindReward(i))));
+    if (i === G.blindIdx) {
+      const b = el('button', 'btn play', '开始 PLAY');
+      b.onclick = () => { sfxClick(); closeScreen(); G.startRound(); renderAll(); };
+      card.appendChild(b);
+      if (i < 2) {
+        const sk = el('button', 'btn grey sm', '跳过（获得标签）');
+        sk.onclick = () => {
+          sfxClick(); const tag = G.skipBlind();
+          toast(`获得标签「${tag.cn}」：${tag.desc}`);
+          showBlindSelect();
+        };
+        card.appendChild(sk);
+      }
+    } else if (i < G.blindIdx) {
+      card.appendChild(el('div', 'cn', '<span style="color:#3fae74">已通过</span>'));
+    }
+    wrap.appendChild(card);
+  });
+  s.appendChild(wrap);
+  const row = el('div', 'rowBtns');
+  const info = el('button', 'btn grey sm', '番种表 HANDS'); info.onclick = () => showHandTable();
+  const deckB = el('button', 'btn grey sm', '牌库 DECK'); deckB.onclick = () => showDeck();
+  row.appendChild(info); row.appendChild(deckB);
+  s.appendChild(row);
+}
+
+/* ---------- 结算 ---------- */
+function showCashOut() {
+  G.state = 'cashout';
+  const r = G.cashOut();
+  const s = makeScreen();
+  const box = el('div', 'screenBox');
+  box.style.minWidth = '360px';
+  box.appendChild(el('div', 'title cn', '过关！'));
+  box.appendChild(el('div', 'subtitle', 'BLIND DEFEATED　得分 ' + fmt(G.score) + ' / ' + fmt(G.target)));
+  const lines = [
+    [G.blindName()[0] + ' 奖励', r.blind],
+    ['剩余出牌次数 ×$1', r.hands],
+    ['利息（每 $5 得 $1）', r.interest]
+  ];
+  if (r.jokers) lines.push(['福神牌收益', r.jokers]);
+  lines.forEach(([k, v]) => {
+    const ln = el('div', 'moneyLine');
+    ln.appendChild(el('span', 'cn', k));
+    ln.appendChild(el('span', 'm', '+$' + v));
+    box.appendChild(ln);
+  });
+  const tl = el('div', 'moneyLine'); tl.style.borderTop = '2px solid #ffffff22'; tl.style.marginTop = '6px'; tl.style.paddingTop = '6px';
+  tl.appendChild(el('span', 'cn', '合计 TOTAL'));
+  tl.appendChild(el('span', 'm', '+$' + r.total));
+  box.appendChild(tl);
+  const row = el('div', 'rowBtns');
+  const b = el('button', 'btn gold', '领取奖励 CASH OUT');
+  b.onclick = () => { sfxCoin(); G.advance(); if (G.won) return showWin(); showShop(); };
+  row.appendChild(b); box.appendChild(row);
+  s.appendChild(box);
+  sfxBig();
+}
+
+/* ---------- 商店 ---------- */
+function showShop() {
+  G.state = 'shop';
+  G.buildShop();
+  renderShop();
+}
+function renderShop() {
+  hideTip();
+  const s = makeScreen();
+  const box = el('div', 'screenBox');
+  box.appendChild(el('div', 'title cn', '商店 SHOP'));
+  const sub = el('div', 'subtitle');
+  sub.innerHTML = `资金 <b style="color:#f0c04a">$${G.money}</b>　·　福神 ${G.fortunes.length}/${G.jokerSlots}　·　消耗 ${G.consumables.length}/${G.consumableSlots}`;
+  box.appendChild(sub);
+
+  // 已有福神展示
+  const own = el('div', ''); own.style.cssText = 'display:flex;gap:5px;justify-content:center;margin-bottom:10px;min-height:90px;';
+  G.fortunes.forEach(j => own.appendChild(jokerNode(j)));
+  G.consumables.forEach(c => own.appendChild(consNode(c)));
+  if (!G.fortunes.length && !G.consumables.length) { own.innerHTML = '<div class="hint">尚未拥有任何福神牌</div>'; own.style.minHeight = '20px'; }
+  box.appendChild(own);
+
+  // 商品
+  const sec1 = el('div', 'shopSection');
+  const grid = el('div', ''); grid.id = 'shopGrid';
+  G.shop.items.forEach((it, idx) => {
+    if (G.shop.bought.has(it.uid)) { const ph = el('div', 'shopSlot'); ph.style.width = '96px'; grid.appendChild(ph); return; }
+    grid.appendChild(shopCard(it, () => buyItem(it)));
+  });
+  if (G.shop.voucher && !G.shop.bought.has(G.shop.voucher.uid)) grid.appendChild(shopCard(G.shop.voucher, () => buyItem(G.shop.voucher)));
+  sec1.appendChild(grid);
+  box.appendChild(sec1);
+
+  // 卡包
+  const sec2 = el('div', 'shopSection'); sec2.style.marginTop = '10px';
+  const g2 = el('div', ''); g2.id = 'shopGrid2'; g2.style.cssText = 'display:flex;gap:10px;justify-content:center;';
+  G.shop.packs.forEach(p => {
+    if (G.shop.bought.has(p.uid)) { const ph = el('div', ''); ph.style.width = '96px'; g2.appendChild(ph); return; }
+    g2.appendChild(shopCard(p, () => buyPack(p)));
+  });
+  sec2.appendChild(g2);
+  box.appendChild(sec2);
+
+  const row = el('div', 'rowBtns');
+  const nb = el('button', 'btn play', '下一关 NEXT ROUND');
+  nb.onclick = () => { sfxClick(); closeScreen(); showBlindSelect(); };
+  const rr = el('button', 'btn disc', `刷新 REROLL $${G.rerollCost()}`);
+  rr.disabled = G.money < G.rerollCost();
+  rr.onclick = () => { if (G.reroll()) { beep(880, .06); renderShop(); } };
+  const ht = el('button', 'btn grey sm', '番种表'); ht.onclick = () => showHandTable(renderShop);
+  const dk = el('button', 'btn grey sm', '牌库'); dk.onclick = () => showDeck(renderShop);
+  row.appendChild(nb); row.appendChild(rr); row.appendChild(ht); row.appendChild(dk);
+  box.appendChild(row);
+  s.appendChild(box);
+}
+
+function shopCard(item, onBuy) {
+  const d = item.def;
+  const wrap = el('div', 'shopSlot');
+  const c = el('div', 'bigCard ' + (item.kind === 'fortune' ? 'r-' + d.rarity : 'k-' + item.kind));
+  c.appendChild(pixelImg(renderIconCanvas(d.icon, '#fff8e6',
+    item.kind === 'fortune' ? RARITY[d.rarity].color : (item.kind === 'manual' ? '#8a72c9' : item.kind === 'voucher' ? '#4a90d9' : item.kind === 'pack' ? '#d96ba0' : '#c9913f')), 3));
+  c.appendChild(el('div', 'bn', d.cn));
+  c.appendChild(el('div', 'bd2', item.kind === 'manual' ? `Lv.${G.levels[d.hand]} → ${G.levels[d.hand] + 1}` : d.desc));
+  if (item.kind === 'fortune') { const r = el('div', 'rar', RARITY[d.rarity].cn); r.style.background = RARITY[d.rarity].color; c.appendChild(r); }
+  const price = G.priceOf(item);
+  const p = el('div', 'price', '$' + price); c.appendChild(p);
+  bindTip(c, () => ({ name: d.cn, en: d.en, desc: item.kind === 'manual' ? d.desc : d.desc, desc2: d.descEn }));
+  if (G.money < price) c.style.filter = 'grayscale(.6) brightness(.7)';
+  c.onclick = () => { if (G.money >= price) onBuy(); else { beep(140, .12, 'sawtooth', .04); toast('资金不足'); } };
+  wrap.appendChild(c);
+  return wrap;
+}
+
+function buyItem(item) {
+  const price = G.priceOf(item);
+  if (G.money < price) return;
+  if (item.kind === 'fortune' && G.fortunes.length >= G.jokerSlots) { toast('福神牌栏位已满'); return; }
+  if ((item.kind === 'manual' || item.kind === 'destiny') && G.consumables.length >= G.consumableSlots) { toast('消耗牌栏位已满'); return; }
+  G.money -= price;
+  G.shop.bought.add(item.uid);
+  if (item.kind === 'fortune') G.addFortune(item.def);
+  else if (item.kind === 'voucher') { item.def.apply(G); G.vouchers.push(item.def); toast(`获得优惠券「${item.def.cn}」`); }
+  else G.addConsumable(item.def, item.kind);
+  sfxCoin(); hideTip(); renderShop();
+}
+
+function buyPack(p) {
+  const price = G.priceOf(p);
+  if (G.money < price) return;
+  G.money -= price;
+  G.shop.bought.add(p.uid);
+  sfxCoin();
+  openPackScreen(p.def);
+}
+
+function openPackScreen(def) {
+  const items = G.openPack(def);
+  let picks = def.pick;
+  const s = makeScreen();
+  const box = el('div', 'screenBox');
+  box.appendChild(el('div', 'title cn', def.cn));
+  const sub = el('div', 'subtitle'); sub.id = 'packSub';
+  sub.textContent = `选择 ${def.pick} 张 · CHOOSE ${def.pick} of ${def.size}`;
+  box.appendChild(sub);
+  const grid = el('div', ''); grid.style.cssText = 'display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:8px 0;';
+  items.forEach(it => {
+    let node;
+    if (it.kind === 'tile') {
+      node = el('div', 'shopSlot');
+      const tn = tileNode(it.def, { scale: 3 });
+      node.appendChild(tn);
+      node.appendChild(el('div', 'bn', tileName(it.def) + (it.def.enh !== 'none' ? '·' + ENHANCE[it.def.enh].cn : '')));
+      node.style.width = '104px';
+      node.style.cursor = 'pointer';
+    } else {
+      node = el('div', 'bigCard ' + (it.kind === 'fortune' ? 'r-' + it.def.rarity : 'k-' + it.kind));
+      node.appendChild(pixelImg(renderIconCanvas(it.def.icon, '#fff8e6',
+        it.kind === 'fortune' ? RARITY[it.def.rarity].color : (it.kind === 'manual' ? '#8a72c9' : '#c9913f')), 3));
+      node.appendChild(el('div', 'bn', it.def.cn));
+      node.appendChild(el('div', 'bd2', it.kind === 'manual' ? `Lv.${G.levels[it.def.hand]} → ${G.levels[it.def.hand] + 1}` : it.def.desc));
+      bindTip(node, () => ({ name: it.def.cn, en: it.def.en, desc: it.def.desc, desc2: it.def.descEn }));
+    }
+    node.onclick = () => {
+      if (picks <= 0) return;
+      if (it.kind === 'fortune') {
+        if (G.fortunes.length >= G.jokerSlots) { toast('福神牌栏位已满'); return; }
+        G.addFortune(it.def);
+      } else if (it.kind === 'manual') {
+        G.levelUp(it.def.hand); toast(`「${HANDS[it.def.hand].cn}」升至 Lv.${G.levels[it.def.hand]}`);
+      } else if (it.kind === 'destiny') {
+        if (G.consumables.length >= G.consumableSlots) { toast('消耗牌栏位已满'); return; }
+        G.addConsumable(it.def, 'destiny');
+      } else {
+        G.fullDeck.push(it.def); toast(`「${tileName(it.def)}」加入牌库`);
+      }
+      picks--; sfxBig();
+      node.style.visibility = 'hidden';
+      $('#packSub').textContent = picks > 0 ? `还可选择 ${picks} 张` : '已选完';
+      if (picks <= 0) { hideTip(); setTimeout(() => renderShop(), 350); }
+    };
+    grid.appendChild(node);
+  });
+  box.appendChild(grid);
+  const row = el('div', 'rowBtns');
+  const skip = el('button', 'btn grey', '跳过 SKIP');
+  skip.onclick = () => { hideTip(); renderShop(); };
+  row.appendChild(skip); box.appendChild(row);
+  s.appendChild(box);
+}
+
+/* ---------- 番种表 / 牌库 ---------- */
+function showHandTable(back) {
+  const s = makeScreen();
+  const box = el('div', 'screenBox');
+  box.appendChild(el('div', 'title cn', '番种表'));
+  box.appendChild(el('div', 'subtitle', 'POKER HANDS · 等级越高分数越高'));
+  const t = el('table'); t.id = 'handTable';
+  HAND_ORDER.forEach(k => {
+    const h = HANDS[k], v = G.handValue(k);
+    const tr = el('tr');
+    tr.innerHTML = `<td class="cn">${h.cn}</td><td style="color:#9daab8;font-size:9px">${h.en}</td>
+      <td class="lv">Lv.${v.level}</td>
+      <td class="hc">${fmt(v.chips)}</td><td style="color:#e7e0cf">×</td><td class="hm">${fmtM(v.mult)}</td>
+      <td style="color:#9daab8;font-size:9px">已打 ${G.handStats[k] || 0}</td>`;
+    t.appendChild(tr);
+  });
+  box.appendChild(t);
+  const row = el('div', 'rowBtns');
+  const b = el('button', 'btn grey', '返回 BACK');
+  b.onclick = () => { closeScreen(); if (back) back(); else if (G.state === 'blindSelect') showBlindSelect(); };
+  row.appendChild(b); box.appendChild(row);
+  s.appendChild(box);
+}
+
+function showDeck(back) {
+  const s = makeScreen();
+  const box = el('div', 'screenBox');
+  box.appendChild(el('div', 'title cn', '牌库 DECK'));
+  box.appendChild(el('div', 'subtitle', `共 ${G.fullDeck.length} 张`));
+  ['man', 'pin', 'sou', 'honor'].forEach(su => {
+    const list = G.fullDeck.filter(t => t.suit === su).sort((a, b) => a.num - b.num);
+    if (!list.length) return;
+    box.appendChild(el('div', 'lbl cn', SUITS[su].cn + ' ' + SUITS[su].en + ` (${list.length})`));
+    const row = el('div', '');
+    row.style.cssText = 'display:flex;flex-wrap:wrap;gap:3px;margin:4px 0 10px;';
+    list.forEach(t => { const n = el('div', 'tile'); n.appendChild(pixelImg(renderTileCanvas(t, {}), 1));
+      if (t.enh !== 'none') { n.style.outline = '2px solid ' + ENHANCE[t.enh].tint; }
+      row.appendChild(n); });
+    box.appendChild(row);
+  });
+  const row = el('div', 'rowBtns');
+  const b = el('button', 'btn grey', '返回 BACK');
+  b.onclick = () => { closeScreen(); if (back) back(); else if (G.state === 'blindSelect') showBlindSelect(); };
+  row.appendChild(b); box.appendChild(row);
+  s.appendChild(box);
+}
+
+/* ---------- 结束 ---------- */
+function showGameOver() {
+  sfxBad();
+  const s = makeScreen();
+  const box = el('div', 'screenBox');
+  box.style.textAlign = 'center';
+  box.appendChild(el('div', 'title cn', '<span style="color:#fe5f55">流局</span>'));
+  box.appendChild(el('div', 'subtitle', 'GAME OVER'));
+  box.appendChild(el('div', 'cn', `在底注 ${G.ante} 的${G.blindName()[0]}倒下`));
+  box.appendChild(el('div', 'hint', `得分 ${fmt(G.score)} / ${fmt(G.target)}　·　共进行 ${G.round} 回合`));
+  const best = Object.entries(G.handStats).sort((a, b) => b[1] - a[1])[0];
+  if (best && best[1]) box.appendChild(el('div', 'hint', `最常用番种：${HANDS[best[0]].cn} ×${best[1]}`));
+  const row = el('div', 'rowBtns');
+  const b = el('button', 'btn play', '再来一局 NEW RUN');
+  b.onclick = () => startNewRun();
+  row.appendChild(b); box.appendChild(row);
+  s.appendChild(box);
+}
+
+function showWin() {
+  sfxBig(); setTimeout(sfxBig, 300); setTimeout(sfxBig, 600);
+  const s = makeScreen();
+  const box = el('div', 'screenBox'); box.style.textAlign = 'center';
+  box.appendChild(el('div', 'title cn', '<span style="color:#f0c04a">大四喜！通关！</span>'));
+  box.appendChild(el('div', 'subtitle', 'YOU WIN — ANTE 8 CLEARED'));
+  box.appendChild(el('div', 'cn', `共 ${G.round} 回合，最终资金 $${G.money}`));
+  const row = el('div', 'rowBtns');
+  const b = el('button', 'btn play', '再来一局 NEW RUN');
+  b.onclick = () => startNewRun();
+  const cont = el('button', 'btn gold', '无尽模式 ENDLESS');
+  cont.onclick = () => { G.won = false; closeScreen(); showBlindSelect(); };
+  row.appendChild(b); row.appendChild(cont); box.appendChild(row);
+  s.appendChild(box);
+}
+
+/* ---------- 开始 ---------- */
+function showTitle() {
+  const s = makeScreen();
+  const box = el('div', 'screenBox'); box.style.textAlign = 'center'; box.style.padding = '26px 34px';
+  const t = pixelTitle('麻将小丑牌', 54, '#f0c04a', '#7a3020');
+  t.style.margin = '0 auto 4px';
+  box.appendChild(t);
+  box.appendChild(el('div', 'subtitle', 'M A H J O N G T R O　·　肉鸽麻将 ROGUELIKE'));
+  const fan = el('div', '');
+  fan.style.cssText = 'display:flex;justify-content:center;margin:10px 0 12px;height:104px;align-items:center;';
+  [['honor', 5], ['man', 1], ['pin', 1], ['sou', 1], ['honor', 6], ['honor', 7]].forEach((t, i) => {
+    const w = el('div', '');
+    w.style.cssText = `margin:0 -6px;transform:rotate(${(i - 2.5) * 7}deg) translateY(${Math.abs(i - 2.5) * 4}px);
+      filter:drop-shadow(0 4px 0 rgba(0,0,0,.45));`;
+    w.appendChild(pixelImg(renderTileCanvas({ suit: t[0], num: t[1], enh: 'none' }, {}), 2));
+    fan.appendChild(w);
+  });
+  box.appendChild(fan);
+  box.appendChild(el('div', 'hint cn', '打出麻将番种，用筹码 × 倍率击破 8 个底注的盲注。<br>福神牌改变一切。'));
+  box.appendChild(el('div', 'hint', '快捷键：Enter 出牌 · D 弃牌 · S 排序 · Esc 取消选择'));
+  const row = el('div', 'rowBtns');
+  const b = el('button', 'btn play', '开始游戏 START');
+  b.onclick = () => startNewRun();
+  const h = el('button', 'btn grey', '玩法说明 HOW TO PLAY');
+  h.onclick = () => showHelp();
+  row.appendChild(b); row.appendChild(h); box.appendChild(row);
+  s.appendChild(box);
+}
+
+function showHelp() {
+  const s = makeScreen();
+  const box = el('div', 'screenBox');
+  box.style.maxWidth = '640px';
+  box.appendChild(el('div', 'title cn', '玩法说明'));
+  box.innerHTML += `
+  <div class="cn" style="font-size:12px;line-height:1.8;color:#e6e2d4">
+   <p><b style="color:#f0c04a">目标</b>　每个盲注给出目标分数，你有 <b>4 次出牌</b>与 <b>3 次弃牌</b>。累计得分达标即过关；用完出牌仍未达标则本局结束。</p>
+   <p><b style="color:#f0c04a">计分</b>　每次最多打出 5 张牌，系统自动识别最大番种。<span style="color:#59c4ff">筹码</span> × <span style="color:#ff8b83">倍率</span> = 得分。番种提供基础筹码/倍率，每张计分牌再加自身筹码。</p>
+   <p><b style="color:#f0c04a">番种</b>　单张 / 对子 / 两对 / 顺子（同花色三连）/ 刻子 / 清一色 / 刻将 / 杠 / 字一色 / 清龙 / 清刻将 / 五同。</p>
+   <p><b style="color:#f0c04a">福神牌</b>　类似小丑牌，常驻生效，最多 5 张。右键出售。</p>
+   <p><b style="color:#f0c04a">秘籍</b>　永久提升某个番种的等级。<b style="color:#f0c04a">天命牌</b>　改造你的麻将牌（玉/朱砂/金/幸运/琉璃/石）。</p>
+   <p><b style="color:#f0c04a">首领盲注</b>　每个底注的第 3 关，带有特殊限制，务必看清描述。</p>
+   <p style="color:#9daab8">提示：点击手牌选择，点「出牌」结算。悬停任何卡牌可查看详情。</p>
+  </div>`;
+  const row = el('div', 'rowBtns');
+  const b = el('button', 'btn grey', '返回 BACK');
+  b.onclick = () => { closeScreen(); showTitle(); };
+  row.appendChild(b); box.appendChild(row);
+  s.appendChild(box);
+}
+
+function startNewRun() {
+  PX.cache.clear();
+  G = new Game();
+  window.G = G;
+  closeScreen();
+  renderAll();
+  showBlindSelect();
+}
+
+/* =========================================================
+   初始化
+   ========================================================= */
+function boot() {
+  $('#playBtn').onclick = doPlay;
+  $('#discBtn').onclick = doDiscard;
+  document.querySelectorAll('[data-sort]').forEach(b => {
+    b.onclick = () => { if (busy) return; sfxClick(); G.sortHand(b.dataset.sort); renderHand(); };
+  });
+  $('#btnHands').onclick = () => showHandTable(() => { closeScreen(); });
+  $('#btnDeck').onclick = () => showDeck(() => { closeScreen(); });
+  $('#btnMenu').onclick = () => { if (confirm('放弃当前进度并重新开始？')) startNewRun(); };
+  let rzT = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(rzT);
+    rzT = setTimeout(() => { if (G && !busy) { renderHand(); renderScoreArea(); } }, 120);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (busy || !G) return;
+    if ($('#screen')) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); doPlay(); }
+    if (e.key === 'Backspace' || e.key.toLowerCase() === 'd') { e.preventDefault(); doDiscard(); }
+    if (e.key.toLowerCase() === 's') { G.sortHand(G.sortMode === 'suit' ? 'rank' : 'suit'); renderHand(); }
+    if (e.key === 'Escape') { G.selected = []; renderHand(); renderScoreArea(); }
+  });
+  G = new Game(); window.G = G;
+  renderAll();
+  showTitle();
+}
+window.addEventListener('DOMContentLoaded', boot);
+
+</script>
+</body>
+</html>

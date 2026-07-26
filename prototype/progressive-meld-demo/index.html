@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#102f29">
+  <title>十四福将 · 麻将构筑试作</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="app">
+    <header class="top-hud">
+      <div class="brand" aria-label="十四福将，麻将构筑试作">
+        <span class="brand-seal" aria-hidden="true">拾<br>肆</span>
+        <span class="brand-copy">
+          <strong>十四福将</strong>
+          <small>LUCKY FOURTEEN · 玩法试作</small>
+        </span>
+      </div>
+
+      <div class="hud-stats" aria-label="本局状态">
+        <div class="hud-stat">
+          <span>换牌</span>
+          <strong id="swaps-value">12</strong>
+        </div>
+        <div class="hud-stat">
+          <span>待结算</span>
+          <strong id="chips-value">0</strong>
+        </div>
+        <div class="hud-stat hud-stat-quiet">
+          <span>牌墙</span>
+          <strong id="wall-value">122</strong>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="icon-button" id="sound-button" type="button" aria-label="关闭声音" aria-pressed="true">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4Zm12.5 3a4.5 4.5 0 0 0-2-4v8a4.5 4.5 0 0 0 2-4Zm-2-8.5v2.1a7 7 0 0 1 0 12.8v2.1a9 9 0 0 0 0-17Z"/></svg>
+        </button>
+        <button class="icon-button" id="help-button" type="button" aria-label="打开玩法说明">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 17a1.25 1.25 0 1 1 0-2.5A1.25 1.25 0 0 1 12 19Zm1.4-6.1c-.5.3-.65.55-.65 1.1v.6h-2v-.85c0-1.1.45-1.75 1.4-2.35.9-.55 1.35-1 1.35-1.75 0-.85-.65-1.4-1.6-1.4-1 0-1.7.55-2.15 1.45L8 8.7c.8-1.55 2.1-2.4 4-2.4 2.2 0 3.75 1.3 3.75 3.25 0 1.55-.75 2.45-2.35 3.35Z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="game-layout">
+      <section class="table-surface" aria-label="麻将牌桌">
+        <div class="table-pattern" aria-hidden="true"></div>
+
+        <section class="group-rack" aria-labelledby="group-title">
+          <div class="section-heading">
+            <span><b id="group-title">已成组</b> · 点普通组合可拆回</span>
+            <span id="structure-count">结构 14 / 实体 14</span>
+          </div>
+          <div class="group-slots" id="group-slots"></div>
+        </section>
+
+        <div class="table-center" aria-live="polite">
+          <div class="round-mark" aria-hidden="true">福</div>
+          <div class="event-copy">
+            <strong id="event-title">一张换 · 成组留 · 凑齐胡</strong>
+            <span id="event-detail">先找出已经成形的对子、顺子或刻子</span>
+          </div>
+        </div>
+
+        <section class="loose-zone" aria-labelledby="loose-title">
+          <div class="section-heading loose-heading">
+            <span><b id="loose-title">未整理牌</b> · 点击选择</span>
+            <span id="loose-count">14 张</span>
+          </div>
+          <div class="loose-hand" id="loose-hand"></div>
+        </section>
+
+        <div class="action-dock">
+          <div class="action-preview" aria-live="polite">
+            <strong id="action-title">请选择麻将牌</strong>
+            <span id="action-detail">1 张换牌，2–4 张组成有效组合</span>
+          </div>
+          <div class="action-buttons">
+            <button class="game-button button-muted" id="clear-button" type="button">取消</button>
+            <button class="game-button button-action" id="action-button" type="button" disabled>选择牌</button>
+            <button class="game-button button-hu" id="hu-button" type="button" disabled>胡！</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="fortune-panel" aria-label="本局说明与福将">
+        <section class="progress-panel">
+          <div class="eyebrow">本局目标</div>
+          <h2>四面一将</h2>
+          <div class="goal-slots" id="goal-slots" aria-label="四个面子和一个将牌槽位"></div>
+          <p id="scenario-copy">顺水局 · 先锁三组与将，再换出最后一张</p>
+        </section>
+
+        <section class="fortune-section">
+          <div class="eyebrow">随行福将 · 自动生效</div>
+          <div class="fortune-charms">
+            <div class="fortune-charm charm-jade">
+              <span class="charm-glyph">龍</span>
+              <span><b>青龙签</b><small>每个顺子 +10</small></span>
+            </div>
+            <div class="fortune-charm charm-red">
+              <span class="charm-glyph">福</span>
+              <span><b>百福印</b><small>字牌面子 +15</small></span>
+            </div>
+            <div class="fortune-charm charm-gold">
+              <span class="charm-glyph">合</span>
+              <span><b>同心结</b><small>将牌 +5</small></span>
+            </div>
+          </div>
+        </section>
+
+        <section class="coach-panel">
+          <div class="eyebrow">桌边提示</div>
+          <p id="coach-copy">试着先锁定牌面里已经存在的组合。锁组不会补牌，也不会消耗换牌次数。</p>
+        </section>
+
+        <section class="scenario-section">
+          <div class="eyebrow">试玩牌谱</div>
+          <div class="scenario-buttons" id="scenario-buttons">
+            <button type="button" data-scenario="simple">顺水</button>
+            <button type="button" data-scenario="kong">杠上</button>
+            <button type="button" data-scenario="ambiguous">迷局</button>
+            <button type="button" data-scenario="random">随机</button>
+          </div>
+          <span class="seed-copy" id="seed-copy">SEED 14001</span>
+        </section>
+      </aside>
+    </main>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="assertive" aria-atomic="true"></div>
+
+  <dialog class="game-dialog result-dialog" id="result-dialog">
+    <div class="dialog-frame">
+      <div class="result-seal" aria-hidden="true">胡</div>
+      <p class="eyebrow">十四张归位</p>
+      <h2 id="result-title">普通胡</h2>
+      <div class="result-equation">
+        <span><small>筹码</small><b id="result-chips">0</b></span>
+        <i>×</i>
+        <span><small>胡牌倍率</small><b id="result-mult">4</b></span>
+        <i>=</i>
+        <span class="result-total"><small>本次得分</small><b id="result-total">0</b></span>
+      </div>
+      <div class="result-fortunes" id="result-fortunes"></div>
+      <div class="dialog-actions">
+        <button class="game-button button-muted" id="replay-button" type="button">再来一次</button>
+        <button class="game-button button-action" id="next-scenario-button" type="button">试玩杠上局</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="game-dialog" id="help-dialog">
+    <div class="dialog-frame help-frame">
+      <p class="eyebrow">玩法试作</p>
+      <h2>一张换，成组留，凑齐胡</h2>
+      <ol>
+        <li><b>选 1 张：</b>弃掉并从牌墙摸一张。</li>
+        <li><b>选 2 张相同：</b>放入唯一的将牌槽。</li>
+        <li><b>选 3 张：</b>同花色连续为顺子，三张相同为刻子。</li>
+        <li><b>选 4 张相同：</b>组成杠并补摸一张，不消耗换牌。</li>
+        <li><b>四面一将归位：</b>“胡！”按钮点亮；未锁的组合不能跳过。</li>
+      </ol>
+      <p>普通组合可免费拆开。杠已经补牌，因此不能拆。本 Demo 暂不开放七对与十三幺。</p>
+      <button class="game-button button-action" id="close-help-button" type="button">知道了</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="./ui/app.mjs"></script>
+</body>
+</html>

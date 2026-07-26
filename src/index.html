@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>天胡 TIANHU</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <section class="panel" id="roundPanel">
+      <div class="rowFlex">
+        <div id="roundChip">壹</div>
+        <div class="grow">
+          <div id="roundName" class="sh">试手局</div>
+          <div id="roundMeta" class="lbl">第 1 副 / 共 3 副</div>
+        </div>
+      </div>
+      <div id="targetBox">
+        <div class="lbl">本关目标 TARGET</div>
+        <div id="targetVal"></div>
+        <div id="targetBar"><span id="targetFill"></span></div>
+        <div id="pendingLine">待结算 0 金 · 三副过关才入账</div>
+      </div>
+    </section>
+
+    <section class="panel dark" id="scorePanel">
+      <div id="handName" class="sh">尚未成牌</div>
+      <div id="calcRow">
+        <div class="calcBox" id="chipsBox">0</div>
+        <div id="xSign">×</div>
+        <div class="calcBox" id="multBox">1</div>
+      </div>
+      <div id="totalBox" class="sh">0</div>
+    </section>
+
+    <section class="panel deep" id="statPanel">
+      <div class="statRow">
+        <div class="stat"><div class="v" id="swapV">4</div><div class="n" id="swapLabel">换牌 SWAPS</div></div>
+        <div class="stat"><div class="v" id="distV">2</div><div class="n">还差 TO HU</div></div>
+        <div class="stat money"><div class="v" id="goldV">4</div><div class="n">金币 GOLD</div></div>
+        <div class="stat"><div class="v" id="slotV">12金</div><div class="n" id="slotLabel">空位 6 SLOTS</div></div>
+      </div>
+    </section>
+
+    <section class="panel deep grow" id="buildPanel">
+      <div class="lbl">常驻构筑 BUILD</div>
+      <div id="buildBar"></div>
+      <div id="sideBtns">
+        <button class="btn grey sm" id="btnHelp" type="button">玩法</button>
+        <button class="btn grey sm" id="btnRestart" type="button">重开</button>
+      </div>
+    </section>
+  </aside>
+
+  <main id="main">
+    <div id="slotBar" aria-label="开运位"></div>
+
+    <div id="table">
+      <div id="tableMark" aria-hidden="true"><div class="mk">胡</div><div class="mk2">TIANHU</div></div>
+      <div id="revealZone"></div>
+      <div id="nextBox">
+        <div class="lbl">下一张 NEXT</div>
+        <div id="nextTile"></div>
+        <div id="deckPile" title="牌堆"></div>
+        <div id="wallCount" class="lbl">牌墙 0</div>
+      </div>
+      <div id="bossBanner" hidden></div>
+      <div id="patternBanner" hidden></div>
+      <div id="draftLayer" hidden>
+        <div id="draftTitle" class="sh">三签选一 · 只在本副生效</div>
+        <div id="draftCards"></div>
+        <button class="btn grey sm" id="btnReroll" type="button" hidden>问签印 · 重抽</button>
+      </div>
+    </div>
+
+    <div id="handZone"></div>
+
+    <div id="actionRow">
+      <button class="btn play" id="btnSwap" type="button">换牌</button>
+      <button class="btn green" id="btnReveal" type="button">亮组</button>
+      <button class="btn gold" id="btnHu" type="button">胡牌 HU</button>
+      <div id="actionHint" class="hintLine">选中要换的牌可以一次换多张；选 2–4 张合法组合就能亮组</div>
+    </div>
+  </main>
+</div>
+
+<div id="floatLayer" aria-hidden="true"></div>
+<div id="tip" role="tooltip"></div>
+<div id="toast" aria-live="polite"></div>
+<script type="module" src="main.mjs"></script>
+</body>
+</html>

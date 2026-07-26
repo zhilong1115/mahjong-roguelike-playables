@@ -1,0 +1,20 @@
+.DS_Store
+node_modules/
+dist/
+coverage/
+*.log
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Editor and OS working files
+.idea/
+.vscode/
+*.swp
+*.swo

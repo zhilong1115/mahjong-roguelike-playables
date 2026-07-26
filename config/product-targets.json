@@ -1,0 +1,15 @@
+{
+  "status": "proposed",
+  "version": 1,
+  "targets": {
+    "first_interaction_ms": 3000,
+    "tutorial_seconds_max": 45,
+    "decision_seconds_typical": [5, 15],
+    "blind_seconds_typical": [20, 45],
+    "checkpoint_seconds_max": 90,
+    "full_run_minutes_typical": [8, 12],
+    "restart_seconds_max": 2,
+    "touch_target_css_px": 48,
+    "touch_target_gap_css_px": 8
+  }
+}

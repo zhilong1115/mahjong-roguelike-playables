@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "orientation_strategy": "landscape_first_portrait_supported",
+  "primary": { "id": "mobile-landscape", "width": 844, "height": 390 },
+  "required": [
+    { "id": "mobile-narrow-portrait", "width": 360, "height": 800 },
+    { "id": "mobile-standard-portrait", "width": 390, "height": 844 },
+    { "id": "mobile-landscape", "width": 844, "height": 390 },
+    { "id": "tablet-portrait", "width": 768, "height": 1024 },
+    { "id": "square-embed", "width": 960, "height": 960 },
+    { "id": "desktop-hd", "width": 1280, "height": 720 }
+  ],
+  "extended": [
+    { "id": "extreme-9x32", "width": 288, "height": 1024 },
+    { "id": "desktop-fhd", "width": 1920, "height": 1080 },
+    { "id": "ultrawide-32x9", "width": 2560, "height": 720 }
+  ],
+  "assertions": [
+    "no_unintentional_page_scroll",
+    "no_clipped_primary_actions",
+    "all_touch_actions_reachable",
+    "state_survives_resize",
+    "text_and_tiles_remain_legible"
+  ]
+}
