@@ -39,11 +39,11 @@ export const CONFIG = Object.freeze({
   emptySlotChips: 12,
   startingGold: 4,
   generalSlots: 4,
-  rerollCost: 3,
+  rerollCost: 4,
   huBase: 50,
   groupChips: Object.freeze({ pair: 10, chow: 20, pung: 30, kong: 45 }),
   patternMult: Object.freeze({
-    普通胡: 0,
+    普通胡: 1,   // 抬高地板：屁胡也要有一次乘算
     七对: 2,
     碰碰胡: 2,
     清一色: 3,

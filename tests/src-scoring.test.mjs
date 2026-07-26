@@ -21,7 +21,8 @@ test('基础结算：底分 + 组合 + 空开运位牌值，最后牌值 × 番�
     + CONFIG.groupChips.chow * 3 + CONFIG.groupChips.pung + CONFIG.groupChips.pair;
   assert.deepEqual(result.patterns, ['普通胡', '门清']);
   assert.equal(result.chips, structure + 6 * CONFIG.emptySlotChips);
-  assert.equal(result.mult, 1);
+  // 普通胡本身给 +1 番势，抬高最差牌型的地板（见 0013 的数值重标）
+  assert.equal(result.mult, 1 + CONFIG.patternMult['普通胡']);
   assert.equal(result.total, result.chips * result.mult);
 });
 
@@ -135,7 +136,11 @@ test('灵签与福将分别按取得顺序和将位顺序结算', () => {
   const labels = result.steps.filter((step) => step.source === 'charm' || step.source === 'general')
     .map((step) => step.label);
   assert.deepEqual(labels, ['顺风签', '倍喜签', '青龙使', '判官']);
-  assert.equal(result.mult, 1 + 1 + 1, '倍喜签与判官各 +1 番势');
+  assert.equal(
+    result.mult,
+    1 + CONFIG.patternMult['普通胡'] + 1 + 1,
+    '普通胡 +1，倍喜签与判官再各 +1 番势',
+  );
 });
 
 test('灵签的即时金币不会在成胡时重复计入', () => {

@@ -12,7 +12,7 @@ export const PAPERS = Object.freeze({
   manPaper: paper({
     id: 'manPaper',
     name: '万字帖',
-    price: 7,
+    price: 11,
     rarity: 'common',
     text: '本局发牌更偏向万字，牌背换成朱漆。',
     modifier: { suitBias: 'man', back: 'vermilion' },
@@ -20,7 +20,7 @@ export const PAPERS = Object.freeze({
   pinPaper: paper({
     id: 'pinPaper',
     name: '筒子帖',
-    price: 7,
+    price: 11,
     rarity: 'common',
     text: '本局发牌更偏向筒子，牌背换成玉髓。',
     modifier: { suitBias: 'pin', back: 'jade' },
@@ -28,7 +28,7 @@ export const PAPERS = Object.freeze({
   souPaper: paper({
     id: 'souPaper',
     name: '条子帖',
-    price: 7,
+    price: 11,
     rarity: 'common',
     text: '本局发牌更偏向条子，牌背换成墨玉。',
     modifier: { suitBias: 'sou', back: 'ink' },

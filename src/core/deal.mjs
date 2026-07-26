@@ -240,6 +240,8 @@ export function createSolvableDeal({
 } = {}) {
   const rng = createSeededRng(seed);
   const serialRef = { value: 1 };
+  // 七对的七个槽位全是对子，打碎三张会留下三个极脆的单张，因此单独封顶
+  const broken = flavorId === 'sevenPairs' ? Math.min(2, brokenTiles) : brokenTiles;
   const specsToTiles = (specs, prefix) => specs.map(
     (spec) => makeTile(`${prefix}${serialRef.value++}`, spec.suit, spec.rank),
   );
@@ -265,16 +267,16 @@ export function createSolvableDeal({
       .map((spec, index) => ({ spec, index }))
       .filter(({ spec }) => !protectedIndices.has(indexOfKind(spec.suit, spec.rank)))
       .map(({ index }) => index);
-    if (breakable.length < brokenTiles) continue;
+    if (breakable.length < broken) continue;
 
-    const holeIndices = shuffleInPlace(breakable, rng).slice(0, brokenTiles);
+    const holeIndices = shuffleInPlace(breakable, rng).slice(0, broken);
     const holeSet = new Set(holeIndices);
     const missingSpecs = holeIndices.map((index) => targetSpecs[index]);
     const keptSpecs = targetSpecs.filter((_, index) => !holeSet.has(index));
 
     for (const spec of missingSpecs) avail[tileIndex(spec)] += 1;
     const junkSpecs = [];
-    for (let count = 0; count < brokenTiles; count += 1) {
+    for (let count = 0; count < broken; count += 1) {
       junkSpecs.push(randomJunkSpec(avail, rng, protectedIndices));
     }
 
@@ -284,7 +286,7 @@ export function createSolvableDeal({
     const looseTiles = sortTiles(specsToTiles(startingSpecs, `${handId}-`));
     const distance = tilesToChange(looseTiles, []);
     // 起手必须还没胡，且一定能在打碎张数之内补回来
-    if (distance === 0 || distance > brokenTiles) continue;
+    if (distance === 0 || distance > broken) continue;
 
     // 牌墙前段固定放需要的牌：认真打一定能成牌，流局只来自换错牌或亮错组。
     // 一次换多张的价值在于省下换牌次数（每次没用掉换金币），而不是赌运气。
@@ -303,6 +305,9 @@ export function createSolvableDeal({
       flavorId,
       flavor: HAND_FLAVORS[flavorId],
       distance,
+      brokenTiles: broken,
+      /** 预览张数跟着打碎张数走：需要几张就让玩家看得见几张。 */
+      previewCount: Math.max(2, broken),
     };
   }
 

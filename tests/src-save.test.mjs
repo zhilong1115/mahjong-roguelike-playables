@@ -81,6 +81,24 @@ test('从半副恢复后继续打，结算结果与原局完全一致', () => {
   assert.equal(restored.lastHandResult?.score, run.lastHandResult?.score);
 });
 
+test('南西圈三张牌墙预览在存档恢复后保持不变', () => {
+  const run = new Run({ seed: 20260726 });
+  run.anteIndex = 1;
+  assert.equal(run.selectBlind().ok, true);
+  assert.equal(run.previewCount, 3);
+
+  const saved = serializeRun(run);
+  const restored = new Run({ seed: 1 });
+  assert.equal(restoreRun(restored, clone(saved)).ok, true);
+  assert.equal(restored.previewCount, 3);
+  assert.equal(restored.snapshot().upcomingTiles.length, 3);
+
+  delete saved.hand.previewCount;
+  const legacyV4 = new Run({ seed: 1 });
+  assert.equal(restoreRun(legacyV4, clone(saved)).ok, true);
+  assert.equal(legacyV4.previewCount, 3, '旧 v4 存档按圈数补出预览张数');
+});
+
 test('v1 → v2 迁移：tileMods 拆成 bones 与 seals', () => {
   const run = buildRun();
   const data = serializeRun(run);

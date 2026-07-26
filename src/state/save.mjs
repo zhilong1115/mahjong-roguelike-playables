@@ -73,6 +73,7 @@ export function serializeRun(run) {
       wall: run.wall.map(serializeTile),
       discard: run.discard.map(serializeTile),
       flavorId: run.flavor?.id ?? null,
+      previewCount: run.previewCount ?? 2,
       revealedGroups: run.revealedGroups.map((group) => ({
         id: group.id,
         kind: group.kind,
@@ -159,6 +160,12 @@ export function restoreRun(run, data) {
   run.draft = cloneDraft(hand.draft);
   run.selectedIds = new Set();
   run.flavor = hand.flavorId ? { id: hand.flavorId, name: hand.flavorId, hint: '' } : null;
+  const fallbackPreviewCount = hand.flavorId === 'sevenPairs'
+    ? 2
+    : Math.max(2, run.currentAnte()?.brokenTiles ?? 2);
+  run.previewCount = Number.isInteger(hand.previewCount) && hand.previewCount > 0
+    ? hand.previewCount
+    : fallbackPreviewCount;
 
   run.shop = save.shop
     ? { ...save.shop, items: save.shop.items.map((item) => ({ ...item })) }

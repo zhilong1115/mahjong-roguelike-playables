@@ -25,8 +25,9 @@ export const ANTES = Object.freeze([
     label: '东',
     handsPerBlind: 2,
     brokenTiles: 2,
-    targets: Object.freeze({ small: 500, big: 800, boss: 1200 }),
-    flavors: Object.freeze(['mixed', 'sevenPairs', 'allPung', 'mixed', 'dragon', 'pureSuit']),
+    targets: Object.freeze({ small: 750, big: 1100, boss: 1300 }),
+    // 牌谱按「闲局教基础、庄局给中番、圈主给大番」排，两副合计要和目标线对得上
+    flavors: Object.freeze(['mixed', 'mixed', 'sevenPairs', 'allPung', 'pureSuit', 'dragon']),
     announced: Object.freeze(['七对', '碰碰胡']),
   }),
   Object.freeze({
@@ -35,8 +36,8 @@ export const ANTES = Object.freeze([
     label: '南',
     handsPerBlind: 2,
     brokenTiles: 3,
-    targets: Object.freeze({ small: 1800, big: 2600, boss: 3800 }),
-    flavors: Object.freeze(['pureSuit', 'dragon', 'mixed', 'sevenPairs', 'pureSuit', 'allPung']),
+    targets: Object.freeze({ small: 1500, big: 1900, boss: 2400 }),
+    flavors: Object.freeze(['pureSuit', 'mixed', 'dragon', 'allPung', 'pureSuit', 'sevenPairs']),
     announced: Object.freeze(['清一色', '一条龙']),
   }),
   Object.freeze({
@@ -45,8 +46,8 @@ export const ANTES = Object.freeze([
     label: '西',
     handsPerBlind: 2,
     brokenTiles: 3,
-    targets: Object.freeze({ small: 5000, big: 7000, boss: 10000 }),
-    flavors: Object.freeze(['bigThree', 'pureSuit', 'dragon', 'bigFour', 'pureSuit', 'sevenPairs']),
+    targets: Object.freeze({ small: 2600, big: 3300, boss: 4600 }),
+    flavors: Object.freeze(['pureSuit', 'allPung', 'dragon', 'bigThree', 'bigFour', 'pureSuit']),
     announced: Object.freeze(['大三元', '清一色', '大四喜']),
   }),
 ]);
