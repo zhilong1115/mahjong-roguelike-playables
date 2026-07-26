@@ -68,6 +68,24 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 #targetFill{display:block;height:100%;width:0;background:linear-gradient(90deg,#3fae74,#f0c04a);transition:width .45s cubic-bezier(.22,1,.36,1);}
 #pendingLine{font-size:9px;color:var(--gold);margin-top:3px;}
 
+#omenSlot{
+  width:100%;min-height:48px;margin-top:5px;padding:4px 7px;border:2px dashed rgba(255,255,255,.2);
+  border-radius:6px;background:#171f28;color:var(--dim);font:inherit;cursor:pointer;text-align:left;
+  display:grid;grid-template-columns:auto 1fr;grid-template-areas:"label name" "label timing";
+  column-gap:7px;align-items:center;
+}
+#omenSlot .omenLabel{
+  grid-area:label;color:#dce6ee;font-size:9px;writing-mode:vertical-rl;letter-spacing:1px;
+}
+#omenName{grid-area:name;font-size:9px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#omenTiming{grid-area:timing;font-size:8px;color:#7f8d9b;}
+#omenSlot.filled{
+  border-style:solid;border-color:var(--goldD);color:#fff4c4;
+  background:linear-gradient(135deg,#463b20,#25303a);box-shadow:inset 0 0 0 1px rgba(240,192,74,.22);
+}
+#omenSlot.filled #omenTiming{color:var(--gold);}
+#omenSlot:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
+
 #handName{text-align:center;font-size:13px;min-height:17px;}
 #calcRow{display:flex;align-items:stretch;gap:4px;margin-top:4px;}
 .calcBox{
@@ -147,14 +165,53 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 }
 #patternBanner[hidden]{display:none;}
 
-/* ---------- 三签选一 ---------- */
-#draftLayer{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:rgba(6,16,13,.86);padding:8px;}
+/* ---------- 灵签决策层 ---------- */
+#draftLayer{
+  position:fixed;inset:0;z-index:700;display:flex;align-items:center;justify-content:center;
+  background:rgba(6,16,13,.92);padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+  overflow:auto;overscroll-behavior:contain;
+}
 #draftLayer[hidden]{display:none;}
-#draftTitle{font-size:14px;color:var(--gold);}
-#draftCards{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.charmPick{width:116px;padding:6px 5px;cursor:pointer;gap:3px;}
-.charmPick:hover,.charmPick:focus-visible{transform:translateY(-6px);outline:none;border-color:var(--gold);}
+#draftPanel{
+  width:min(760px,100%);max-height:100%;overflow:auto;padding:10px;border:3px solid #18221f;border-radius:10px;
+  background:linear-gradient(180deg,rgba(31,57,50,.98),rgba(18,35,30,.98));
+  box-shadow:0 7px 0 rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.08);
+}
+#draftTitle{font-size:14px;color:var(--gold);text-align:center;margin-bottom:7px;}
+#draftNotice{
+  margin:0 auto 7px;width:max-content;max-width:100%;padding:3px 8px;border:2px solid #765f25;
+  border-radius:5px;background:#302913;color:#ffe89c;font-size:10px;text-align:center;
+}
+#draftNotice[hidden]{display:none;}
+#draftCards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;justify-content:center;}
+#draftLayer[data-offer-count="4"] #draftCards{grid-template-columns:repeat(4,minmax(0,1fr));}
+#draftActions{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:8px;flex-wrap:wrap;}
+.charmPick{
+  width:100%;min-width:0;min-height:132px;padding:7px 6px;cursor:pointer;gap:3px;
+  color:var(--txt);font-family:inherit;font-weight:800;
+}
+.charmPick:focus-visible{transform:translateY(-6px);outline:none;border-color:var(--gold);}
+@media (hover:hover){.charmPick:hover{transform:translateY(-6px);border-color:var(--gold);}}
 .charmPick .cRole{font-size:8px;color:#ffe9a8;}
+.charmPick .cTierRow{display:flex;align-items:center;justify-content:center;gap:5px;font-size:8px;}
+.charmPick .tierMarks{letter-spacing:1px;font-size:8px;}
+.charmPick.tier-silver{border-top:5px solid #c5d0d8;background:linear-gradient(180deg,#456b79,#294c59);}
+.charmPick.tier-gold{
+  border-color:#d8ac3f;border-top-width:6px;background:linear-gradient(180deg,#77602d,#3c5360);
+  box-shadow:0 3px 0 rgba(0,0,0,.45),inset 0 0 0 2px rgba(255,222,126,.24);
+}
+.charmPick.tier-rainbow{
+  border-width:4px;border-top-width:8px;border-image:linear-gradient(90deg,#67d7ff,#f7d657,#ff7aa2,#a68aff) 1;
+  background:linear-gradient(150deg,#374f69,#594273 50%,#5f4f2e);
+  clip-path:polygon(3% 0,97% 0,100% 6%,100% 94%,94% 100%,6% 100%,0 94%,0 6%);
+}
+.charmPick.tier-rainbow .cTierRow{color:#fff0a8;}
+.omenCompare{grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;}
+.omenCompareCard{min-height:116px;padding:9px;border:3px solid var(--edge);border-radius:8px;background:#27333e;display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center;}
+.omenCompareCard.new{border-color:var(--goldD);background:#3b3421;}
+.omenCompareCard .compareLabel{font-size:9px;color:var(--dim);}
+.omenCompareCard .compareName{font-size:14px;color:#fff2be;}
+.omenCompareCard .compareText{font-size:10px;line-height:1.4;color:#e7dfcf;}
 
 /* ---------- 手牌 ---------- */
 #handZone{flex:0 0 auto;display:flex;justify-content:center;align-items:flex-end;gap:3px;flex-wrap:wrap;padding:8px 2px 2px;min-height:0;}
@@ -227,7 +284,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 #tip{position:fixed;z-index:950;pointer-events:none;max-width:230px;background:#12181f;color:var(--txt);border:3px solid #000;border-radius:8px;padding:6px 8px;font-size:11px;line-height:1.4;box-shadow:0 5px 0 rgba(0,0,0,.5);display:none;}
 #tip .tn{font-size:12px;margin-bottom:2px;color:var(--gold);}
 #toast{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:960;display:flex;flex-direction:column;gap:4px;align-items:center;pointer-events:none;}
-.toastItem{background:#12181f;border:3px solid #000;border-radius:8px;padding:5px 10px;font-size:11px;box-shadow:0 4px 0 rgba(0,0,0,.5);animation:tin .25s ease, tout .3s ease 1.7s forwards;}
+.toastItem{max-width:min(92vw,520px);background:#12181f;border:3px solid #000;border-radius:8px;padding:5px 10px;font-size:11px;line-height:1.4;text-align:center;box-shadow:0 4px 0 rgba(0,0,0,.5);animation:tin .25s ease, tout .3s ease var(--toast-out-delay,1.7s) forwards;}
 @keyframes tin{from{opacity:0;transform:translateY(-12px);}to{opacity:1;transform:none;}}
 @keyframes tout{to{opacity:0;transform:translateY(-12px);}}
 
@@ -312,7 +369,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .settingRow{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#1b232c;border:2px solid #10161d;border-radius:6px;padding:6px 8px;font-size:12px;}
 .segmented{display:flex;gap:4px;}
 
-.blindScreen .screenBox{min-width:min(760px,94vw);}
+.blindScreen .screenBox{position:relative;min-width:min(760px,94vw);}
 .blindGrid{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
 .blindCard{
   width:190px;padding:10px 8px;border:3px solid var(--edge);border-radius:10px;position:relative;
@@ -332,7 +389,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .blindTarget{font-size:16px;color:var(--red);}
 .blindCard .cMeta{font-size:10px;color:var(--gold);}
 .blindActions{display:flex;flex-direction:column;gap:5px;width:100%;align-items:stretch;margin-top:4px;}
-.blindScreen .rowBtns{position:sticky;bottom:0;z-index:2;background:var(--panel);padding-top:4px;}
+.blindScreen .rowBtns{position:absolute;top:7px;right:7px;z-index:2;margin:0;background:transparent;padding:0;}
 .blindScreen .rowBtns .btn{min-height:48px;}
 .blindStamp{position:absolute;top:8px;right:8px;font-size:10px;color:#0e1116;background:rgba(255,255,255,.75);border-radius:3px;padding:0 4px;}
 .tagRow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;justify-content:center;}
@@ -361,6 +418,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #targetVal{min-height:16px;}
   #targetBar{height:5px;margin-top:3px;}
   #pendingLine{font-size:8px;margin-top:2px;}
+  #omenSlot{min-height:48px;margin-top:3px;padding:2px 5px;}
   #handName{font-size:10px;min-height:13px;}
   #calcRow{margin-top:3px;}
   .calcBox{min-height:24px;padding:2px;}
@@ -383,6 +441,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #revealZone{padding:4px 76px 4px 6px;gap:6px;}
   #patternBanner{font-size:24px;}
   .btn{padding:6px 10px;font-size:12px;min-height:44px;}
+  #draftActions .btn{min-height:48px;}
   .tile{min-height:44px;min-width:44px;}
   #actionHint{display:none;}
   #handZone{padding:4px 2px 0;gap:2px;}
@@ -392,7 +451,9 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .deckCard{width:126px;}
   #bossBanner{max-width:44%;padding:3px 6px;}
   #deckPile{display:none;}
-  .charmPick{width:104px;padding:4px;}
+  #draftPanel{width:min(700px,100%);padding:7px;}
+  #draftCards{gap:6px;}
+  .charmPick{min-height:112px;padding:4px;}
   .charmPick .cText{font-size:8px;}
   #draftTitle{font-size:12px;}
 }
@@ -419,6 +480,10 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #tableMark .mk{font-size:76px;}
   #handZone{gap:2px;}
   #kindGrid{grid-template-columns:repeat(7,minmax(44px,1fr));}
+  #draftPanel{width:min(420px,100%);}
+  #draftCards,#draftLayer[data-offer-count="4"] #draftCards{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #draftLayer[data-offer-count="3"] .charmPick:last-child{grid-column:1 / -1;width:calc(50% - 3px);justify-self:center;}
+  .charmPick{min-height:128px;}
 }
 
 @media (max-width:420px){
@@ -432,7 +497,9 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .blindCard .cText{font-size:9px;min-height:38px;}
   .blindTarget{font-size:12px;}
   .blindActions .btn{width:100%;min-width:0;padding:6px 2px;font-size:10px;}
-  .charmPick{width:98px;}
+  #draftPanel{padding:8px;}
+  #draftCards{gap:6px;}
+  .charmPick{min-height:122px;padding:5px 3px;}
   .shopCard{width:110px;}
   /* 窄竖屏要让回合面板和计分面板挤在同一行，否则牌桌会被压没 */
   #roundPanel{flex:1 1 140px;}

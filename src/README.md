@@ -21,7 +21,7 @@ core/       规则内核，纯 JS，不碰 DOM
   scoring   八步结算流水线，输出有序 steps
   run       一局状态机：三圈 × 三关 × 两副、跳局、最多八家百宝阁
 content/    五系内容，以及圈关 / 圈主 / 牌组 / 手气 / 牌帖数据
-state/      存档：schemaVersion 3 + v1 → v2 → v3 迁移
+state/      存档：schemaVersion 4、v1 → v4 迁移、异步写入串行协调
 render/     像素绘制（牌面、印章、像素字），零外部请求
 ui/         开始 / 选牌组 / 选关 / 牌桌 / 商店界面、动画、音效
 platforms/  平台适配层接口与 web 实现

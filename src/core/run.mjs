@@ -31,13 +31,18 @@ import {
   DECKS,
   GENERAL_LIST,
   blindIndexOf,
-  draftCharms,
   getItem,
   listItems,
   pickBoss,
   rollTag,
   shelfFor,
 } from '../content/index.mjs';
+import {
+  CHARM_LIST,
+  OMEN_IDS,
+  draftCharmOffers,
+  rollCharmTierSlots,
+} from '../content/charms.mjs';
 import { createSolvableDeal } from './deal.mjs';
 import {
   classifySelection,
@@ -49,6 +54,37 @@ import {
 import { scoreHand } from './scoring.mjs';
 import { tilesToChange } from './shanten.mjs';
 import { createSeededRng, sortTiles, tileKey } from './tiles.mjs';
+
+const cloneOmen = (omen) => (omen ? { ...omen } : null);
+
+/** MurmurHash3 风格的 32-bit finalizer，打散相邻 seed 的首个 RNG 输出。 */
+function avalanche32(value) {
+  let hash = Number(value) >>> 0;
+  hash ^= hash >>> 16;
+  hash = Math.imul(hash, 0x85ebca6b) >>> 0;
+  hash ^= hash >>> 13;
+  hash = Math.imul(hash, 0xc2b2ae35) >>> 0;
+  hash ^= hash >>> 16;
+  return hash >>> 0;
+}
+
+function cloneDraft(draft) {
+  if (!draft) return null;
+  return {
+    ...draft,
+    charmIds: [...(draft.charmIds ?? [])],
+    tierSlots: [...(draft.tierSlots ?? [])],
+    offers: (draft.offers ?? []).map((offer) => ({ ...offer })),
+    appliedOmen: cloneOmen(draft.appliedOmen),
+    pendingOmenReplacement: draft.pendingOmenReplacement
+      ? {
+        ...draft.pendingOmenReplacement,
+        current: cloneOmen(draft.pendingOmenReplacement.current),
+        next: cloneOmen(draft.pendingOmenReplacement.next),
+      }
+      : null,
+  };
+}
 
 export class Run {
   /**
@@ -91,6 +127,8 @@ export class Run {
     this.pendingFreeBuy = 0;
     this.pendingExtraSwaps = 0;
     this.pendingFreeCharms = 0;
+    this.pendingOmen = null;
+    this.blindEntryPendingOmen = null;
 
     this.totalScore = 0;
     this.completedBlinds = [];
@@ -200,6 +238,8 @@ export class Run {
   /** 开始打当前这一关。 */
   selectBlind() {
     if (this.status !== 'blind-select') return { ok: false, reason: '现在不能开始' };
+    // 失败重试要回到进关时的待缘状态，不能把失败尝试里的签兆带回来或刷掉。
+    this.blindEntryPendingOmen = cloneOmen(this.pendingOmen);
     this.handIndex = 0;
     this.resetBlindProgress();
     this.dealHand();
@@ -252,6 +292,7 @@ export class Run {
     }
     if (this.anteIndex >= this.antes.length - 1) {
       this.status = 'run-complete';
+      this.pendingOmen = null;
       this.lastEvent = { type: 'run-complete', text: `通关！总分 ${this.totalScore}` };
       return;
     }
@@ -280,8 +321,10 @@ export class Run {
     this.revealedGroups = [];
     this.selectedIds = new Set();
     this.charmIds = [];
+    this.charmInstances = [];
     this.charmGold = 0;
     this.draft = null;
+    this.omenTriggeredThisHand = false;
     this.usedSealKinds = new Set();
     this.lastHandResult = null;
     this.flavor = null;
@@ -312,18 +355,26 @@ export class Run {
     this.selectedIds = new Set();
     this.swapsRemaining = config.swapsPerHand;
     this.charmIds = [];
+    this.charmInstances = [];
     this.charmGold = 0;
     this.draft = null;
+    this.omenTriggeredThisHand = false;
     this.usedSealKinds = new Set();
     this.lastHandResult = null;
     this.status = 'playing';
     this.lastEvent = { type: 'deal', text: `第 ${this.handIndex + 1} 副 · 目标 ${deal.flavor.name}` };
 
-    // 手气「签气」：开局先白拿一张灵签
+    // 手气「签气」：固定给银色助势签，不抽改命、彩签或签兆。
     if (this.pendingFreeCharms > 0) {
-      const rng = createSeededRng((this.handSeed() + 4451) >>> 0);
-      const [charmId] = draftCharms(rng, 'pair');
+      const charmId = 'doubleJoy';
       this.charmIds = [charmId];
+      this.charmInstances = [{
+        instanceId: `tag:${this.handSeed()}:0`,
+        charmId,
+        tier: getItem('charm', charmId).tier,
+        role: getItem('charm', charmId).functionRole,
+        source: 'tag',
+      }];
       this.pendingFreeCharms -= 1;
       this.consumeTag('charm');
       this.lastEvent = { type: 'tag-charm', text: `签气生效 · ${getItem('charm', charmId).name}`, charmId };
@@ -561,18 +612,21 @@ export class Run {
     const supplement = preview.kind === 'kong' ? this.drawOne() : null;
 
     const sealHit = this.fireSeal('reveal', group.tiles);
-    this.draft = {
-      groupId: group.id,
-      slotIndex: this.slotsUsed() - 1,
-      charmIds: this.rollDraft(group.kind, 0),
-      rerollsLeft: sealHit ? 1 : 0,
-      rerollSource: sealHit?.seal.id ?? null,
-      rolls: 0,
-    };
+    this.draft = this.createCharmDraft(group, sealHit);
+    if (!this.draft) {
+      // 内容配置不完整时不让状态机卡进一个无法选择的签局。
+      this.lastEvent = { type: 'error', text: '当前没有足够的合法灵签' };
+      this.status = 'playing';
+      this.refreshStatus();
+      this.emit();
+      return { ok: false, reason: this.lastEvent.text };
+    }
     this.status = 'charm-draft';
     this.lastEvent = {
       type: 'reveal',
-      text: sealHit ? `亮组 · ${sealHit.seal.name}给了一次重抽` : '亮组 · 三签选一',
+      text: sealHit
+        ? `亮组 · ${sealHit.seal.name}给了一次重抽`
+        : `亮组 · ${this.draft.offerCount} 签选一`,
       group,
       supplement,
       sealHit: sealHit?.seal.id ?? null,
@@ -600,53 +654,311 @@ export class Run {
     return null;
   }
 
-  rollDraft(groupKind, rollIndex) {
-    const rng = createSeededRng(
-      (this.handSeed() + (this.slotsUsed() - 1) * 7919 + rollIndex * 5077 + 13) >>> 0,
-    );
-    return draftCharms(rng, groupKind);
+  /** 当前求签之后，本局是否还存在理论上的下一次求签。 */
+  hasFutureCharmDraft() {
+    if (this.emptySlots() > 0) return true;
+    if (this.handIndex < this.currentAnte().handsPerBlind - 1) return true;
+    const blindIndex = BLIND_ORDER.indexOf(this.blindKind);
+    return this.anteIndex < this.antes.length - 1 || blindIndex < BLIND_ORDER.length - 1;
+  }
+
+  draftSeed(slotIndex, salt, rollIndex = 0) {
+    const combined = (
+      this.handSeed()
+      ^ Math.imul(slotIndex + 1, 0x9e3779b1)
+      ^ Math.imul(rollIndex + 1, 0x85ebca6b)
+      ^ Math.imul(Number(salt) >>> 0, 0xc2b2ae35)
+    ) >>> 0;
+    return avalanche32(combined);
+  }
+
+  /**
+   * 构建完整且可存档的签局。签阶 RNG 与内容 RNG 使用不同 salt；
+   * pendingOmen 只有在增强签局完整生成后才会清空。
+   */
+  createCharmDraft(group, sealHit) {
+    const slotIndex = this.slotsUsed() - 1;
+    const draftId = `d:a${this.anteIndex}:${this.blindKind}:h${this.handIndex}:s${slotIndex}:${group.id}`;
+    const pending = (!this.omenTriggeredThisHand && this.pendingOmen?.consumeOn === 'nextCharmDraft')
+      ? cloneOmen(this.pendingOmen)
+      : null;
+
+    const build = (omen) => {
+      const offerCount = omen?.omenId === OMEN_IDS.extraChoice ? 4 : 3;
+      const excludeDelayedOmens = Boolean(omen) || !this.hasFutureCharmDraft();
+      const excludeCharmIds = !omen && this.pendingOmen?.sourceCharmId
+        ? [this.pendingOmen.sourceCharmId]
+        : [];
+      const tierRng = createSeededRng(this.draftSeed(
+        slotIndex,
+        omen ? 27077 : 17011,
+      ));
+      const tierSlots = rollCharmTierSlots(tierRng, group.kind, {
+        offerCount,
+        minimumTier: omen?.omenId === OMEN_IDS.luckyTier ? 'gold' : null,
+        rainbowChance: omen?.omenId === OMEN_IDS.luckyTier ? 0.15 : 0,
+        excludeDelayedOmens,
+        excludeCharmIds,
+      });
+      const contentRng = createSeededRng(this.draftSeed(slotIndex, omen ? 39019 : 13, 0));
+      const rolled = draftCharmOffers(contentRng, group.kind, {
+        offerCount,
+        tierSlots,
+        excludeDelayedOmens,
+        excludeCharmIds,
+      });
+      if (rolled.length !== offerCount) return null;
+      if (omen?.omenId === OMEN_IDS.luckyTier
+        && !rolled.some((offer) => offer.tier === 'gold' || offer.tier === 'rainbow')) {
+        return null;
+      }
+      const offers = rolled.map((offer, index) => ({
+        ...offer,
+        offerId: `${draftId}:r0:o${index}`,
+      }));
+      return {
+        draftId,
+        groupId: group.id,
+        slotIndex,
+        offerCount,
+        tierSlots: offers.map((offer) => offer.tier),
+        appliedOmen: omen ? { ...omen, appliedAtDraftId: draftId } : null,
+        offers,
+        // 兼容旧 UI；新 UI 以 offers / offerId 为准。
+        charmIds: offers.map((offer) => offer.charmId),
+        rerollsLeft: sealHit ? 1 : 0,
+        rerollSource: sealHit?.seal.id ?? null,
+        rolls: 0,
+        pendingOmenReplacement: null,
+      };
+    };
+
+    const enhanced = pending ? build(pending) : null;
+    const draft = enhanced ?? build(null);
+    if (!draft) return null;
+    if (enhanced) {
+      this.pendingOmen = null;
+      this.omenTriggeredThisHand = true;
+    }
+    return draft;
+  }
+
+  draftContentOptions(draft) {
+    return {
+      excludeDelayedOmens: Boolean(draft.appliedOmen) || !this.hasFutureCharmDraft(),
+      excludeCharmIds: !draft.appliedOmen && this.pendingOmen?.sourceCharmId
+        ? [this.pendingOmen.sourceCharmId]
+        : [],
+    };
+  }
+
+  /**
+   * seeded 重抽恰好与原签完全相同时，枚举当前固定职责 / 签阶下的合法组合。
+   * 只有确实存在另一套完整且不重复的 offers 才替换；否则允许原样返回。
+   */
+  findAlternativeDraftOffers(draft, groupKind, options) {
+    const excluded = new Set(options.excludeCharmIds ?? []);
+    const slotDefaults = ['group', 'pattern', 'wild', 'extra'];
+    const chosenIds = new Set();
+    const chosen = [];
+
+    const candidatesFor = (index) => {
+      const slotRole = draft.offers?.[index]?.slotRole ?? slotDefaults[index] ?? 'extra';
+      let pool = CHARM_LIST.filter((item) => !excluded.has(item.id));
+      if (options.excludeDelayedOmens) {
+        pool = pool.filter((item) => item.omen?.consumeOn !== 'nextCharmDraft');
+      }
+      if (slotRole !== 'extra') pool = pool.filter((item) => item.draftRole === slotRole);
+      if (slotRole === 'group') {
+        const matching = pool.filter((item) => item.match?.includes(groupKind));
+        if (matching.length) pool = matching;
+      }
+      pool = pool.filter((item) => (
+        item.tier === draft.tierSlots[index] && !chosenIds.has(item.id)
+      ));
+
+      // 当前签放到最后：先寻找真正改变内容的完整合法组合，同时保持稳定顺序。
+      const currentId = draft.offers?.[index]?.charmId;
+      return [...pool].sort((left, right) => (
+        Number(left.id === currentId) - Number(right.id === currentId)
+      ));
+    };
+
+    const search = (index) => {
+      if (index >= draft.offerCount) {
+        return chosen.some((offer, offerIndex) => (
+          offer.charmId !== draft.offers?.[offerIndex]?.charmId
+        ));
+      }
+      const slotRole = draft.offers?.[index]?.slotRole ?? slotDefaults[index] ?? 'extra';
+      for (const item of candidatesFor(index)) {
+        chosenIds.add(item.id);
+        chosen.push({
+          charmId: item.id,
+          tier: item.tier,
+          role: item.functionRole,
+          draftRole: item.draftRole,
+          slotRole,
+        });
+        if (search(index + 1)) return true;
+        chosen.pop();
+        chosenIds.delete(item.id);
+      }
+      return false;
+    };
+
+    return search(0) ? chosen : null;
+  }
+
+  rollDraftOffers(draft, groupKind, rollIndex) {
+    const contentRng = createSeededRng(this.draftSeed(
+      draft.slotIndex,
+      draft.appliedOmen ? 39019 : 13,
+      rollIndex,
+    ));
+    const options = this.draftContentOptions(draft);
+    let rolled = draftCharmOffers(contentRng, groupKind, {
+      offerCount: draft.offerCount,
+      tierSlots: draft.tierSlots,
+      ...options,
+    });
+    if (rolled.length !== draft.offerCount) return null;
+    const unchanged = rolled.every((offer, index) => (
+      offer.charmId === draft.offers?.[index]?.charmId
+    ));
+    if (unchanged) {
+      rolled = this.findAlternativeDraftOffers(draft, groupKind, options) ?? rolled;
+    }
+    return rolled.map((offer, index) => ({
+      ...offer,
+      offerId: `${draft.draftId}:r${rollIndex}:o${index}`,
+    }));
   }
 
   rerollDraft() {
     if (this.status !== 'charm-draft' || !this.draft) return { ok: false, reason: '现在不需要重抽' };
     if (this.draft.rerollsLeft <= 0) return { ok: false, reason: '没有可用的重抽' };
+    if (this.draft.pendingOmenReplacement) return { ok: false, reason: '请先决定是否替换待缘' };
     const group = this.revealedGroups.find((item) => item.id === this.draft.groupId);
+    const nextRoll = this.draft.rolls + 1;
+    const offers = this.rollDraftOffers(this.draft, group?.kind ?? 'pair', nextRoll);
+    if (!offers) return { ok: false, reason: '当前没有足够的合法灵签可重抽' };
     this.draft = {
       ...this.draft,
-      rolls: this.draft.rolls + 1,
+      rolls: nextRoll,
       rerollsLeft: this.draft.rerollsLeft - 1,
-      charmIds: this.rollDraft(group?.kind ?? 'pair', this.draft.rolls + 1),
+      offers,
+      charmIds: offers.map((offer) => offer.charmId),
     };
-    this.lastEvent = { type: 'draft-reroll', text: '三签已重抽' };
+    this.lastEvent = { type: 'draft-reroll', text: `${this.draft.offerCount} 张灵签已重抽` };
     this.emit();
-    return { ok: true, charmIds: this.draft.charmIds };
+    return { ok: true, charmIds: this.draft.charmIds, offers: this.draft.offers };
   }
 
   chooseCharm(charmId) {
     if (this.status !== 'charm-draft' || !this.draft) return { ok: false, reason: '现在不需要选签' };
-    if (!this.draft.charmIds.includes(charmId)) return { ok: false, reason: '这张灵签不在本次选择里' };
-    const charm = getItem('charm', charmId);
+    const offer = this.draft.offers?.find((item) => item.charmId === charmId);
+    if (!offer) return { ok: false, reason: '这张灵签不在本次选择里' };
+    return this.chooseDraftOffer(offer.offerId);
+  }
+
+  /** 新 UI 的 canonical 选签入口，避免未来同名签实例造成歧义。 */
+  chooseDraftOffer(offerId) {
+    if (this.status !== 'charm-draft' || !this.draft) return { ok: false, reason: '现在不需要选签' };
+    if (this.draft.pendingOmenReplacement) return { ok: false, reason: '请先决定是否替换待缘' };
+    const offer = this.draft.offers?.find((item) => item.offerId === offerId);
+    if (!offer) return { ok: false, reason: '这张灵签不在本次选择里' };
+    const charm = getItem('charm', offer.charmId);
+    if (!charm) return { ok: false, reason: '灵签内容不存在' };
+
+    const nextOmen = charm.omen ? {
+      omenId: charm.omen.omenId,
+      sourceCharmId: charm.id,
+      acquiredAtBlind: `${this.anteIndex}:${this.blindKind}`,
+      consumeOn: charm.omen.consumeOn,
+    } : null;
+
+    if (nextOmen && this.pendingOmen) {
+      this.draft = {
+        ...this.draft,
+        pendingOmenReplacement: {
+          offerId: offer.offerId,
+          charmId: charm.id,
+          current: cloneOmen(this.pendingOmen),
+          next: cloneOmen(nextOmen),
+        },
+      };
+      this.lastEvent = { type: 'omen-replace', text: '待缘位已有签兆，是否替换？' };
+      this.emit();
+      return {
+        ok: true,
+        needsOmenReplace: true,
+        current: cloneOmen(this.pendingOmen),
+        next: cloneOmen(nextOmen),
+      };
+    }
+    return this.finishCharmChoice(offer, charm, nextOmen);
+  }
+
+  finishCharmChoice(offer, charm, nextOmen = null) {
     const group = this.revealedGroups.find((item) => item.id === this.draft.groupId);
-    if (group) group.charmId = charmId;
-    this.charmIds = [...this.charmIds, charmId];
+    const instance = {
+      instanceId: offer.offerId,
+      charmId: charm.id,
+      tier: offer.tier,
+      role: offer.role,
+      source: 'draft',
+    };
+    if (group) {
+      group.charmId = charm.id;
+      group.charmInstanceId = instance.instanceId;
+    }
+    this.charmIds = [...this.charmIds, charm.id];
+    this.charmInstances = [...this.charmInstances, instance];
 
     let goldNow = 0;
     for (const effect of charm.effects ?? []) {
       if (effect.kind === 'goldNow') goldNow += effect.value;
     }
     this.charmGold += goldNow;
+    if (nextOmen) this.pendingOmen = cloneOmen(nextOmen);
 
     this.draft = null;
     this.status = 'playing';
     this.lastEvent = {
       type: 'charm',
-      text: goldNow ? `${charm.name} · +${goldNow} 待结算金` : `${charm.name} 生效`,
-      charmId,
+      text: nextOmen
+        ? `${charm.name} · 待下次求签应验`
+        : (goldNow ? `${charm.name} · +${goldNow} 待结算金` : `${charm.name} 生效`),
+      charmId: charm.id,
+      offerId: offer.offerId,
       goldNow,
+      pendingOmen: cloneOmen(this.pendingOmen),
     };
     this.refreshStatus();
     this.emit();
-    return { ok: true, charm, goldNow };
+    return { ok: true, charm, instance, goldNow, pendingOmen: cloneOmen(this.pendingOmen) };
+  }
+
+  confirmPendingOmen() {
+    if (this.status !== 'charm-draft' || !this.draft?.pendingOmenReplacement) {
+      return { ok: false, reason: '现在不需要替换待缘' };
+    }
+    const replacement = this.draft.pendingOmenReplacement;
+    const offer = this.draft.offers.find((item) => item.offerId === replacement.offerId);
+    const charm = getItem('charm', replacement.charmId);
+    if (!offer || !charm) return { ok: false, reason: '替换的灵签已经不存在' };
+    return this.finishCharmChoice(offer, charm, replacement.next);
+  }
+
+  cancelPendingOmenReplacement() {
+    if (this.status !== 'charm-draft' || !this.draft?.pendingOmenReplacement) {
+      return { ok: false, reason: '现在不需要替换待缘' };
+    }
+    this.draft = { ...this.draft, pendingOmenReplacement: null };
+    this.lastEvent = { type: 'omen-replace-cancel', text: '保留原有签兆' };
+    this.emit();
+    return { ok: true };
   }
 
   /* ---------------- 结算 ---------------- */
@@ -657,6 +969,7 @@ export class Run {
     if (!best) return { ok: false, reason: '现在还不能胡' };
 
     for (const fired of best.sealsFired ?? []) this.usedSealKinds.add(fired.kind);
+    // goldNow 在选签时记入 charmGold，scoreHand 会主动跳过，避免胡牌时重复触发。
     const gold = best.gold + this.charmGold + this.emptySlots() * this.config.goldPerEmptySlot;
     const result = {
       handIndex: this.handIndex,
@@ -675,6 +988,7 @@ export class Run {
       slotsUsed: this.slotsUsed(),
       emptySlots: this.emptySlots(),
       charmIds: [...this.charmIds],
+      charmInstances: this.charmInstances.map((instance) => ({ ...instance })),
       swapsRemaining: this.swapsRemaining,
     };
 
@@ -750,6 +1064,7 @@ export class Run {
     const wasLastBlind = this.blindKind === BLIND_ORDER.at(-1);
     if (wasLastBlind && this.anteIndex >= this.antes.length - 1) {
       this.status = 'run-complete';
+      this.pendingOmen = null;
       this.lastEvent = { type: 'run-complete', text: `通关！总分 ${this.totalScore}`, banked };
       this.emit();
       return { ok: true, status: this.status };
@@ -770,6 +1085,7 @@ export class Run {
   /** 试玩用：本关重来一次，不清空已入账金币与构筑。 */
   retryBlind() {
     if (this.status !== 'run-over') return { ok: false, reason: '现在不需要重试' };
+    this.pendingOmen = cloneOmen(this.blindEntryPendingOmen);
     this.handIndex = 0;
     this.resetBlindProgress();
     this.status = 'blind-select';
@@ -974,7 +1290,11 @@ export class Run {
       projectedGold: live ? this.projectedGold() : 0,
 
       charmIds: [...this.charmIds],
-      draft: this.draft ? { ...this.draft, charmIds: [...this.draft.charmIds] } : null,
+      charmInstances: this.charmInstances.map((instance) => ({ ...instance })),
+      draft: cloneDraft(this.draft),
+      pendingOmen: cloneOmen(this.pendingOmen),
+      blindEntryPendingOmen: cloneOmen(this.blindEntryPendingOmen),
+      omenTriggeredThisHand: this.omenTriggeredThisHand,
       generalIds: [...this.generalIds],
       generalSlots: config.generalSlots,
       codexLevels: { ...this.codexLevels },

@@ -46,6 +46,28 @@ test('每副开局：14 张结构牌、6 个开运位、5 次换牌', () => {
   assert.ok(state.distance >= 1);
 });
 
+test('跳过闲局和庄局会逐关推进，圈主保持不可跳', () => {
+  const run = new Run({ seed: SEED });
+
+  assert.equal(run.blindKind, 'small');
+  assert.equal(run.skipBlind().ok, true);
+  let state = run.snapshot();
+  assert.equal(state.status, 'blind-select');
+  assert.equal(state.blindKind, 'big');
+  assert.equal(state.blindCards.find((card) => card.kind === 'small')?.outcome, 'skipped');
+  assert.equal(state.blindCards.find((card) => card.kind === 'big')?.current, true);
+
+  assert.equal(run.skipBlind().ok, true);
+  state = run.snapshot();
+  assert.equal(state.status, 'blind-select');
+  assert.equal(state.blindKind, 'boss');
+  assert.equal(state.blindCards.find((card) => card.kind === 'big')?.outcome, 'skipped');
+  assert.equal(state.blindCards.find((card) => card.kind === 'boss')?.current, true);
+
+  assert.deepEqual(run.skipBlind(), { ok: false, reason: '圈主不能跳' });
+  assert.equal(run.blindKind, 'boss');
+});
+
 test('完全不亮牌：满额空位金币 + 门清标签', () => {
   const run = startSelectedBlind(new Run({ seed: SEED }));
   assert.equal(playHand(run), 'hand-won');
