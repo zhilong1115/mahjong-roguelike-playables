@@ -33,7 +33,16 @@ const el = (tag, className, text) => {
   return node;
 };
 
-const ROLE_LABEL = { group: '本组签', pattern: '牌型签', wild: '奇签' };
+const ROLE_LABEL = {
+  group: '助势',
+  pattern: '助势',
+  wild: '奇缘',
+  momentum: '助势',
+  fate: '改命',
+  omen: '奇缘',
+};
+const TIER_LABEL = { silver: '银签', gold: '金签', rainbow: '彩签' };
+const TIER_MARKS = { silver: '◆', gold: '◆◆', rainbow: '◆◆◆' };
 const SETTINGS_KEY = 'tianhu.settings.v1';
 const DEFAULT_SETTINGS = { sound: true, animationSpeed: 1, haptics: true, deckId: 'plain' };
 
@@ -63,6 +72,8 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   let lastScreenStatus = null;
   let screenQueue = Promise.resolve();
   let hasSave = false;
+  let draftFocusToken = null;
+  let draftReturnFocus = null;
   const timeline = new Timeline();
 
   /* ---------------- 基础工具 ---------------- */
@@ -76,10 +87,11 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     timeline.speed = settings.animationSpeed === 0 ? Infinity : settings.animationSpeed;
   }
 
-  function toast(message) {
+  function toast(message, duration = 2100) {
     const node = el('div', 'toastItem', message);
+    node.style.setProperty('--toast-out-delay', `${Math.max(250, duration - 400)}ms`);
     $('#toast').append(node);
-    setTimeout(() => node.remove(), 2100);
+    setTimeout(() => node.remove(), duration);
   }
 
   function haptic() {
@@ -100,14 +112,17 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     node.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
   }
 
-  function cardNode(family, item, { className = '', meta = '', showText = true } = {}) {
+  function cardNode(family, item, {
+    className = '', meta = '', showText = true, interactive = false,
+  } = {}) {
     const info = FAMILIES[family] ?? {
       name: family === 'paper' ? '牌帖' : family,
       subtitle: '改牌组',
       duration: item.duration ?? '本局',
       glyph: item.glyph,
     };
-    const node = el('div', `card family-${family} ${className}`.trim());
+    const node = el(interactive ? 'button' : 'div', `card family-${family} ${className}`.trim());
+    if (interactive) node.type = 'button';
     node.dataset.card = `${family}:${item.id}`;
     node.append(createSealCanvas(item.glyph ?? info.glyph, { family, scale: 1 }));
     node.append(el('div', 'cName', item.name));
@@ -177,6 +192,19 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     setPixelText($('#goldV'), state.gold, 11, '#f0c04a', '#000', scale);
     setPixelText($('#slotV'), `${state.projectedGold}金`, 11, '#f0c04a', '#000', scale);
     $('#slotLabel').textContent = `空位 ${state.emptySlots} SLOTS`;
+
+    const omenSlot = $('#omenSlot');
+    const omen = state.pendingOmen;
+    const omenCharm = omen ? getItem('charm', omen.sourceCharmId) : null;
+    omenSlot.classList.toggle('filled', Boolean(omen));
+    $('#omenName').textContent = omenCharm ? omenCharm.name : '空 · 延时奇缘会留在这里';
+    $('#omenTiming').textContent = omen ? '下次求签 · 一次' : '等待奇缘';
+    omenSlot.setAttribute(
+      'aria-label',
+      omenCharm
+        ? `待缘位，${omenCharm.name}，下次求签时应验一次。${omenCharm.text}`
+        : '待缘位为空，延时奇缘会留在这里',
+    );
 
     renderBuildBar();
     renderBossBanner();
@@ -249,7 +277,15 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         slot.append(el('div', 'charmName', charm ? charm.name : GROUP_NAMES[group.kind]));
         if (charm) {
           slot.dataset.card = `charm:${charm.id}`;
-          bindTip(slot, `${charm.name} · ${GROUP_NAMES[group.kind]}`, `${charm.text}（本副）`);
+          const instance = state.charmInstances?.find(
+            (item) => item.instanceId === group.charmInstanceId,
+          );
+          const tier = group.charmTier ?? instance?.tier ?? charm.tier ?? 'silver';
+          bindTip(
+            slot,
+            `${charm.name} · ${TIER_LABEL[tier] ?? '灵签'} · ${GROUP_NAMES[group.kind]}`,
+            `${charm.text}（本副）`,
+          );
         }
       } else {
         slot.append(el('div', 'slotGold', `+${state.goldPerEmptySlot}金`));
@@ -366,42 +402,206 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     const layer = $('#draftLayer');
     const cards = $('#draftCards');
     const reroll = $('#btnReroll');
+    const actions = $('#draftActions');
+    const notice = $('#draftNotice');
     if (!state.draft) {
+      const wasOpen = !layer.hidden;
+      const previousFocus = draftReturnFocus;
       layer.hidden = true;
+      layer.inert = false;
+      layer.removeAttribute('aria-hidden');
+      layer.removeAttribute('data-offer-count');
       cards.replaceChildren();
+      actions.replaceChildren(reroll);
       reroll.hidden = true;
+      notice.hidden = true;
+      $('#side').inert = false;
+      $('#main').inert = false;
+      draftFocusToken = null;
+      draftReturnFocus = null;
+      if (wasOpen) {
+        requestAnimationFrame(() => {
+          if (state?.draft) return;
+          const fallback = [$('#btnHu'), $('#btnReveal'), $('#btnSwap')]
+            .find((node) => node && !node.disabled);
+          const target = previousFocus?.isConnected && !previousFocus.matches?.(':disabled')
+            ? previousFocus
+            : fallback;
+          target?.focus();
+        });
+      }
       return;
     }
+    if ($('#screen')) {
+      coverDraftForScreen();
+      return;
+    }
+    if (layer.hidden) {
+      const active = document.activeElement;
+      draftReturnFocus = active instanceof HTMLElement && active !== document.body ? active : null;
+    }
+    layer.inert = false;
+    layer.removeAttribute('aria-hidden');
     layer.hidden = false;
+    $('#side').inert = true;
+    $('#main').inert = true;
     cards.replaceChildren();
-    state.draft.charmIds.forEach((charmId, index) => {
+    actions.replaceChildren(reroll);
+
+    const replacement = state.draft.pendingOmenReplacement
+      ?? state.draft.replacement
+      ?? state.draft.pendingReplacement
+      ?? null;
+    if (replacement) {
+      renderOmenReplacement({ layer, cards, actions, notice, replacement });
+      return;
+    }
+
+    const offers = state.draft.offers ?? state.draft.charmIds.map((charmId, index) => ({
+      offerId: `legacy-${index}`,
+      charmId,
+      tier: getItem('charm', charmId)?.tier ?? 'silver',
+    }));
+    layer.dataset.offerCount = String(state.draft.offerCount ?? offers.length);
+
+    const applied = state.draft.appliedOmen;
+    const appliedCharm = applied ? getItem('charm', applied.sourceCharmId) : null;
+    notice.hidden = !applied;
+    notice.textContent = applied
+      ? `签兆已应验 · ${appliedCharm?.name ?? '待缘'} · 本次${offers.length}选一`
+      : '';
+    $('#draftTitle').textContent = `${offers.length === 4 ? '四' : '三'}签选一 · 只取一张`;
+
+    offers.forEach((offer, index) => {
+      const { charmId } = offer;
       const charm = getItem('charm', charmId);
-      const node = cardNode('charm', charm, { className: 'charmPick' });
-      node.setAttribute('role', 'button');
-      node.tabIndex = 0;
-      node.prepend(el('div', 'cRole', ROLE_LABEL[charm.role] ?? ''));
+      if (!charm) return;
+      const tier = offer.tier ?? charm.tier ?? 'silver';
+      const role = offer.functionRole ?? offer.role ?? charm.functionRole ?? charm.role;
+      const durationMeta = charm.omen ? `${charm.duration ?? '本局'} · 一次` : (charm.duration ?? '本副');
+      const node = cardNode('charm', charm, {
+        className: `charmPick tier-${tier}`,
+        meta: `${index + 1} · ${durationMeta}`,
+        interactive: true,
+      });
+      node.dataset.offerId = offer.offerId;
+      node.dataset.tier = tier;
+      node.dataset.role = role;
+      node.setAttribute(
+        'aria-label',
+        `${index + 1}，${TIER_LABEL[tier] ?? '灵签'}，${ROLE_LABEL[role] ?? '奇缘'}，${charm.name}，${charm.text}`,
+      );
+      const tierRow = el('div', 'cTierRow');
+      tierRow.append(
+        el('span', 'tierName', TIER_LABEL[tier] ?? '灵签'),
+        el('span', 'tierMarks', TIER_MARKS[tier] ?? '◆'),
+      );
+      node.prepend(el('div', 'cRole', ROLE_LABEL[role] ?? '奇缘'), tierRow);
       const choose = () => {
         if (locked) return;
         sfx.charm();
         haptic();
-        const result = run.chooseCharm(charmId);
+        const result = run.chooseDraftOffer
+          ? run.chooseDraftOffer(offer.offerId)
+          : run.chooseCharm(charmId);
+        if (result.ok && result.needsOmenReplace) {
+          return;
+        }
         if (result.ok && result.goldNow) {
           sfx.coin();
           toast(`${charm.name} · +${result.goldNow} 待结算金`);
+        } else if (result.ok && result.pendingOmen) {
+          toast(`${charm.name} · 已放入待缘位，下次求签应验一次`);
+        } else if (result.ok) {
+          toast(`${charm.name} · 已生效`);
+        } else if (!result.ok && !result.needsOmenReplace && result.reason) {
+          toast(result.reason);
         }
       };
       node.addEventListener('click', choose);
-      node.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          choose();
-        }
-      });
       node.style.animationDelay = `${index * 60}ms`;
       node.classList.add('dealIn');
       cards.append(node);
     });
     reroll.hidden = state.draft.rerollsLeft <= 0;
+    if (!reroll.hidden) reroll.classList.remove('sm');
+
+    const focusToken = `${state.draft.draftId ?? state.draft.groupId}:offers`;
+    if (draftFocusToken !== focusToken) {
+      requestAnimationFrame(() => {
+        const target = cards.querySelector('.charmPick');
+        if ($('#screen') || layer.hidden || layer.inert || !state?.draft || !target?.isConnected) return;
+        draftFocusToken = focusToken;
+        target.focus();
+      });
+    }
+  }
+
+  function omenCharmFrom(value) {
+    if (!value) return null;
+    return getItem('charm', value.sourceCharmId ?? value.charmId ?? value.nextCharmId);
+  }
+
+  function renderOmenReplacement({ layer, cards, actions, notice, replacement }) {
+    layer.dataset.offerCount = '2';
+    notice.hidden = false;
+    notice.textContent = '待缘位已占用 · 选择是否替换';
+    $('#draftTitle').textContent = '旧缘与新缘只能留一个';
+
+    const current = omenCharmFrom(replacement.current ?? state.pendingOmen);
+    const incoming = omenCharmFrom(replacement.incoming ?? replacement.next ?? replacement);
+    const comparison = el('div', 'omenCompare');
+    for (const [label, item, className] of [
+      ['当前待缘', current, 'current'],
+      ['这次新缘', incoming, 'new'],
+    ]) {
+      const node = el('div', `omenCompareCard ${className}`);
+      node.append(
+        el('div', 'compareLabel', label),
+        el('div', 'compareName', item?.name ?? '未知签兆'),
+        el('div', 'compareText', item?.text ?? '下一次求签时应验一次'),
+      );
+      comparison.append(node);
+    }
+    cards.append(comparison);
+
+    const back = el('button', 'btn grey', '返回选签');
+    back.type = 'button';
+    back.addEventListener('click', () => (
+      run.cancelPendingOmenReplacement?.() ?? run.cancelOmenReplacement?.()
+    ));
+    const confirm = el('button', 'btn gold', '换成新缘');
+    confirm.type = 'button';
+    confirm.addEventListener('click', () => {
+      const result = run.confirmPendingOmen?.()
+        ?? run.confirmPendingOmenReplacement?.()
+        ?? run.confirmOmenReplacement?.()
+        ?? { ok: false, reason: '暂时无法替换' };
+      if (!result.ok && result.reason) toast(result.reason);
+      else toast(`${incoming?.name ?? '新签兆'}已放入待缘位`);
+    });
+    actions.append(back, confirm);
+    $('#btnReroll').hidden = true;
+
+    const focusToken = `${state.draft.draftId ?? state.draft.groupId}:replacement`;
+    if (draftFocusToken !== focusToken) {
+      requestAnimationFrame(() => {
+        if ($('#screen') || layer.hidden || layer.inert || !state?.draft || !back.isConnected) return;
+        draftFocusToken = focusToken;
+        back.focus();
+      });
+    }
+  }
+
+  /** 外层屏幕出现时，求签只作为待恢复状态存在，不能留在可访问树或抢走焦点。 */
+  function coverDraftForScreen() {
+    const layer = $('#draftLayer');
+    if (!state?.draft || !layer) return;
+    if (layer.contains(document.activeElement)) document.activeElement.blur();
+    layer.hidden = true;
+    layer.inert = true;
+    layer.setAttribute('aria-hidden', 'true');
+    draftFocusToken = null;
   }
 
   function renderAll(options = {}) {
@@ -769,6 +969,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
   function openTitle() {
     lastScreenStatus = 'title';
+    coverDraftForScreen();
     showTitle({
       deckId: settings.deckId,
       hasSave,
@@ -810,7 +1011,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     });
   }
 
-  function openBlindSelect() {
+  function openBlindSelect({ focusPrimary = false } = {}) {
     showBlindSelect({
       state,
       onSelect: () => { closeScreen(); sfx.reveal(); run.selectBlind(); },
@@ -820,9 +1021,20 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
           sfx.coin();
           toast(`跳局 · 得到${getItem('tag', result.tagId).name}`);
         } else toast(result.reason);
+        // 跳局前后都属于 blind-select，不能只靠 status 变化重建覆盖层。
+        // 核心 emit 是同步的；此时 state 已指向下一关，立即替换旧的静态 DOM。
+        openBlindSelect({ focusPrimary: true });
       },
       onTitle: () => openTitle(),
     });
+    if (focusPrimary) {
+      requestAnimationFrame(() => {
+        const screen = $('#screen');
+        if (!screen?.classList.contains('blindScreen')) return;
+        screen.querySelector('.blindCard.current .blindActions .btn.green')
+          ?.focus({ preventScroll: true });
+      });
+    }
   }
 
   /* ---------------- 状态驱动 ---------------- */
@@ -915,6 +1127,13 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       onBack: () => { closeScreen(); ensureScreen(); },
     }));
     $('#btnRestart').addEventListener('click', () => openTitle());
+    $('#omenSlot').addEventListener('click', () => {
+      const omen = state?.pendingOmen;
+      const charm = omen ? getItem('charm', omen.sourceCharmId) : null;
+      toast(charm
+        ? `${charm.name} · ${charm.text}`
+        : '待缘位为空 · 选择延时奇缘后会留在这里', charm ? 4200 : 2100);
+    });
     $('#btnReroll').addEventListener('click', () => {
       const result = run.rerollDraft();
       if (result.ok) sfx.charm();
@@ -924,19 +1143,41 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     document.addEventListener('pointerdown', () => timeline.skip(), { capture: true });
 
     document.addEventListener('keydown', (event) => {
+      const screen = $('#screen');
+      if (screen) {
+        // 标题 / 帮助等外层屏幕覆盖求签时，禁止数字键和隐藏签卡的默认 Enter 激活。
+        if (state?.draft
+          && !screen.contains(event.target)
+          && ['1', '2', '3', '4', 'Escape', 'Enter', ' '].includes(event.key)) {
+          event.preventDefault();
+        }
+        return;
+      }
       if (timeline.running && (event.key === ' ' || event.key === 'Enter')) {
         timeline.skip();
         return;
       }
-      if (state?.draft && ['1', '2', '3'].includes(event.key)) {
-        const charmId = state.draft.charmIds[Number(event.key) - 1];
-        if (charmId) {
-          sfx.charm();
-          run.chooseCharm(charmId);
+      if (state?.draft) {
+        if (event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+        const replacement = state.draft.pendingOmenReplacement
+          ?? state.draft.replacement
+          ?? state.draft.pendingReplacement
+          ?? null;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          if (replacement) {
+            run.cancelPendingOmenReplacement?.() ?? run.cancelOmenReplacement?.();
+          }
+          return;
+        }
+        if (['1', '2', '3', '4'].includes(event.key)) {
+          event.preventDefault();
+          const index = Number(event.key) - 1;
+          const card = [...document.querySelectorAll('#draftCards .charmPick')][index];
+          card?.click();
         }
         return;
       }
-      if ($('#screen')) return;
       const key = event.key.toLowerCase();
       if (event.key === 'Enter') doSwap();
       else if (key === 'r') doReveal();

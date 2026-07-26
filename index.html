@@ -42,6 +42,11 @@
         <div class="stat money"><div class="v" id="goldV">4</div><div class="n">金币 GOLD</div></div>
         <div class="stat"><div class="v" id="slotV">12金</div><div class="n" id="slotLabel">空位 6 SLOTS</div></div>
       </div>
+      <button id="omenSlot" type="button" aria-label="待缘位为空">
+        <span class="omenLabel">待缘位</span>
+        <span id="omenName">空 · 延时奇缘会留在这里</span>
+        <span id="omenTiming">下一次求签 · 一次</span>
+      </button>
     </section>
 
     <section class="panel deep grow" id="buildPanel">
@@ -68,11 +73,6 @@
       </div>
       <div id="bossBanner" hidden></div>
       <div id="patternBanner" hidden></div>
-      <div id="draftLayer" hidden>
-        <div id="draftTitle" class="sh">三签选一 · 只在本副生效</div>
-        <div id="draftCards"></div>
-        <button class="btn grey sm" id="btnReroll" type="button" hidden>问签印 · 重抽</button>
-      </div>
     </div>
 
     <div id="handZone"></div>
@@ -84,6 +84,17 @@
       <div id="actionHint" class="hintLine">选中要换的牌可以一次换多张；选 2–4 张合法组合就能亮组</div>
     </div>
   </main>
+
+  <section id="draftLayer" role="dialog" aria-modal="true" aria-labelledby="draftTitle" hidden>
+    <div id="draftPanel">
+      <div id="draftTitle" class="sh">三签选一 · 只在本副生效</div>
+      <div id="draftNotice" aria-live="polite" hidden></div>
+      <div id="draftCards"></div>
+      <div id="draftActions">
+        <button class="btn grey" id="btnReroll" type="button" hidden>问签印 · 重抽</button>
+      </div>
+    </div>
+  </section>
 </div>
 
 <div id="floatLayer" aria-hidden="true"></div>

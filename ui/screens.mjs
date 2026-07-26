@@ -214,6 +214,8 @@ export function showHelp({ state, onBack }) {
        <b>没用完的换牌，胡牌时每次换 ${state.goldPerUnusedSwap} 金。</b></p>
     <p><b>亮组</b>：选 2–4 张合法组合，花掉一个<b>开运位</b>，立刻三签选一。
        开运位每个留空给 +${state.emptySlotChips} 牌值和 +${state.goldPerEmptySlot} 金。</p>
+    <p>灵签同时有<b>银 / 金 / 彩</b>签阶和<b>助势 / 奇缘</b>职责。部分奇缘会留在待缘位，
+       在下一次求签时自动应验一次；广缘会把下一次求签变成四选一。</p>
     <p>得分 = <b>牌值 × 番势</b>。过关拿金币，进百宝阁买长期构筑。</p>
   `;
   const families = el('div', '');
@@ -226,7 +228,7 @@ export function showHelp({ state, onBack }) {
     families.append(line);
   }
   text.append(families);
-  text.append(el('p', 'lbl', '快捷键：Enter 换牌 · R 亮组 · H 胡牌 · Esc 取消 · 1/2/3 选灵签 · 结算时点一下快进'));
+  text.append(el('p', 'lbl', '快捷键：Enter 换牌 · R 亮组 · H 胡牌 · Esc 取消 · 1/2/3/4 选灵签 · 结算时点一下快进'));
   box.append(text);
   const row = el('div', 'rowBtns');
   row.append(button('btn green big', '返回', onBack));

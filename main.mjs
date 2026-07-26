@@ -2,6 +2,7 @@
 
 import { Run } from './core/run.mjs';
 import { createWebAdapter } from './platforms/adapter.mjs';
+import { createSaveCoordinator } from './state/save-coordinator.mjs';
 import { createLocalStorage, restoreRun, serializeRun } from './state/save.mjs';
 import { createApp } from './ui/app.mjs';
 import { setAudioEnabled } from './ui/audio.mjs';
@@ -28,26 +29,37 @@ if (saved && !Number.isFinite(seedParam)) {
   savedRun = restoreRun(initialRun, saved).ok;
 }
 
-// 每次状态变化都写一次本地存档；平台版换成 adapter 的存档接口
-let saveTimer = null;
+// 普通状态保留 400ms 防抖；求签等关键状态立即入串行队列。
+// 平台存档即使是异步的，也不会出现旧请求晚完成、覆盖新状态。
+const saveCoordinator = createSaveCoordinator({
+  save: (snapshot) => adapter.save(snapshot),
+  debounceMs: 400,
+});
 let stopWatchingSaves = null;
 const scheduleSave = (run) => {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => adapter.save(serializeRun(run)), 400);
+  saveCoordinator.schedule(serializeRun(run));
+};
+const flushSave = (run) => {
+  return saveCoordinator.flush(serializeRun(run));
 };
 const watchSaves = (run, { silent = false } = {}) => {
   stopWatchingSaves?.();
-  clearTimeout(saveTimer);
-  stopWatchingSaves = run.subscribe(() => scheduleSave(run));
+  saveCoordinator.cancelScheduled();
+  stopWatchingSaves = run.subscribe((state) => {
+    const critical = state.status === 'charm-draft'
+      || ['charm', 'draft-reroll', 'omen', 'omen-replace'].includes(state.lastEvent?.type);
+    if (critical) void flushSave(run);
+    else scheduleSave(run);
+  });
   // 标题背景的临时 Run 不应凭空制造「继续上局」；真正开局则立即落档。
-  if (!silent) scheduleSave(run);
+  if (!silent) void flushSave(run);
 };
 
 const app = createApp({ createRun, adapter, storage, onRunAttached: watchSaves });
 app.mount({ initialRun, savedRun, autoStart: skipTitle });
 
 adapter.onLifecycle((event) => {
-  if (event === 'pause' && app.run) adapter.save(serializeRun(app.run));
+  if (event === 'pause' && app.run) void flushSave(app.run);
   if (event === 'audio') setAudioEnabled(adapter.isAudioEnabled());
 });
 
