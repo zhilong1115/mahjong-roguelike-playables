@@ -18,7 +18,7 @@ export const BONES = Object.freeze({
   warmJade: bone({
     id: 'warmJade',
     name: '温玉骨',
-    price: 5,
+    price: 8,
     rarity: 'common',
     text: '此牌进入最终胡牌结构时，每张 +12 牌值。',
     effects: [{ kind: 'boneChipsPerTile', value: 12 }],
@@ -26,7 +26,7 @@ export const BONES = Object.freeze({
   greenBamboo: bone({
     id: 'greenBamboo',
     name: '青竹骨',
-    price: 5,
+    price: 8,
     rarity: 'common',
     text: '此牌在最终胡牌结构中属于顺子时，每张 +18 牌值。',
     effects: [{ kind: 'boneChipsPerTile', groupKinds: ['chow'], value: 18 }],

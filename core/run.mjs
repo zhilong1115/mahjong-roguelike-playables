@@ -351,6 +351,7 @@ export class Run {
     this.wall = deal.wall;
     this.discard = [];
     this.flavor = deal.flavor;
+    this.previewCount = deal.previewCount ?? 2;
     this.revealedGroups = [];
     this.selectedIds = new Set();
     this.swapsRemaining = config.swapsPerHand;
@@ -1270,7 +1271,7 @@ export class Run {
       selectedIds: [...this.selectedIds],
       swapPreview: this.swapPreview(),
       revealPreview: this.revealPreview(),
-      upcomingTiles: modifiers.hideWallPreview ? [] : this.wall.slice(0, 2),
+      upcomingTiles: modifiers.hideWallPreview ? [] : this.wall.slice(0, this.previewCount ?? 2),
       wallCount: this.wall.length,
       structuralCount: structuralCount(this.looseTiles, this.revealedGroups),
       physicalCount: physicalCount(this.looseTiles, this.revealedGroups),
