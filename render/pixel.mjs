@@ -158,22 +158,59 @@ function cutCorners(context, width, height) {
 }
 
 /**
- * 牌身：上面是象牙面，底部留一条玉色托板——真麻将牌就是象牙面压在竹背上，
- * 这一条是整张牌「立起来」的关键。
+ * 牌骨材质：牌骨不再只是牌底的一条彩带，而是真的换掉整张牌的料子。
+ * 玩家扫一眼手牌就能认出哪几张被改造过（这是 0021 的要求）。
  */
-function tileBody(context, dim) {
-  const face = dim ? '#b9b2a4' : '#f7f2e4';
-  const faceLow = dim ? '#a9a294' : '#e8e0cb';
-  const high = dim ? '#cdc6b6' : '#fffefa';
-  const low = dim ? '#8e887c' : '#cdc4ad';
-  const edge = dim ? '#5a564d' : '#7d7159';
-  const jade = dim ? '#4d6157' : '#2f7d5c';
-  const jadeLow = dim ? '#35443d' : '#1d5340';
+const TILE_MATERIALS = Object.freeze({
+  ivory: {
+    face: '#f7f2e4', faceLow: '#e8e0cb', high: '#fffefa', low: '#cdc4ad',
+    edge: '#7d7159', plate: '#2f7d5c', plateLow: '#1d5340', mark: null, grain: null,
+  },
+  // 温玉骨：整张牌是半透的玉料，面色发青白
+  warmJade: {
+    face: '#dcefe3', faceLow: '#c2ddcd', high: '#f4fdf6', low: '#a5c6b3',
+    edge: '#587c69', plate: '#17a074', plateLow: '#0b6b4c', mark: '#2fd39c', grain: null,
+  },
+  // 青竹骨：竹料，面色偏黄绿，还带竖向竹纹
+  greenBamboo: {
+    face: '#ecefcf', faceLow: '#d6dbab', high: '#fbfce9', low: '#b8bf8d',
+    edge: '#6b7243', plate: '#4f9a2f', plateLow: '#2d5f18', mark: '#a8dd63', grain: '#d2d79f',
+  },
+});
+
+function dimColor(hex, amount = 0.42) {
+  const value = parseInt(hex.slice(1), 16);
+  const mix = (channel) => Math.round(channel + (0x6b - channel) * amount);
+  return `#${[
+    mix((value >> 16) & 255), mix((value >> 8) & 255), mix(value & 255),
+  ].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/**
+ * 牌身：上面是象牙面，底部留一条玉色托板——真麻将牌就是象牙面压在竹背上，
+ * 这一条是整张牌「立起来」的关键。`material` 换的是整张牌的料子。
+ */
+function tileBody(context, dim, material = 'ivory') {
+  const tone = TILE_MATERIALS[material] ?? TILE_MATERIALS.ivory;
+  const pick = (color) => (dim ? dimColor(color) : color);
+  const face = pick(tone.face);
+  const faceLow = pick(tone.faceLow);
+  const high = pick(tone.high);
+  const low = pick(tone.low);
+  const edge = pick(tone.edge);
+  const jade = pick(tone.plate);
+  const jadeLow = pick(tone.plateLow);
 
   // 外框
   px(context, 0, 0, TILE_W, TILE_H, '#241c13');
   // 象牙面（上部）
   px(context, 1, 1, TILE_W - 2, TILE_H - 6, face);
+  // 竹料的竖纹：只有青竹骨有
+  if (tone.grain && !dim) {
+    for (let x = 3; x < TILE_W - 3; x += 5) {
+      px(context, x, 2, 1, TILE_H - 10, tone.grain);
+    }
+  }
   // 面下缘微微变深，做出弧面感
   px(context, 1, TILE_H - 10, TILE_W - 2, 4, faceLow);
   // 玉色托板（底部）
@@ -184,7 +221,26 @@ function tileBody(context, dim) {
   px(context, 1, 1, 1, TILE_H - 7, high);
   px(context, TILE_W - 2, 2, 1, TILE_H - 8, low);
   px(context, 1, TILE_H - 7, TILE_W - 2, 1, edge);
+  // 左上角一枚材质记号，和图案不打架，但一眼能数出有几张被改造
+  if (tone.mark) {
+    const mark = pick(tone.mark);
+    px(context, 2, 2, 4, 4, mark);
+    px(context, 2, 2, 3, 1, high);
+    px(context, 5, 3, 1, 3, edge);
+  }
   roundCorners(context, TILE_W, TILE_H, '#0e0b07');
+}
+
+/** 牌印：右上角一枚朱砂小印，说明这张牌挂了事件。 */
+function sealMark(context, dim) {
+  const body = dim ? '#8d6560' : '#c0392b';
+  const light = dim ? '#a8807a' : '#e8695a';
+  const dark = dim ? '#5c4340' : '#7d1f1c';
+  const x = TILE_W - 8;
+  px(context, x, 2, 6, 6, dark);
+  px(context, x + 1, 3, 4, 4, body);
+  px(context, x + 1, 3, 4, 1, light);
+  px(context, x + 2, 4, 2, 2, light);
 }
 
 function drawDots(context, rank) {
@@ -271,8 +327,8 @@ function drawBamboo(context, rank) {
   });
 }
 
-function tileSource(tile, dim = false) {
-  const key = `tile|${tile.suit}|${tile.rank}|${dim ? 1 : 0}`;
+function tileSource(tile, dim = false, material = 'ivory', sealed = false) {
+  const key = `tile|${tile.suit}|${tile.rank}|${dim ? 1 : 0}|${material}|${sealed ? 1 : 0}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
@@ -281,7 +337,7 @@ function tileSource(tile, dim = false) {
   canvas.height = TILE_H;
   const context = canvas.getContext('2d');
   context.imageSmoothingEnabled = false;
-  tileBody(context, dim);
+  tileBody(context, dim, material);
 
   const cx = (TILE_W / 2) | 0;
   const cy = FACE_CY;
@@ -319,6 +375,7 @@ function tileSource(tile, dim = false) {
     drawBamboo(context, tile.rank);
   }
 
+  if (sealed) sealMark(context, dim);
   cache.set(key, canvas);
   return canvas;
 }
@@ -450,9 +507,17 @@ export function createTileBackCanvas(back = 'plain', scale = 2) {
 
 export const TILE_SIZE = Object.freeze({ width: TILE_W, height: TILE_H });
 
-/** @param {import('../core/tiles.mjs').Tile} tile */
-export function createTileCanvas(tile, scale = 2, { dim = false } = {}) {
-  return scaled(tileSource(tile, dim), scale, 'pxc tileFace');
+/** 牌骨 id → 材质名。内容里没定义材质的牌骨就退回象牙面。 */
+export const TILE_MATERIAL_IDS = Object.freeze(Object.keys(TILE_MATERIALS));
+
+/**
+ * @param {import('../core/tiles.mjs').Tile} tile
+ * @param {number} scale
+ * @param {{dim?:boolean, material?:string, sealed?:boolean}} [options]
+ */
+export function createTileCanvas(tile, scale = 2, { dim = false, material = 'ivory', sealed = false } = {}) {
+  const safe = TILE_MATERIALS[material] ? material : 'ivory';
+  return scaled(tileSource(tile, dim, safe, sealed), scale, 'pxc tileFace');
 }
 
 /* ---------------- 像素文字 ---------------- */

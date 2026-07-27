@@ -7,7 +7,7 @@ import { CHARMS, CHARM_LIST, draftCharms } from './charms.mjs';
 import { CODEX, CODEX_BY_PATTERN, CODEX_CHIPS_PER_LEVEL, CODEX_LIST, CODEX_MAX_LEVEL } from './codex.mjs';
 import { DECKS, DECK_LIST, TILE_BACKS } from './decks.mjs';
 import { FAMILIES, FAMILY_ORDER } from './families.mjs';
-import { GENERALS, GENERAL_LIST } from './generals.mjs';
+import { GENERALS, GENERAL_ARCHETYPES, GENERAL_LIST } from './generals.mjs';
 import {
   CONTENT_COUNTS,
   CONTENT_LIBRARY,
@@ -30,7 +30,7 @@ export {
   CODEX, CODEX_BY_PATTERN, CODEX_CHIPS_PER_LEVEL, CODEX_LIST, CODEX_MAX_LEVEL,
   DECKS, DECK_LIST, TILE_BACKS,
   FAMILIES, FAMILY_ORDER,
-  GENERALS, GENERAL_LIST,
+  GENERALS, GENERAL_ARCHETYPES, GENERAL_LIST,
   CONTENT_COUNTS, CONTENT_LIBRARY, CONTENT_POOLS, CONTENT_STATUSES, pickContentItem, validateContentLibrary,
   PAPERS, PAPER_LIST,
   SEALS, SEALS_BY_TRIGGER, SEAL_LIST,
@@ -86,11 +86,10 @@ export function listItems(family, options = {}) {
   return Object.values(REGISTRY[family] ?? {});
 }
 
-/** 商店货位：福将固定 + 番谱/牌帖轮换 + 牌骨/牌印轮换。 */
+/** 商店货位：第 1 / 3 / 5 家请将三选一，第 2 / 4 家提供长期改造。 */
 export function shelfFor(shopIndex) {
-  return [
-    'general',
-    shopIndex % 3 === 2 ? 'paper' : 'codex',
-    shopIndex % 2 === 0 ? 'bone' : 'seal',
-  ];
+  if (shopIndex % 2 === 0) return ['general', 'general', 'general'];
+  return shopIndex % 4 === 1
+    ? ['codex', 'bone', 'seal']
+    : ['codex', 'paper', 'seal'];
 }

@@ -37,6 +37,8 @@ const button = (className, label, onClick) => {
 /** 所有覆盖屏共用的外壳。 */
 export function makeScreen(extraClass = '') {
   document.querySelector('#screen')?.remove();
+  // 明细弹层是局内的轻量浮层，任何覆盖屏出现时都不该压在它下面
+  document.querySelector('#sheet')?.remove();
   const screen = el('div', `screen ${extraClass}`.trim());
   screen.id = 'screen';
   const box = el('div', 'screenBox');
