@@ -104,7 +104,41 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .stat.money{background:#2b2416;border-color:#171208;}
 
 #buildPanel{display:flex;flex-direction:column;gap:5px;overflow:hidden;}
-#buildBar{flex:1;display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;min-height:0;overflow:hidden auto;}
+#buildBar{flex:1;display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden auto;}
+#buildChips{flex:0 0 auto;}
+/* 福将：一位一卡，空位也画出来，玩家才知道还能带几个。
+   两列排：四个将位在侧栏里一屏放得下，不用滚。 */
+.generalRow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;}
+.generalRow .buildCard{width:100%;min-width:0;padding:3px 4px;gap:4px;}
+.generalRow .buildCard .cName{
+  font-size:10px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.generalRow .buildCard .cMeta{display:none;}
+.generalRow .buildSlot{min-height:38px;}
+/* 番谱 / 牌骨 / 牌印 / 牌帖：收成一排可点摘要 */
+.chipRow{display:flex;flex-wrap:wrap;gap:4px;}
+.buildChip{
+  flex:1 1 46%;min-width:0;min-height:38px;display:flex;align-items:center;gap:5px;padding:3px 5px;
+  font:inherit;font-weight:800;color:var(--txt);cursor:pointer;text-align:left;
+  border:2px solid var(--edge);border-radius:6px;background:linear-gradient(180deg,#3d4a5c,#2c3644);
+  box-shadow:0 2px 0 rgba(0,0,0,.4);transition:transform .1s,filter .12s;
+}
+.buildChip:hover{filter:brightness(1.15);transform:translateY(-2px);}
+.buildChip:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
+.buildChip .chipGlyph{
+  flex:0 0 20px;width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:#10161d;background:#cbd6e2;
+}
+.buildChip .chipBody{display:flex;flex-direction:column;min-width:0;line-height:1.15;}
+.buildChip .chipName{font-size:10px;}
+.buildChip .chipCount{font-size:8px;color:#ffe9a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.buildChip.family-codex{background:linear-gradient(180deg,#5b4790,#382a5c);}
+.buildChip.family-codex .chipGlyph{background:var(--codex);}
+.buildChip.family-bone{background:linear-gradient(180deg,#2f7d5c,#1d5340);}
+.buildChip.family-bone .chipGlyph{background:var(--bone);}
+.buildChip.family-seal{background:linear-gradient(180deg,#9c3b33,#6d2620);}
+.buildChip.family-seal .chipGlyph{background:var(--seal);}
+.buildChip.family-paper{background:linear-gradient(180deg,#5a6775,#3c4652);}
 #sideBtns{display:flex;gap:4px;}
 #sideBtns .btn{flex:1;}
 
@@ -134,11 +168,16 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .buildCard{width:100%;flex-direction:row;align-items:center;gap:5px;padding:4px;}
 .buildCard .cName{text-align:left;}
 .buildCard .cMeta{margin-left:auto;}
-.buildSlot{width:100%;min-height:30px;border:2px dashed rgba(255,255,255,.14);border-radius:6px;}
+.buildSlot{
+  width:100%;min-height:30px;border:2px dashed rgba(255,255,255,.14);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+}
+.buildSlot .slotIdx{font-size:8px;color:var(--dim);}
 .kindTag{font-size:8px;color:#cfe6ff;background:rgba(0,0,0,.3);border-radius:3px;padding:0 3px;}
 
 /* ---------- 开运位 ---------- */
 #slotBar{flex:0 0 auto;display:flex;gap:5px;padding:5px;background:rgba(0,0,0,.24);border:3px solid var(--edge);border-radius:8px;}
+/* 开运位就是灵签栏。亮出的碰 / 顺 / 杠在牌桌中央，这里只放签。 */
 .slot{
   flex:1 1 0;min-width:0;border-radius:7px;border:3px dashed rgba(255,255,255,.14);
   background:rgba(255,255,255,.03);min-height:54px;padding:3px;
@@ -146,9 +185,27 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 }
 .slot .slotGold{font-size:11px;color:var(--gold);}
 .slot .slotIdx{font-size:8px;color:var(--dim);}
-.slot.filled{border-style:solid;border-color:var(--edge);background:linear-gradient(180deg,#4a5a6b,#38455a);box-shadow:0 3px 0 rgba(0,0,0,.4);}
-.slot .groupTiles{display:flex;gap:1px;justify-content:center;}
-.slot .charmName{font-size:9px;color:#ffe9a8;text-align:center;line-height:1.05;}
+.slot.filled{
+  flex-direction:row;align-items:center;justify-content:flex-start;gap:5px;padding:4px 5px;
+  border-style:solid;border-color:var(--edge);
+  background:linear-gradient(180deg,#2f6f86,#1d4a5e);box-shadow:0 3px 0 rgba(0,0,0,.4);
+  border-top:4px solid var(--charm);
+}
+.slot.filled canvas{flex:0 0 auto;filter:drop-shadow(0 2px 0 rgba(0,0,0,.4));}
+.slot .slotBody{display:flex;flex-direction:column;min-width:0;line-height:1.15;text-align:left;}
+.slot .charmName{
+  font-size:11px;color:#fff3c8;text-align:left;line-height:1.15;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.slot .charmTier{font-size:8px;color:#bcd8e4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.slot.tier-gold{border-top-color:var(--gold);background:linear-gradient(180deg,#77602d,#3c5360);}
+.slot.tier-rainbow{
+  border-top-color:transparent;
+  background:linear-gradient(150deg,#374f69,#594273 50%,#5f4f2e);
+  box-shadow:0 3px 0 rgba(0,0,0,.4),inset 0 3px 0 rgba(255,222,126,.5);
+}
+.slot.noCharm{flex-direction:column;justify-content:center;border-top-color:#5a6775;background:linear-gradient(180deg,#44505f,#2f3a47);}
+.slot.noCharm .charmName{text-align:center;}
 
 /* ---------- 牌桌 ---------- */
 /* 牌桌：中央聚光的绒面 + 一圈木框，让牌浮在桌面上而不是贴在背景上 */
@@ -191,46 +248,52 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   overflow:auto;overscroll-behavior:contain;
 }
 #draftLayer[hidden]{display:none;}
+/* 求签是一次性弹窗，选完就没了：像云顶选强化符文那样占满屏幕，别缩在中间一小块 */
 #draftPanel{
-  width:min(760px,100%);max-height:100%;overflow:auto;padding:12px;border:3px solid #18221f;border-radius:10px;
+  width:min(1240px,100%);max-height:100%;overflow:auto;padding:18px 20px;
+  border:3px solid #18221f;border-radius:14px;
   background:linear-gradient(180deg,rgba(31,57,50,.98),rgba(18,35,30,.98));
   box-shadow:0 7px 0 rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.08);
+  display:flex;flex-direction:column;gap:10px;
 }
-#draftTitle{font-size:14px;color:var(--gold);text-align:center;margin-bottom:7px;}
+#draftTitle{font-size:24px;color:var(--gold);text-align:center;margin-bottom:0;letter-spacing:2px;}
 #draftNotice{
   margin:0 auto 7px;width:max-content;max-width:100%;padding:3px 8px;border:2px solid #765f25;
   border-radius:5px;background:#302913;color:#ffe89c;font-size:10px;text-align:center;
 }
 #draftNotice[hidden]{display:none;}
-#draftCards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;justify-content:center;}
+#draftCards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;justify-content:center;flex:1;min-height:0;}
 #draftLayer[data-offer-count="4"] #draftCards{grid-template-columns:repeat(4,minmax(0,1fr));}
-#draftActions{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:8px;flex-wrap:wrap;}
+#draftActions{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:0;flex-wrap:wrap;}
+#draftLayer{padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));}
 .charmPick{
   /* 卡面按竖版比例约束宽度，否则三签一排会被拉成横条 */
-  width:100%;min-width:0;max-width:212px;justify-self:center;min-height:244px;
-  padding:9px 8px 8px;cursor:pointer;gap:4px;
+  width:100%;min-width:0;max-width:320px;justify-self:center;
+  min-height:min(430px, 58dvh);
+  padding:14px 12px 12px;cursor:pointer;gap:7px;
   color:var(--txt);font-family:inherit;font-weight:800;justify-content:flex-start;
 }
-.charmPick canvas{margin:2px 0 3px;filter:drop-shadow(0 3px 0 rgba(0,0,0,.42));}
-.charmPick .cName{font-size:15px;line-height:1.15;letter-spacing:.5px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
+.charmPick canvas,.shopCard canvas{width:90px;height:114px;}
+.charmPick canvas{margin:6px 0 4px;filter:drop-shadow(0 3px 0 rgba(0,0,0,.42));}
+.charmPick .cName{font-size:22px;line-height:1.15;letter-spacing:1px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
 .charmPick .cText{
-  font-size:11px;line-height:1.5;flex:1;display:flex;align-items:center;padding:0 2px;
+  font-size:14px;line-height:1.6;flex:1;display:flex;align-items:center;padding:0 4px;
 }
 .charmPick .cMeta{
-  width:100%;font-size:9px;padding:2px 0 0;border-top:1px solid rgba(255,255,255,.16);
+  width:100%;font-size:11px;padding:5px 0 0;border-top:1px solid rgba(255,255,255,.16);
 }
 .charmPick:focus-visible{transform:translateY(-6px);outline:none;border-color:var(--gold);}
 @media (hover:hover){.charmPick:hover{transform:translateY(-6px);border-color:var(--gold);}}
 /* 顶部两条带：左上职责、整行签阶，卡面一眼能读出「这是什么签」 */
 .charmPick .cRole{
-  align-self:flex-start;font-size:9px;color:#12181f;background:rgba(255,233,168,.92);
-  border-radius:3px;padding:1px 6px;letter-spacing:1px;
+  align-self:flex-start;font-size:12px;color:#12181f;background:rgba(255,233,168,.92);
+  border-radius:4px;padding:2px 9px;letter-spacing:2px;
 }
 .charmPick .cTierRow{
-  display:flex;align-items:center;justify-content:center;gap:6px;font-size:10px;width:100%;
-  padding:2px 0;background:rgba(0,0,0,.28);border-radius:4px;
+  display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;width:100%;
+  padding:4px 0;background:rgba(0,0,0,.28);border-radius:5px;
 }
-.charmPick .tierMarks{letter-spacing:2px;font-size:10px;}
+.charmPick .tierMarks{letter-spacing:3px;font-size:13px;}
 .charmPick.tier-silver{border-top:5px solid #c5d0d8;background:linear-gradient(180deg,#456b79,#294c59);}
 .charmPick.tier-gold{
   border-color:#d8ac3f;border-top-width:6px;background:linear-gradient(180deg,#77602d,#3c5360);
@@ -248,6 +311,30 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .omenCompareCard .compareLabel{font-size:9px;color:var(--dim);}
 .omenCompareCard .compareName{font-size:14px;color:#fff2be;}
 .omenCompareCard .compareText{font-size:10px;line-height:1.4;color:#e7dfcf;}
+
+/* ---------- 金签 · 定向改命 ---------- */
+#draftLayer[data-mode="fate"] #draftCards{display:block;overflow:auto;}
+.fateChooser{width:100%;display:flex;flex-direction:column;gap:12px;align-items:center;}
+.fateHint{font-size:13px;line-height:1.5;text-align:center;color:#ffe9a8;}
+.fateHand,.fateTargetGrid{
+  width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(52px,1fr));gap:8px;
+}
+.fateTargetGrid{grid-template-columns:repeat(auto-fit,minmax(76px,1fr));}
+.fateOption{
+  min-width:52px;min-height:82px;padding:5px 3px;border:3px solid #997b2d;border-radius:8px;
+  background:linear-gradient(180deg,#69552b,#273b3d);color:var(--txt);font-family:inherit;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;
+  box-shadow:0 3px 0 rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.1);
+}
+.fateOption canvas{width:auto;max-width:100%;height:58px;image-rendering:pixelated;pointer-events:none;}
+.fateOptionName{font-size:11px;color:#fff1bd;}
+.fateOptionMeta{font-size:9px;color:#d7d0bb;white-space:nowrap;}
+.fateOption:focus-visible{outline:3px solid var(--gold);outline-offset:2px;transform:translateY(-4px);}
+@media (hover:hover){.fateOption:not(:disabled):hover{transform:translateY(-4px);border-color:#f1cd62;}}
+.fateOption.invalid{opacity:.28;filter:grayscale(1);cursor:not-allowed;border-color:#4d5554;}
+.fateBefore{display:flex;align-items:center;justify-content:center;gap:14px;min-height:76px;}
+.fateBefore canvas{height:72px;width:auto;image-rendering:pixelated;}
+.fateArrow{font-size:30px;color:var(--gold);}
 
 /* ---------- 手牌 ---------- */
 #handZone{flex:0 0 auto;display:flex;justify-content:center;align-items:flex-end;gap:3px;flex-wrap:wrap;padding:8px 2px 2px;min-height:0;}
@@ -324,23 +411,54 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   background:rgba(0,0,0,.28);color:#f7e9ba;font-size:8px;padding:1px 4px;
 }
 
-#shopGrid{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
-.shopCard{width:174px;min-height:214px;padding:10px 8px 8px;cursor:pointer;gap:4px;justify-content:flex-start;}
-.shopCard canvas{margin:4px 0 2px;filter:drop-shadow(0 3px 0 rgba(0,0,0,.42));}
-.shopCard .cName{font-size:14px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
-.shopCard .cText{font-size:11px;line-height:1.5;flex:1;display:flex;align-items:center;}
-.shopCard .cMeta{width:100%;font-size:9px;padding-top:2px;border-top:1px solid rgba(255,255,255,.16);}
+/* 百宝阁同理：一次性弹窗，卡面尽量大 */
+.shopScreen .screenBox{width:min(1240px,96vw);max-height:94dvh;display:flex;flex-direction:column;padding:18px 20px;}
+.shopScreen .title{font-size:34px;}
+.shopScreen .subtitle{font-size:14px;margin-bottom:14px;}
+#shopGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;flex:1;min-height:0;}
+.shopCard{
+  width:100%;max-width:320px;justify-self:center;min-height:min(420px,56dvh);
+  padding:14px 12px 12px;cursor:pointer;gap:7px;justify-content:flex-start;
+}
+.shopCard canvas{margin:8px 0 4px;filter:drop-shadow(0 3px 0 rgba(0,0,0,.42));}
+.shopCard .cName{font-size:22px;letter-spacing:1px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
+.shopCard .cText{font-size:14px;line-height:1.6;flex:1;display:flex;align-items:center;padding:0 4px;}
+.shopCard .cMeta{width:100%;font-size:11px;padding-top:5px;border-top:1px solid rgba(255,255,255,.16);}
+.shopCard .famTag{font-size:11px;padding:1px 7px;}
 .shopCard:hover{transform:translateY(-6px);}
 .shopCard.cant{filter:grayscale(.6) brightness(.7);cursor:default;}
 .shopCard.sold{filter:grayscale(.9) brightness(.45);cursor:default;}
-.shopCard .price{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--gold);color:#3a2c06;font-size:12px;padding:1px 8px;border-radius:4px;border:2px solid #0f1319;z-index:2;box-shadow:0 2px 0 rgba(0,0,0,.4);}
-#shopGrid{padding-top:12px;}
+.shopCard .price{position:absolute;top:6px;right:6px;background:var(--gold);color:#3a2c06;font-size:15px;padding:2px 10px;border-radius:5px;border:2px solid #0f1319;z-index:2;box-shadow:0 2px 0 rgba(0,0,0,.4);}
 .shopCard .famTag{font-size:8px;color:#0e1116;background:rgba(255,255,255,.75);border-radius:3px;padding:0 4px;}
 
 #kindGrid{display:grid;grid-template-columns:repeat(9,minmax(44px,1fr));gap:4px;max-width:560px;}
 .kindBtn{background:none;border:2px solid rgba(255,255,255,.14);border-radius:5px;padding:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;min-height:48px;min-width:44px;}
 .kindBtn:hover,.kindBtn:focus-visible{border-color:var(--gold);outline:none;}
 .kindBtn.taken{border-color:var(--seal);}
+
+/* 明细弹层：番谱 / 牌骨 / 牌印点开后看的东西，比覆盖屏轻，但仍然是模态 */
+.sheet{
+  position:fixed;inset:0;z-index:820;display:flex;align-items:center;justify-content:center;
+  background:rgba(6,14,12,.88);padding:16px;overflow:auto;
+}
+.sheetBox{
+  width:min(620px,94vw);max-height:88dvh;overflow:auto;display:flex;flex-direction:column;
+  background:var(--panel);border:4px solid var(--edge);border-radius:12px;padding:14px 16px;
+  box-shadow:0 8px 0 rgba(0,0,0,.5);
+}
+.sheetList{display:flex;flex-direction:column;gap:5px;min-height:0;}
+.sheetRow{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:12px;
+  background:#1b232c;border:2px solid #10161d;border-radius:6px;padding:6px 9px;
+}
+.sheetRow .v{color:var(--gold);font-size:11px;text-align:right;}
+.sheetRow.hot{border-color:var(--goldD);background:#2b2a16;box-shadow:inset 0 0 0 1px rgba(240,192,74,.3);}
+.sheetRow.kindRow{justify-content:flex-start;}
+.sheetRow .kindTile{flex:0 0 auto;display:flex;}
+.sheetRow .kindTitle{font-size:13px;color:#fff3c8;}
+.sheetRow .kindText{font-size:11px;color:#e7dfcf;line-height:1.45;font-weight:700;}
+.sheetRow .kindExtra{font-size:10px;color:var(--chipL);margin-top:2px;}
+.sheetEmpty{font-size:12px;line-height:1.6;color:var(--dim);padding:10px 4px;text-align:center;}
 
 #tip{position:fixed;z-index:950;pointer-events:none;max-width:230px;background:#12181f;color:var(--txt);border:3px solid #000;border-radius:8px;padding:6px 8px;font-size:11px;line-height:1.4;box-shadow:0 5px 0 rgba(0,0,0,.5);display:none;}
 #tip .tn{font-size:12px;margin-bottom:2px;color:var(--gold);}
@@ -392,6 +510,19 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   80%{transform:translate(calc(var(--shake) * 0.6), 0);}
 }
 
+/* 结算时被点名的那张卡：跳一下 + 一圈金色高光，玩家才知道分从哪儿来 */
+.slotPop{animation:slotPop .42s cubic-bezier(.34,1.56,.64,1);}
+@keyframes slotPop{
+  0%{transform:translateY(0) scale(1);}
+  35%{transform:translateY(-10px) scale(1.14);}
+  70%{transform:translateY(2px) scale(.98);}
+  100%{transform:translateY(0) scale(1);}
+}
+.spotlight{
+  position:relative;z-index:20;
+  box-shadow:0 0 0 3px var(--gold),0 0 16px 4px rgba(240,192,74,.55) !important;
+  filter:brightness(1.18);
+}
 .glowBone{animation:glowBone .4s ease;}
 @keyframes glowBone{0%,100%{filter:none;}50%{filter:drop-shadow(0 0 8px var(--bone)) brightness(1.3);}}
 .glowSeal{animation:glowSeal .4s ease;}
@@ -525,14 +656,23 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .stat .v{min-height:14px;}
   .stat .n{font-size:7px;}
   #buildPanel{flex:0 0 auto;}
-  #buildBar{max-height:44px;flex-wrap:nowrap;overflow-x:auto;}
+  #buildBar{max-height:86px;gap:4px;overflow:hidden auto;}
+  .generalRow{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:3px;}
   .buildCard{padding:2px 3px;width:auto;min-width:70px;flex:0 0 auto;}
-  .buildSlot{width:34px;flex:0 0 34px;min-height:30px;}
+  .buildSlot{width:44px;flex:0 0 44px;min-height:28px;}
+  .buildSlot .slotIdx{font-size:7px;}
   .buildCard .cText{display:none;}
+  .buildChip{min-height:30px;padding:2px 4px;gap:4px;}
+  .buildChip .chipGlyph{flex:0 0 16px;width:16px;height:16px;font-size:10px;}
+  .buildChip .chipName{font-size:9px;}
+  .buildChip .chipCount{font-size:7px;}
   #sideBtns .btn{font-size:8px;padding:3px 4px;min-height:26px;min-width:30px;}
   .slot{min-height:38px;border-width:2px;}
   .slot .slotGold{font-size:10px;}
   .slot .slotIdx{font-size:7px;}
+  .slot.filled{gap:3px;padding:2px 4px;border-top-width:3px;}
+  .slot .charmName{font-size:9px;}
+  .slot .charmTier{font-size:7px;}
   #tableMark .mk{font-size:60px;}
   #tableMark .mk2{display:none;}
   #revealZone{padding:4px 76px 4px 6px;gap:6px;}
@@ -558,16 +698,37 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .libraryScreen .rowBtns{margin-top:5px;}
   #bossBanner{max-width:44%;padding:3px 6px;}
   #deckPile{display:none;}
-  #draftPanel{width:min(760px,100%);padding:7px;}
-  #draftCards{gap:6px;}
-  .charmPick{min-height:176px;max-width:170px;padding:5px 5px 4px;}
-  .charmPick .cName{font-size:13px;}
-  .charmPick .cText{font-size:9px;line-height:1.35;}
-  .charmPick .cTierRow,.charmPick .tierMarks{font-size:9px;}
-  .shopCard{width:150px;min-height:180px;padding:6px 5px;}
-  .shopCard .cName{font-size:12px;}
-  .shopCard .cText{font-size:9px;line-height:1.35;}
-  #draftTitle{font-size:12px;}
+  #draftPanel{width:min(980px,100%);padding:8px 10px;gap:6px;}
+  #draftCards{gap:8px;}
+  .charmPick canvas,.shopCard canvas{width:52px;height:66px;}
+  .charmPick{min-height:196px;max-width:210px;padding:6px 6px 5px;gap:3px;}
+  .charmPick canvas{margin:2px 0;}
+  .charmPick .cName{font-size:15px;}
+  .charmPick .cText{font-size:11px;line-height:1.4;}
+  .charmPick .cRole{font-size:9px;padding:1px 6px;}
+  .charmPick .cTierRow,.charmPick .tierMarks{font-size:10px;padding:2px 0;}
+  .charmPick .cMeta{font-size:9px;padding-top:3px;}
+  .fateChooser{gap:6px;}
+  .fateHint{font-size:10px;}
+  .fateHand,.fateTargetGrid{gap:4px;grid-template-columns:repeat(auto-fit,minmax(48px,1fr));}
+  .fateTargetGrid{grid-template-columns:repeat(auto-fit,minmax(64px,1fr));}
+  .fateOption{min-width:48px;min-height:68px;padding:2px 1px;border-width:2px;}
+  .fateOption canvas{height:44px;}
+  .fateBefore{min-height:54px;}
+  .fateBefore canvas{height:52px;}
+  .shopScreen .screenBox{padding:8px 12px;}
+  .shopScreen .title{font-size:20px;}
+  .shopScreen .subtitle{font-size:11px;margin-bottom:6px;}
+  #shopGrid{gap:8px;}
+  .shopCard{min-height:196px;max-width:220px;padding:6px 6px 5px;gap:3px;}
+  .shopCard canvas{margin:2px 0;}
+  .shopCard .cName{font-size:15px;}
+  .shopCard .cText{font-size:11px;line-height:1.4;}
+  .shopCard .cMeta,.shopCard .famTag{font-size:9px;}
+  .shopCard .price{font-size:12px;padding:1px 7px;}
+  #draftTitle{font-size:17px;}
+  .sheetBox{padding:8px 12px;}
+  .sheetRow{padding:4px 7px;font-size:11px;}
 }
 
 /* ---------- 竖屏 ---------- */
@@ -580,9 +741,13 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .stat{flex:1 1 20%;}
   #buildPanel{flex:1 1 100%;flex-direction:row;align-items:center;}
   #buildPanel > .lbl{writing-mode:vertical-rl;}
-  #buildBar{flex:1;flex-wrap:nowrap;overflow-x:auto;max-height:56px;}
+  #buildChips{flex:0 0 auto;}
+  #buildBar{flex:1;flex-direction:row;align-items:center;overflow-x:auto;max-height:60px;gap:4px;}
+  .generalRow{flex-direction:row;flex-wrap:nowrap;gap:3px;}
+  .chipRow{flex-wrap:nowrap;gap:3px;}
+  .buildChip{flex:0 0 auto;min-width:74px;min-height:44px;}
   .buildCard{width:auto;min-width:88px;flex:0 0 auto;}
-  .buildSlot{width:40px;flex:0 0 40px;min-height:40px;}
+  .buildSlot{width:44px;flex:0 0 44px;min-height:40px;}
   #sideBtns{flex-direction:column;}
   #main{flex:1;}
   #slotBar{flex-wrap:wrap;}
@@ -592,10 +757,13 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #tableMark .mk{font-size:76px;}
   #handZone{gap:2px;}
   #kindGrid{grid-template-columns:repeat(7,minmax(44px,1fr));}
-  #draftPanel{width:min(420px,100%);}
+  #draftPanel{width:100%;}
   #draftCards,#draftLayer[data-offer-count="4"] #draftCards{grid-template-columns:repeat(2,minmax(0,1fr));}
-  #draftLayer[data-offer-count="3"] .charmPick:last-child{grid-column:1 / -1;width:calc(50% - 3px);justify-self:center;}
-  .charmPick{min-height:206px;}
+  #draftLayer[data-offer-count="3"] .charmPick:last-child{grid-column:1 / -1;width:calc(50% - 5px);justify-self:center;}
+  .charmPick{min-height:min(300px,33dvh);max-width:none;}
+  #shopGrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .shopCard{min-height:min(300px,32dvh);max-width:none;}
+  #shopGrid .shopCard:last-child:nth-child(3){grid-column:1 / -1;width:calc(50% - 8px);justify-self:center;}
   .libraryTabs{justify-content:center;flex-wrap:wrap;overflow:visible;padding:2px;}
   .libraryTab{min-width:96px;flex:1 1 28%;}
   .libraryGrid{grid-template-columns:repeat(2,minmax(0,1fr));}
@@ -612,13 +780,21 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .blindCard .cText{font-size:9px;min-height:38px;}
   .blindTarget{font-size:12px;}
   .blindActions .btn{width:100%;min-width:0;padding:6px 2px;font-size:10px;}
-  #draftPanel{padding:8px;}
-  #draftCards{gap:6px;}
-  .charmPick{min-height:198px;padding:7px 5px 6px;}
-  .charmPick .cName{font-size:13px;}
-  .charmPick .cText{font-size:10px;line-height:1.4;}
-  .shopCard{width:152px;min-height:198px;padding:8px 6px;}
-  .shopCard .cName{font-size:13px;}
+  #draftPanel{padding:10px 8px;}
+  #draftCards{gap:8px;}
+  .charmPick canvas,.shopCard canvas{width:66px;height:84px;}
+  .charmPick{padding:8px 6px 6px;gap:4px;}
+  .charmPick .cName{font-size:16px;}
+  .charmPick .cText{font-size:11px;line-height:1.45;}
+  .charmPick .cRole{font-size:10px;}
+  .charmPick .cTierRow,.charmPick .tierMarks{font-size:11px;}
+  #draftTitle{font-size:19px;}
+  .shopScreen .screenBox{padding:12px 10px;}
+  .shopScreen .title{font-size:24px;}
+  .shopScreen .subtitle{font-size:12px;margin-bottom:8px;}
+  .shopCard{padding:8px 6px 6px;gap:4px;}
+  .shopCard .cName{font-size:16px;}
+  .shopCard .cText{font-size:11px;line-height:1.45;}
   .libraryCard{min-height:194px;padding:8px 6px;}
   .libraryCard .cName{font-size:13px;}
   .libraryCard .cText{font-size:10px;}

@@ -3,7 +3,9 @@
  * 这里不产生任何规则结果，只表演。
  */
 
-import { ANTES, CODEX_BY_PATTERN, CONFIG, FAMILIES, getItem } from '../content/index.mjs';
+import {
+  ANTES, CODEX_BY_PATTERN, CODEX_CHIPS_PER_LEVEL, CONFIG, FAMILIES, getItem,
+} from '../content/index.mjs';
 import { GROUP_NAMES } from '../core/patterns.mjs';
 import { TILE_KINDS, kindName, tileKey, tileName } from '../core/tiles.mjs';
 import {
@@ -155,8 +157,22 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     return true;
   }
 
+  /** 这张牌被哪个牌骨 / 牌印改造过。牌骨直接换材质，牌印在右上角盖一枚朱砂印。 */
+  function tileSkin(tile) {
+    const kind = tileKey(tile);
+    return {
+      material: state?.bones?.[kind] ?? 'ivory',
+      sealed: Boolean(state?.seals?.[kind]),
+    };
+  }
+
+  /** 所有牌一律走这里，材质才不会有的地方画有的地方不画。 */
+  function tileCanvas(tile, scale, options = {}) {
+    return createTileCanvas(tile, scale, { ...tileSkin(tile), ...options });
+  }
+
   function tileFace(tile) {
-    const face = createTileCanvas(tile, tileScale);
+    const face = tileCanvas(tile, tileScale);
     face.style.width = `${Math.round(34 * tileDisplay)}px`;
     face.style.height = `${Math.round(46 * tileDisplay)}px`;
     return face;
@@ -226,70 +242,220 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     );
   }
 
+  /* ---------------- 常驻构筑栏 ---------------- */
+
+  /**
+   * 番谱 / 牌骨 / 牌印 / 牌帖不再一张一卡：它们是「按牌种或按番种铺开」的东西，
+   * 平铺出来既占地方又读不出来。收成一枚可点摘要，点开看明细（0021 的反馈）。
+   * 福将不一样，它是有限的将位，必须一位一卡地看见。
+   */
+  function buildChip(family, { count, hint, onOpen }) {
+    const info = FAMILIES[family] ?? { name: '牌帖', glyph: '帖' };
+    const chip = el('button', `buildChip family-${family}`);
+    chip.type = 'button';
+    chip.dataset.family = family;
+    chip.append(el('span', 'chipGlyph', info.glyph ?? '牌'));
+    const body = el('span', 'chipBody');
+    body.append(el('span', 'chipName', info.name));
+    body.append(el('span', 'chipCount', count));
+    chip.append(body);
+    chip.setAttribute('aria-label', `${info.name}：${count}。点开看明细`);
+    bindTip(chip, `${info.name} · 点开看明细`, hint);
+    chip.addEventListener('click', onOpen);
+    return chip;
+  }
+
   function renderBuildBar() {
     const bar = $('#buildBar');
     bar.replaceChildren();
 
+    // 福将：一位一卡，空位也要看得见。将位多了就在这块里滚动。
+    const generals = el('div', 'generalRow');
     for (let index = 0; index < state.generalSlots; index += 1) {
       const generalId = state.generalIds[index];
       if (!generalId) {
-        bar.append(el('div', 'buildSlot'));
+        const empty = el('div', 'buildSlot');
+        empty.append(el('span', 'slotIdx', `将位 ${index + 1}`));
+        generals.append(empty);
         continue;
       }
-      bar.append(cardNode('general', getItem('general', generalId), {
+      generals.append(cardNode('general', getItem('general', generalId), {
         className: 'buildCard', meta: `将位 ${index + 1}`, showText: false,
       }));
     }
-    for (const [pattern, level] of Object.entries(state.codexLevels)) {
-      const book = CODEX_BY_PATTERN[pattern];
-      if (!book || !level) continue;
-      bar.append(cardNode('codex', book, { className: 'buildCard', meta: `Lv.${level}`, showText: false }));
-    }
-    for (const [kind, boneId] of Object.entries(state.bones)) {
-      const node = cardNode('bone', getItem('bone', boneId), {
-        className: 'buildCard', meta: kindName(kind), showText: false,
-      });
-      node.dataset.kind = kind;
-      bar.append(node);
-    }
-    for (const [kind, sealId] of Object.entries(state.seals)) {
-      const node = cardNode('seal', getItem('seal', sealId), {
-        className: 'buildCard', meta: kindName(kind), showText: false,
-      });
-      node.dataset.kind = kind;
-      bar.append(node);
-    }
-    for (const paperId of state.papers) {
-      bar.append(cardNode('paper', getItem('paper', paperId), { className: 'buildCard', showText: false }));
+    bar.append(generals);
+
+    // 摘要不放在滚动区里：福将占满时它必须还看得见
+    const chips = el('div', 'chipRow');
+    $('#buildChips').replaceChildren(chips);
+    const codexOwned = Object.entries(state.codexLevels).filter(([, level]) => level > 0);
+    const boneEntries = Object.entries(state.bones);
+    const sealEntries = Object.entries(state.seals);
+
+    chips.append(buildChip('codex', {
+      count: codexOwned.length ? `${codexOwned.length} 本` : '看番率',
+      hint: '点开看本局所有番种的番势，以及番谱把哪几种练到了几级。',
+      onOpen: showCodexSheet,
+    }));
+    chips.append(buildChip('bone', {
+      count: boneEntries.length ? `${boneEntries.length} 种` : '无',
+      hint: '点开看哪几个牌种换了材质。改过材质的牌在手上就是另一种料子。',
+      onOpen: showBoneSheet,
+    }));
+    chips.append(buildChip('seal', {
+      count: sealEntries.length ? `${sealEntries.length} 种` : '无',
+      hint: '点开看哪几个牌种挂了牌印，以及各自在什么时候触发。',
+      onOpen: showSealSheet,
+    }));
+    if (state.papers.length) {
+      chips.append(buildChip('paper', {
+        count: `${state.papers.length} 张`,
+        hint: '点开看牌帖怎么改了这一局的牌组。',
+        onOpen: showPaperSheet,
+      }));
     }
   }
 
+  /* ---------------- 明细弹层 ---------------- */
+
+  function closeSheet() {
+    const sheet = $('#sheet');
+    if (!sheet) return;
+    if (sheet.contains(document.activeElement)) document.activeElement.blur();
+    sheet.remove();
+  }
+
+  function openSheet(title, subtitle, body) {
+    closeSheet();
+    const sheet = el('div', 'sheet');
+    sheet.id = 'sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    const box = el('div', 'sheetBox');
+    box.append(el('div', 'title sh', title));
+    if (subtitle) box.append(el('div', 'subtitle', subtitle));
+    box.append(body);
+    const row = el('div', 'rowBtns');
+    const close = el('button', 'btn green big', '关闭');
+    close.type = 'button';
+    close.addEventListener('click', closeSheet);
+    row.append(close);
+    box.append(row);
+    sheet.append(box);
+    sheet.addEventListener('click', (event) => {
+      if (event.target === sheet) closeSheet();
+    });
+    document.body.append(sheet);
+    close.focus({ preventScroll: true });
+  }
+
+  /** 番谱：不摆卡，直接把这一局的番率表摊开。 */
+  function showCodexSheet() {
+    const list = el('div', 'sheetList');
+    const active = new Set(state.preview?.patterns ?? []);
+    for (const [pattern, mult] of Object.entries(CONFIG.patternMult)) {
+      const level = state.codexLevels[pattern] ?? 0;
+      const book = CODEX_BY_PATTERN[pattern];
+      const row = el('div', `sheetRow${active.has(pattern) ? ' hot' : ''}`);
+      row.append(el('div', 'n', pattern));
+      const parts = [mult ? `番势 +${mult}` : '记名 · 不加番'];
+      if (level > 0) parts.push(`${book?.name ?? '番谱'} Lv.${level} · +${level * CODEX_CHIPS_PER_LEVEL} 牌值`);
+      else if (book) parts.push(`${book.name} 未修习`);
+      row.append(el('div', 'v', parts.join(' · ')));
+      list.append(row);
+    }
+    openSheet('番率', state.preview?.patterns?.length
+      ? `当前手牌命中：${state.preview.patterns.join(' · ')} · 番势 ×${state.preview.mult ?? 1}`
+      : '当前手牌还没成番种；亮着的行会随手牌变化', list);
+  }
+
+  /** 牌骨 / 牌印共用：按牌种铺开，左边直接画那张牌，改了什么一眼看到。 */
+  function kindSheet(family, entries, title, subtitle, extra) {
+    const list = el('div', 'sheetList');
+    if (!entries.length) {
+      list.append(el('div', 'sheetEmpty', `这一局还没有${FAMILIES[family].name}。去百宝阁买一张，选一个牌种装上。`));
+    }
+    for (const [kind, itemId] of entries) {
+      const item = getItem(family, itemId);
+      const [suit, rank] = kind.split(':');
+      const row = el('div', 'sheetRow kindRow');
+      const tile = el('div', 'kindTile');
+      tile.append(tileCanvas({ id: `sheet-${kind}`, suit, rank: Number(rank) }, 2));
+      row.append(tile);
+      const body = el('div', 'n');
+      body.append(el('div', 'kindTitle', `${kindName(kind)} · ${item?.name ?? itemId}`));
+      body.append(el('div', 'kindText', item?.text ?? ''));
+      if (extra) body.append(el('div', 'kindExtra', extra(item)));
+      row.append(body);
+      list.append(row);
+    }
+    openSheet(title, subtitle, list);
+  }
+
+  function showBoneSheet() {
+    kindSheet('bone', Object.entries(state.bones), '牌骨 · 材质',
+      '换过材质的牌在手上就是另一种料子，牌面直接看得出来', null);
+  }
+
+  const SEAL_TRIGGER_NAMES = { swapOut: '换出这张牌时', reveal: '用这张牌亮组时', settle: '成胡结算时' };
+
+  function showSealSheet() {
+    kindSheet('seal', Object.entries(state.seals), '牌印 · 事件',
+      '挂了牌印的牌右上角有一枚朱砂印',
+      (item) => `触发：${SEAL_TRIGGER_NAMES[item?.trigger] ?? '未知'}`);
+  }
+
+  function showPaperSheet() {
+    const list = el('div', 'sheetList');
+    for (const paperId of state.papers) {
+      const paper = getItem('paper', paperId);
+      const row = el('div', 'sheetRow');
+      row.append(el('div', 'n', paper?.name ?? paperId));
+      row.append(el('div', 'v', paper?.text ?? ''));
+      list.append(row);
+    }
+    openSheet('牌帖', '牌帖改的是这一局的牌组构成', list);
+  }
+
+  /**
+   * 开运位只放灵签。亮出的碰 / 顺 / 杠已经在牌桌中央摆着了，
+   * 顶部再摆一份纯属重复，还把灵签挤成一行小字（0021 的反馈）。
+   */
   function renderSlots() {
     const bar = $('#slotBar');
     bar.replaceChildren();
+    let charmSeen = 0;
     for (let index = 0; index < state.slotCount; index += 1) {
       const group = state.revealedGroups[index];
       const slot = el('div', 'slot');
       slot.dataset.slot = String(index);
-      if (group) {
-        slot.classList.add('filled');
-        const tiles = el('div', 'groupTiles');
-        for (const tile of group.tiles) tiles.append(createTileCanvas(tile, 1));
-        slot.append(tiles);
-        const charm = group.charmId ? getItem('charm', group.charmId) : null;
-        slot.append(el('div', 'charmName', charm ? charm.name : GROUP_NAMES[group.kind]));
-        if (charm) {
-          slot.dataset.card = `charm:${charm.id}`;
-          const instance = state.charmInstances?.find(
-            (item) => item.instanceId === group.charmInstanceId,
-          );
-          const tier = group.charmTier ?? instance?.tier ?? charm.tier ?? 'silver';
-          bindTip(
-            slot,
-            `${charm.name} · ${TIER_LABEL[tier] ?? '灵签'} · ${GROUP_NAMES[group.kind]}`,
-            `${charm.text}（本副）`,
-          );
-        }
+      const charm = group?.charmId ? getItem('charm', group.charmId) : null;
+      if (charm) {
+        const instance = state.charmInstances?.find(
+          (item) => item.instanceId === group.charmInstanceId,
+        );
+        const tier = group.charmTier ?? instance?.tier ?? charm.tier ?? 'silver';
+        slot.classList.add('filled', `tier-${tier}`);
+        slot.dataset.card = `charm:${charm.id}`;
+        // 结算按取得顺序播灵签，同名签也能分清是哪一格
+        slot.dataset.charmIndex = String(charmSeen);
+        charmSeen += 1;
+        slot.append(createSealCanvas(charm.glyph ?? FAMILIES.charm.glyph, { family: 'charm', scale: 1 }));
+        const body = el('div', 'slotBody');
+        body.append(el('div', 'charmName', charm.name));
+        body.append(el('div', 'charmTier', `${TIER_LABEL[tier] ?? '灵签'} · ${GROUP_NAMES[group.kind]}`));
+        slot.append(body);
+        bindTip(
+          slot,
+          `${charm.name} · ${TIER_LABEL[tier] ?? '灵签'} · ${GROUP_NAMES[group.kind]}`,
+          `${charm.text}（本副）`,
+        );
+      } else if (group) {
+        // 亮了组但没拿到签（签池不足时的兜底），仍然要占位说明这个开运位已经花掉
+        slot.classList.add('filled', 'noCharm');
+        slot.append(el('div', 'charmName', GROUP_NAMES[group.kind]));
+        slot.append(el('div', 'charmTier', '已花掉 · 无签'));
+        bindTip(slot, '已花掉的开运位', `亮了${GROUP_NAMES[group.kind]}，但这次没有可选的灵签。`);
       } else {
         slot.append(el('div', 'slotGold', `+${state.goldPerEmptySlot}金`));
         slot.append(el('div', 'slotIdx', `开运位 ${index + 1}`));
@@ -306,7 +472,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     for (const tile of group.tiles) {
       const wrap = el('span', 'meldTile');
       wrap.dataset.kind = tileKey(tile);
-      wrap.append(createTileCanvas(tile, scale));
+      wrap.append(tileCanvas(tile, scale));
       meld.append(wrap);
     }
     return meld;
@@ -322,7 +488,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     if (state.upcomingTiles.length) {
       state.upcomingTiles.forEach((tile, index) => {
         const wrap = el('div', index === 0 ? 'nextFirst' : 'nextSecond');
-        wrap.append(createTileCanvas(tile, Math.max(1, tileScale - 1)));
+        wrap.append(tileCanvas(tile, Math.max(1, tileScale - 1)));
         nextBox.append(wrap);
       });
       bindTip($('#nextBox'), '牌墙预览',
@@ -414,6 +580,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       layer.inert = false;
       layer.removeAttribute('aria-hidden');
       layer.removeAttribute('data-offer-count');
+      layer.removeAttribute('data-mode');
       cards.replaceChildren();
       actions.replaceChildren(reroll);
       reroll.hidden = true;
@@ -450,6 +617,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     $('#main').inert = true;
     cards.replaceChildren();
     actions.replaceChildren(reroll);
+    layer.removeAttribute('data-mode');
 
     const replacement = state.draft.pendingOmenReplacement
       ?? state.draft.replacement
@@ -457,6 +625,10 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       ?? null;
     if (replacement) {
       renderOmenReplacement({ layer, cards, actions, notice, replacement });
+      return;
+    }
+    if (state.draft.pendingFateChoice) {
+      renderFateChoice({ layer, cards, actions, notice, pending: state.draft.pendingFateChoice });
       return;
     }
 
@@ -486,7 +658,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         className: `charmPick tier-${tier}`,
         meta: `${index + 1} · ${durationMeta}`,
         interactive: true,
-        sealScale: 2,
+        sealScale: 3,
       });
       node.dataset.offerId = offer.offerId;
       node.dataset.tier = tier;
@@ -509,6 +681,9 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
           ? run.chooseDraftOffer(offer.offerId)
           : run.chooseCharm(charmId);
         if (result.ok && result.needsOmenReplace) {
+          return;
+        }
+        if (result.ok && result.needsFateChoice) {
           return;
         }
         if (result.ok && result.goldNow) {
@@ -544,6 +719,105 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   function omenCharmFrom(value) {
     if (!value) return null;
     return getItem('charm', value.sourceCharmId ?? value.charmId ?? value.nextCharmId);
+  }
+
+  function renderFateChoice({ layer, cards, actions, notice, pending }) {
+    layer.dataset.mode = 'fate';
+    layer.removeAttribute('data-offer-count');
+    $('#btnReroll').hidden = true;
+    const charm = getItem('charm', pending.charmId);
+    const selected = pending.selectedTileId
+      ? state.looseTiles.find((tile) => tile.id === pending.selectedTileId)
+      : null;
+    const validTileIds = new Set(pending.choices.map((choice) => choice.tileId));
+
+    notice.hidden = false;
+    notice.textContent = `${charm?.name ?? '改命签'} · 只显示能让“还差几张”下降的结果`;
+    $('#draftTitle').textContent = selected
+      ? `${kindName(tileKey(selected))} · 选择要变成的牌`
+      : `${charm?.name ?? '改命签'} · 选择要改变的牌`;
+
+    const chooser = el('div', 'fateChooser');
+    chooser.append(el('div', 'fateHint', selected
+      ? `当前还差 ${pending.distanceBefore} 张；点击目标牌后立即改牌并取得金签。`
+      : '灰色牌没有有效改法；选择一张亮着的手牌。'));
+
+    if (!selected) {
+      const handGrid = el('div', 'fateHand');
+      for (const tile of state.looseTiles) {
+        const valid = validTileIds.has(tile.id);
+        const node = el('button', `fateOption fateSource${valid ? '' : ' invalid'}`);
+        node.type = 'button';
+        node.disabled = !valid;
+        node.dataset.tileId = tile.id;
+        node.setAttribute('aria-label', valid
+          ? `选择${tileName(tile)}作为要改变的牌`
+          : `${tileName(tile)}没有有效改牌目标`);
+        node.append(tileCanvas(tile, 2));
+        node.append(el('span', 'fateOptionMeta', valid ? '可改' : '无改善'));
+        if (valid) node.addEventListener('click', () => run.selectFateTile(tile.id));
+        handGrid.append(node);
+      }
+      chooser.append(handGrid);
+    } else {
+      const before = el('div', 'fateBefore');
+      before.append(tileCanvas(selected, 2), el('span', 'fateArrow', '→'));
+      chooser.append(before);
+
+      const targetGrid = el('div', 'fateTargetGrid');
+      const options = pending.choices
+        .filter((choice) => choice.tileId === selected.id)
+        .sort((left, right) => (
+          left.distanceAfter - right.distanceAfter
+          || right.potential - left.potential
+          || TILE_KINDS.indexOf(left.targetKind) - TILE_KINDS.indexOf(right.targetKind)
+        ));
+      for (const choice of options) {
+        const [suit, rank] = choice.targetKind.split(':');
+        const node = el('button', 'fateOption fateTarget');
+        node.type = 'button';
+        node.dataset.targetKind = choice.targetKind;
+        node.setAttribute('aria-label', `改成${kindName(choice.targetKind)}，还差${choice.distanceAfter}张`);
+        node.append(tileCanvas({ id: `fate-${choice.targetKind}`, suit, rank: Number(rank) }, 2));
+        node.append(el('span', 'fateOptionName', kindName(choice.targetKind)));
+        node.append(el('span', 'fateOptionMeta', choice.distanceAfter === 0 ? '立即可胡' : `还差 ${choice.distanceAfter} 张`));
+        node.addEventListener('click', () => {
+          const result = run.confirmFateTarget(choice.targetKind);
+          if (!result.ok) {
+            toast(result.reason);
+            return;
+          }
+          sfx.charm();
+          haptic();
+          const changed = result.fateChange;
+          toast(`${charm?.name ?? '改命'} · ${kindName(tileKey(changed.before))}化为${kindName(tileKey(changed.after))}`);
+        });
+        targetGrid.append(node);
+      }
+      chooser.append(targetGrid);
+    }
+    cards.append(chooser);
+
+    if (selected) {
+      const back = el('button', 'btn grey', '重选原牌');
+      back.type = 'button';
+      back.addEventListener('click', () => run.backFateTile());
+      actions.append(back);
+    }
+    const cancel = el('button', 'btn grey', '返回三签');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => run.cancelFateChoice());
+    actions.append(cancel);
+
+    const focusToken = `${state.draft.draftId ?? state.draft.groupId}:fate:${selected?.id ?? 'source'}`;
+    if (draftFocusToken !== focusToken) {
+      requestAnimationFrame(() => {
+        const target = cards.querySelector('.fateOption:not(:disabled)');
+        if ($('#screen') || layer.hidden || layer.inert || !state?.draft?.pendingFateChoice || !target?.isConnected) return;
+        draftFocusToken = focusToken;
+        target.focus();
+      });
+    }
   }
 
   function renderOmenReplacement({ layer, cards, actions, notice, replacement }) {
@@ -622,24 +896,55 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
   /* ---------------- 结算动画 ---------------- */
 
-  function findStepTarget(step) {
+  /**
+   * 一条结算步骤可能同时对应好几个东西：牌骨要让牌桌上那几张牌和常驻栏的摘要一起跳。
+   * 返回全部锚点，第一个用来飘字。
+   */
+  function stepAnchors(step) {
     const target = step.target ?? {};
-    if (target.type === 'group') return $(`#revealZone .meld[data-group-id="${target.groupId}"]`);
-    if (target.type === 'kind') {
-      return $(`#revealZone .meldTile[data-kind="${target.kind}"]`) ?? $(`#buildBar [data-kind="${target.kind}"]`);
+    const found = [];
+    const add = (node) => { if (node && !found.includes(node)) found.push(node); };
+
+    if (target.type === 'group') {
+      add($(`#revealZone .meld[data-group-id="${target.groupId}"]`));
+    } else if (target.type === 'kind') {
+      for (const tile of document.querySelectorAll(`#revealZone .meldTile[data-kind="${target.kind}"]`)) {
+        add(tile);
+      }
+      add($(`#buildPanel [data-family="${target.family}"]`));
+    } else if (target.type === 'card' && target.family === 'charm') {
+      add($(`#slotBar .slot[data-charm-index="${target.index}"]`));
+      add($(`#slotBar [data-card="charm:${target.id}"]`));
+    } else if (target.type === 'card') {
+      add($(`#buildPanel [data-card="${target.family}:${target.id}"]`));
+      add($(`#buildPanel [data-family="${target.family}"]`));
+    } else if (target.type === 'pattern') {
+      add($('#patternBanner'));
+    } else if (target.id === 'slots') {
+      add($('#slotV'));
+    } else if (target.id === 'swaps') {
+      add($('#swapV'));
+    } else if (target.id === 'total') {
+      add($('#totalBox'));
     }
-    if (target.type === 'card') {
-      return $(`#slotBar [data-card="${target.family}:${target.id}"]`)
-        ?? $(`#buildBar [data-card="${target.family}:${target.id}"]`);
-    }
-    if (target.type === 'pattern') return $('#patternBanner');
-    if (target.id === 'slots') return $('#slotV');
-    if (target.id === 'swaps') return $('#swapV');
-    if (target.id === 'total') return $('#totalBox');
-    return $('#chipsBox');
+    if (!found.length) add($('#chipsBox'));
+    return found;
   }
 
+  /**
+   * 每条步骤的节奏。原来一律 190ms，玩家根本看不清是哪张牌在加分（0021 的反馈）。
+   * 现在按「这一步值不值得看」分档：灵签和番种最慢，组合底分最快。
+   */
+  const STEP_BEAT = {
+    base: 260, group: 210, slots: 300, swaps: 300,
+    bone: 380, seal: 380, pattern: 480, codex: 400,
+    charm: 460, general: 420,
+  };
+  /** 先让卡跳，再飘数字。两件事分开，玩家才看得出因果。 */
+  const STEP_LEAD = 130;
+
   async function playSettlement(result) {
+    closeSheet();
     locked = true;
     timeline.begin();
     try {
@@ -675,19 +980,27 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
     for (const step of result.steps) {
       if (step.source === 'total') break;
-      const anchor = findStepTarget(step);
+      const anchors = stepAnchors(step);
+      const anchor = anchors[0];
+      const beat = STEP_BEAT[step.source] ?? 300;
 
       if (step.source === 'pattern') {
         banner.hidden = false;
         banner.textContent = step.label;
         pulse(banner, 'slamIn', 380);
-        if (step.mult) sfx.mult(multIndex++);
-      } else if (anchor) {
+        if (step.mult || step.multFactor > 1) sfx.mult(multIndex++);
+      } else {
         const animation = step.source === 'group' ? 'popScore'
           : step.source === 'bone' ? 'glowBone'
-            : step.source === 'seal' ? 'glowSeal' : 'jiggle';
-        pulse(anchor, animation, 400);
+            : step.source === 'seal' ? 'glowSeal' : 'slotPop';
+        for (const node of anchors) {
+          pulse(node, animation, 420);
+          pulse(node, 'spotlight', beat + STEP_LEAD);
+        }
       }
+
+      // 先跳，再出数字
+      await timeline.wait(STEP_LEAD);
 
       if (step.chips) {
         floatText(anchor, `+${step.chips}`, 'chips', layer);
@@ -701,12 +1014,18 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         pulse(multBox, 'pulse', 300);
         setPixelText(multBox, step.multAfter, 13, '#ffffff', '#7a1f19', textScale());
       }
+      if (step.multFactor > 1) {
+        floatText(anchor, `×${step.multFactor} 番势`, 'mult', layer);
+        if (step.source !== 'pattern') sfx.mult(multIndex++);
+        pulse(multBox, 'pulse', 420);
+        setPixelText(multBox, step.multAfter, 13, '#ffffff', '#7a1f19', textScale());
+      }
       if (step.gold) {
         floatText(anchor, `+${step.gold} 金`, 'gold', layer);
         sfx.coin();
       }
 
-      await timeline.wait(step.source === 'pattern' ? 260 : 190);
+      await timeline.wait(beat);
     }
 
     // 收尾三拍：先把乘式砸出来，再滚总分，最后让数字落地停一下
@@ -714,12 +1033,12 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     banner.textContent = `${result.chips} × ${result.mult}`;
     pulse(banner, 'slamIn', 380);
     sfx.mult(9);
-    await timeline.wait(320);
+    await timeline.wait(520);
 
     sfx.hu();
     haptic();
     shake($('#app'), Math.min(3, result.score / 900));
-    await countUp(0, result.score, timeline.skipped ? 0 : 700 / (timeline.speed || 1), (value) => {
+    await countUp(0, result.score, timeline.skipped ? 0 : 1000 / (timeline.speed || 1), (value) => {
       setPixelText($('#totalBox'), value, 14, '#f0c04a', '#3a2c06', textScale());
     });
 
@@ -732,7 +1051,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       sfx.coin();
       floatText($('#goldV'), `+${result.gold} 金`, 'gold', layer);
     }
-    await timeline.wait(780);
+    await timeline.wait(950);
     return true;
   }
 
@@ -745,6 +1064,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       const parts = [];
       if (step.chips) parts.push(`+${step.chips} 牌值`);
       if (step.mult) parts.push(`+${step.mult} 番势`);
+      if (step.multFactor > 1) parts.push(`番势 ×${step.multFactor}`);
       if (step.gold) parts.push(`+${step.gold} 金`);
       if (!parts.length) continue;
       const line = el('div', 'lineItem');
@@ -858,10 +1178,11 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   }
 
   function showShop() {
-    const box = makeScreen();
-    box.append(el('div', 'title sh', '百宝阁'));
+    const box = makeScreen('shopScreen');
+    const isGeneralDraft = state.shop?.kind === 'general-draft';
+    box.append(el('div', 'title sh', isGeneralDraft ? '请将台 · 三选一' : '百宝阁'));
     box.append(el('div', 'subtitle',
-      `${state.ante.name}·${state.blind.name}达标 · 现有 ${state.gold} 金${state.pendingFreeBuy ? ' · 免单气可用' : ''}`));
+      `${state.ante.name}·${state.blind.name}达标 · 现有 ${state.gold} 金${isGeneralDraft ? ` · 第 ${state.shop.stage} 阶福将，只能请一位` : ''}${state.pendingFreeBuy ? ' · 免单气可用' : ''}`));
 
     if (state.shop?.pending) {
       renderKindPicker(box, state.shop.pending);
@@ -878,10 +1199,10 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       const card = cardNode(offer.family, item, {
         className: `shopCard${offer.sold ? ' sold' : affordable ? '' : ' cant'}`,
         meta: `${info.name} · ${item.duration ?? info.duration}`,
-        sealScale: 2,
+        sealScale: 3,
       });
       card.prepend(el('div', 'price', price === 0 ? '免费' : `${offer.price} 金`));
-      card.append(el('div', 'famTag', info.subtitle ?? '改牌组'));
+      card.append(el('div', 'famTag', isGeneralDraft ? `第 ${state.shop.stage} 阶 · 三选一` : (info.subtitle ?? '改牌组')));
       if (affordable) {
         card.addEventListener('click', () => {
           const result = run.buy(offer.slotIndex);
@@ -898,7 +1219,8 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
     const buttons = el('div', 'rowBtns');
     const reroll = el('button', 'btn grey', `刷新 ${state.rerollCost} 金`);
-    reroll.disabled = state.gold < state.rerollCost;
+    reroll.hidden = isGeneralDraft;
+    reroll.disabled = isGeneralDraft || state.gold < state.rerollCost;
     reroll.addEventListener('click', () => {
       const result = run.rerollShop();
       if (!result.ok) toast(result.reason);
@@ -923,7 +1245,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       const node = el('button', `kindBtn${existing[kind] ? ' taken' : ''}`);
       node.type = 'button';
       node.title = kindName(kind);
-      node.append(createTileCanvas({ id: `pick-${kind}`, suit, rank: Number(rank) }, 1));
+      node.append(tileCanvas({ id: `pick-${kind}`, suit, rank: Number(rank) }, 1));
       node.addEventListener('click', () => {
         const replaced = existing[kind];
         if (replaced) {
@@ -1172,6 +1494,14 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     document.addEventListener('pointerdown', () => timeline.skip(), { capture: true });
 
     document.addEventListener('keydown', (event) => {
+      // 明细弹层开着的时候独占键盘，否则 Esc 会顺手把手牌选择也清了
+      if ($('#sheet')) {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeSheet();
+        }
+        return;
+      }
       const screen = $('#screen');
       if (screen) {
         // 标题 / 帮助等外层屏幕覆盖求签时，禁止数字键和隐藏签卡的默认 Enter 激活。
@@ -1192,17 +1522,24 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
           ?? state.draft.replacement
           ?? state.draft.pendingReplacement
           ?? null;
+        const fate = state.draft.pendingFateChoice ?? null;
         if (event.key === 'Escape') {
           event.preventDefault();
           if (replacement) {
             run.cancelPendingOmenReplacement?.() ?? run.cancelOmenReplacement?.();
+          } else if (fate?.selectedTileId) {
+            run.backFateTile();
+          } else if (fate) {
+            run.cancelFateChoice();
           }
           return;
         }
         if (['1', '2', '3', '4'].includes(event.key)) {
           event.preventDefault();
           const index = Number(event.key) - 1;
-          const card = [...document.querySelectorAll('#draftCards .charmPick')][index];
+          const card = fate
+            ? [...document.querySelectorAll('#draftCards .fateOption:not(:disabled)')][index]
+            : [...document.querySelectorAll('#draftCards .charmPick')][index];
           card?.click();
         }
         return;

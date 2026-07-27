@@ -12,6 +12,7 @@
  * @property {string} [detail]       右侧补充
  * @property {number} chips
  * @property {number} mult
+ * @property {number} multFactor
  * @property {number} gold
  * @property {number} chipsAfter
  * @property {number} multAfter
@@ -75,10 +76,12 @@ export function scoreHand({
   const push = (step) => {
     chips += step.chips ?? 0;
     mult += step.mult ?? 0;
+    mult = Math.max(1, mult * (step.multFactor ?? 1));
     gold += step.gold ?? 0;
     steps.push({
       chips: 0,
       mult: 0,
+      multFactor: 1,
       gold: 0,
       ...step,
       chipsAfter: chips,
@@ -198,13 +201,14 @@ export function scoreHand({
     const charm = getItem('charm', charmId);
     if (!charm) return;
     const result = resolveEffects(charm.effects, context);
-    if (!result.chips && !result.mult && !result.gold) return;
+    if (!result.chips && !result.mult && !result.gold && result.multFactor === 1) return;
     push({
       key: `charm:${index}:${charmId}`,
       source: 'charm',
       label: charm.name,
       chips: result.chips,
       mult: result.mult,
+      multFactor: result.multFactor,
       gold: result.gold,
       target: { type: 'card', family: 'charm', id: charmId, index },
     });
@@ -215,13 +219,14 @@ export function scoreHand({
     const general = getItem('general', generalId);
     if (!general) return;
     const result = resolveEffects(general.effects, context);
-    if (!result.chips && !result.mult && !result.gold) return;
+    if (!result.chips && !result.mult && !result.gold && result.multFactor === 1) return;
     push({
       key: `general:${index}:${generalId}`,
       source: 'general',
       label: general.name,
       chips: result.chips,
       mult: result.mult,
+      multFactor: result.multFactor,
       gold: result.gold,
       target: { type: 'card', family: 'general', id: generalId, index },
     });
@@ -237,6 +242,7 @@ export function scoreHand({
     detail: `${chips} × ${mult}`,
     chips: 0,
     mult: 0,
+    multFactor: 1,
     gold: 0,
     chipsAfter: chips,
     multAfter: mult,

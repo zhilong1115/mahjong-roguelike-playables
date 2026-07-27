@@ -212,13 +212,13 @@ const METRICS_EXPRESSION = `(() => {
   const draftLayer = document.querySelector('#draftLayer');
   const draftOpen = draftLayer && !draftLayer.hidden;
   const critical = draftOpen
-    ? [...document.querySelectorAll('#draftLayer, #draftPanel, #draftTitle, #draftNotice:not([hidden]), #draftCards, .charmPick, .omenCompare, #draftActions, #draftActions .btn')]
+    ? [...document.querySelectorAll('#draftLayer, #draftPanel, #draftTitle, #draftNotice:not([hidden]), #draftCards, .charmPick, .omenCompare, .fateChooser, .fateHand, .fateTargetGrid, #draftActions, #draftActions .btn')]
     : screen
     ? [...document.querySelectorAll('#screen .screenBox, #screen .rowBtns, #screen .shopCard, #screen .blindCard, #screen .libraryTabs, #screen .libraryGrid')]
     : [...document.querySelectorAll('#app, #side, #slotBar, #table, #handZone, #actionRow, #omenSlot')];
   const clipped = critical.filter(visible).filter((element) => visibleRatio(element) < .98).map(describe);
   const primary = draftOpen
-    ? [...document.querySelectorAll('#draftLayer .charmPick, #draftActions .btn')]
+    ? [...document.querySelectorAll('#draftLayer .charmPick, #draftLayer .fateOption, #draftActions .btn')]
     : screen
     ? [...document.querySelectorAll('#screen .rowBtns .btn, #screen .shopCard, #screen .kindBtn, #screen .blindActions .btn, #screen .libraryTab')]
     : [...document.querySelectorAll('#handZone .tile, #btnSwap, #btnReveal, #btnHu, #omenSlot')];
@@ -253,6 +253,9 @@ const METRICS_EXPRESSION = `(() => {
     tierLabels: charmCards.map((card) => card.querySelector('.tierName')?.textContent ?? ''),
     tierMarks: charmCards.map((card) => card.querySelector('.tierMarks')?.textContent?.length ?? 0),
     offerCount: Number(draftLayer?.dataset.offerCount ?? 0),
+    fateMode: draftLayer?.dataset.mode === 'fate',
+    fateOptions: document.querySelectorAll('#draftCards .fateOption').length,
+    fateTargets: document.querySelectorAll('#draftCards .fateTarget').length,
     omenText: document.querySelector('#omenSlot')?.textContent?.replace(/\\s+/g, ' ').trim() ?? '',
     omenInsideSlots: Boolean(document.querySelector('#slotBar #omenSlot')),
     kindButtons: document.querySelectorAll('#kindGrid .kindBtn').length,
@@ -279,6 +282,19 @@ function assertMetrics(metrics, viewport, label, { expectTiles = true, tileCount
     assert.equal(metrics.tileCount, tileCount, `${label}: 手牌数量`);
     assert.ok(metrics.smallestTileWidth >= 33.5, `${label}: 牌面宽度 ${metrics.smallestTileWidth}`);
     assert.equal(metrics.slotCount, 6, `${label}: 6 个开运位`);
+  }
+}
+
+/**
+ * 等一个条件成立。结算动画的时长会随手感调整，测试不能写死 sleep，
+ * 否则每次改节奏都要回来改测试。
+ */
+async function waitUntil(client, expression, { timeout = 20000, step = 150, label = '条件' } = {}) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    if (await evaluate(client, expression)) return true;
+    if (Date.now() > deadline) throw new Error(`等待超时：${label}`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, step));
   }
 }
 
@@ -538,12 +554,12 @@ try {
     const charmLibrary = await evaluate(client, METRICS_EXPRESSION);
     assert.equal(charmLibrary.screenTitle, '百牌谱', `${viewport.id}: 应打开功能牌图鉴`);
     assert.equal(charmLibrary.activeLibraryFamily, 'charm', `${viewport.id}: 默认显示灵签`);
-    assert.equal(charmLibrary.libraryCards, 11, `${viewport.id}: 应显示 11 张灵签`);
+    assert.equal(charmLibrary.libraryCards, 19, `${viewport.id}: 应显示 19 张灵签`);
     assertMetrics(charmLibrary, viewport, `library-charm-${viewport.id}`, { expectTiles: false });
     await click(client, '#screen .libraryTab[data-family="general"]');
     const generalLibrary = await evaluate(client, METRICS_EXPRESSION);
     assert.equal(generalLibrary.activeLibraryFamily, 'general', `${viewport.id}: 福将页签应切换`);
-    assert.equal(generalLibrary.libraryCards, 5, `${viewport.id}: 应显示 5 位福将`);
+    assert.equal(generalLibrary.libraryCards, 11, `${viewport.id}: 应显示 11 位福将`);
     assertMetrics(generalLibrary, viewport, `library-general-${viewport.id}`, { expectTiles: false });
     if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
       await capture(client, artifactDir, `library-${viewport.id}`);
@@ -592,6 +608,64 @@ try {
       await capture(client, artifactDir, `draft-${viewport.id}`);
     }
     results.push({ id: `draft-${viewport.id}`, ...metrics });
+  }
+
+  // 金色改命：required 六视口都要完成「选原牌 → 选目标牌」，并可用 Esc 返回上一步。
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await startCurrentBlind(client, `fate-${viewport.id}`);
+    const began = await evaluate(client, `(async () => {
+      const { makeTile, parseTileNotation, sortTiles } = await import('/src/core/tiles.mjs');
+      const run = globalThis.__tianhu.run;
+      run.looseTiles = sortTiles(parseTileNotation('123m 456m 789m 111p 2s 3s')
+        .map((spec, index) => makeTile('fate-' + index, spec.suit, spec.rank)));
+      run.revealedGroups = [];
+      run.status = 'charm-draft';
+      run.draft = {
+        draftId: 'viewport-fate', groupId: 'missing', offerCount: 1,
+        offers: [{ offerId: 'viewport-fate:o0', charmId: 'thunderGather', tier: 'gold', role: 'fate' }],
+        charmIds: ['thunderGather'], tierSlots: ['gold'],
+        pendingOmenReplacement: null, pendingFateChoice: null,
+      };
+      run.emit();
+      return run.chooseDraftOffer('viewport-fate:o0');
+    })()`);
+    assert.equal(began.needsFateChoice, true, `${viewport.id}: 聚雷签应进入目标选择`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));
+
+    const sourceMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(sourceMetrics.fateMode, true, `${viewport.id}: 改命层应标记 fate mode`);
+    assert.equal(sourceMetrics.fateOptions, 14, `${viewport.id}: 应重画完整 14 张未亮手牌`);
+    assert.equal(sourceMetrics.fateTargets, 0, `${viewport.id}: 第一步不应提前显示目标牌`);
+    assertMetrics(sourceMetrics, viewport, `fate-source-${viewport.id}`);
+    assert.ok(sourceMetrics.smallestTouchWidth >= 47.5, `${viewport.id}: 改命原牌触控宽度`);
+    assert.ok(sourceMetrics.smallestTouchHeight >= 47.5, `${viewport.id}: 改命原牌触控高度`);
+
+    await click(client, '#draftCards .fateSource:not(:disabled)');
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+    const targetMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.ok(targetMetrics.fateTargets > 0, `${viewport.id}: 选原牌后应显示合法目标牌`);
+    assertMetrics(targetMetrics, viewport, `fate-target-${viewport.id}`);
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `fate-target-${viewport.id}`);
+    }
+
+    await pressKey(client, 'Escape');
+    assert.equal(await evaluate(client, `globalThis.__tianhu.run.draft.pendingFateChoice.selectedTileId`), null,
+      `${viewport.id}: 目标步骤按 Esc 应返回原牌步骤`);
+    await click(client, '#draftCards .fateSource:not(:disabled)');
+    await click(client, '#draftCards .fateTarget');
+    const finished = await evaluate(client, `(() => ({
+      draftClosed: globalThis.__tianhu.run.draft === null,
+      picked: globalThis.__tianhu.run.charmIds.at(-1),
+      distance: globalThis.__tianhu.run.distance(),
+    }))()`);
+    assert.equal(finished.draftClosed, true, `${viewport.id}: 选择目标后应提交并关闭签局`);
+    assert.equal(finished.picked, 'thunderGather', `${viewport.id}: 应取得聚雷签`);
+    assert.ok(finished.distance < 1, `${viewport.id}: 目标选择应真实改善成胡距离`);
+    results.push({ id: `fate-${viewport.id}`, ...targetMetrics });
   }
 
   // 广缘签兆：下一次求签变成四选一，第四张固定银签；数字键 4 能真正选中。
@@ -762,7 +836,7 @@ try {
     results.push({ id: `short-complete-${viewport.id}`, ...complete });
   }
 
-  // 选关 → 单副结算 → 百宝阁 → 选牌种 → 下一关选关
+  // 选关 → 单副结算 → 请将三选一 → 下一关 → 普通百宝阁 → 选牌种
   await setViewport(client, VIEWPORTS.at(-1));
   await client.send('Page.navigate', { url });
   await waitForPage(client);
@@ -773,7 +847,9 @@ try {
   for (let index = 0; index < handsPerBlind; index += 1) {
     const status = await evaluate(client, 'globalThis.__autoHand(0)');
     assert.ok(['hand-won', 'hand-failed'].includes(status), `第 ${index + 1} 副异常状态 ${status}`);
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 4200));
+    await waitUntil(client, "Boolean(document.querySelector('#screen .title')?.textContent)", {
+      label: `第 ${index + 1} 副结算屏`,
+    });
     const settled = await evaluate(client, METRICS_EXPRESSION);
     assert.ok(settled.screenTitle, `第 ${index + 1} 副结束后应当出现结算屏`);
     if (index === 0) {
@@ -785,18 +861,45 @@ try {
   }
 
   const shop = await evaluate(client, METRICS_EXPRESSION);
-  assert.equal(shop.screenTitle, '百宝阁', '单副过关后进入百宝阁');
+  assert.equal(shop.screenTitle, '请将台 · 三选一', '第一家店应当进入阶段 1 请将台');
   for (const viewport of [VIEWPORTS[2], VIEWPORTS[1]]) {
     await setViewport(client, viewport);
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));
     const metrics = await evaluate(client, METRICS_EXPRESSION);
-    assertMetrics(metrics, viewport, `shop-${viewport.id}`, { expectTiles: false });
-    await capture(client, artifactDir, `shop-${viewport.id}`);
-    results.push({ id: `shop-${viewport.id}`, ...metrics });
+    assertMetrics(metrics, viewport, `general-draft-${viewport.id}`, { expectTiles: false });
+    await capture(client, artifactDir, `general-draft-${viewport.id}`);
+    results.push({ id: `general-draft-${viewport.id}`, ...metrics });
   }
 
-  // 锻牌位要能走完「选牌种」这一步
+  // 请将台只能买一位；购买后回到庄局选关，再打进第二家普通百宝阁。
   await setViewport(client, VIEWPORTS.at(-1));
+  const pickedGeneral = await evaluate(client, `(() => {
+    const run = globalThis.__tianhu.run;
+    run.gold += 50;
+    const offer = run.shop.items[0];
+    const result = run.buy(offer.slotIndex);
+    return { ok: result.ok, picked: run.shop.generalPicked, allSold: run.shop.items.every((item) => item.sold) };
+  })()`);
+  assert.equal(pickedGeneral.ok, true, '请将台应当能购买一位福将');
+  assert.equal(Boolean(pickedGeneral.picked), true, '请将台应记录已选福将');
+  assert.equal(pickedGeneral.allSold, true, '选择一位后另外两位应一起锁定');
+  await click(client, '#screen .rowBtns .btn.green.big');
+  let nextBlind = await evaluate(client, METRICS_EXPRESSION);
+  assert.equal(nextBlind.screenTitle, '东圈', '离开请将台后回到东圈选关');
+  assert.equal(await evaluate(client, 'globalThis.__tianhu.run.blindKind'), 'big', '下一关应为庄局');
+
+  await startCurrentBlind(client, 'support-shop-flow');
+  const secondStatus = await evaluate(client, 'globalThis.__autoHand(0)');
+  assert.ok(['hand-won', 'hand-failed'].includes(secondStatus), `庄局异常状态 ${secondStatus}`);
+  await waitUntil(client, "Boolean(document.querySelector('#screen .title')?.textContent)", {
+    label: '庄局结算屏',
+  });
+  await click(client, '#screen .rowBtns .btn');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 200));
+  const supportShop = await evaluate(client, METRICS_EXPRESSION);
+  assert.equal(supportShop.screenTitle, '百宝阁', '第二家店应当恢复长期商品百宝阁');
+
+  // 锻牌位要能走完「选牌种」这一步
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));
   const opened = await evaluate(client, `(() => {
     const run = globalThis.__tianhu.run;
@@ -813,17 +916,29 @@ try {
   await capture(client, artifactDir, 'kind-picker');
   results.push({ id: 'kind-picker', ...picker });
 
-  // 完成改造并离店后，要回到当前圈的下一关，不能直接发牌。
+  // 完成改造并离店后，要回到圈主选关，不能直接发牌。
   await click(client, '#kindGrid .kindBtn');
   await click(client, '#screen .rowBtns .btn.green.big');
-  const nextBlind = await evaluate(client, METRICS_EXPRESSION);
+  nextBlind = await evaluate(client, METRICS_EXPRESSION);
   assert.equal(nextBlind.screenTitle, '东圈', '离店后应当回到东圈选关');
-  assert.equal(await evaluate(client, 'globalThis.__tianhu.run.blindKind'), 'big',
-    '闲局之后应当轮到庄局');
+  assert.equal(await evaluate(client, 'globalThis.__tianhu.run.blindKind'), 'boss',
+    '庄局之后应当轮到圈主');
   assertMetrics(nextBlind, VIEWPORTS.at(-1), 'next-blind-select', { expectTiles: false });
 
-  // 跳过同一个选关屏里的庄局后，虽然 status 仍是 blind-select，屏幕也必须立即
+  // 独立重开后先跳闲局，再跳庄局；虽然 status 始终是 blind-select，屏幕也必须立即
   // 重绘到圈主；旧的「跳局」按钮不能留在 DOM 中继续接受点击。
+  await evaluate(client, `globalThis.__tianhu.app.startRun({ seed: 20260728 })`);
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+  const skippedSmall = await evaluate(client, `(() => {
+    const current = document.querySelector('#screen .blindCard.current');
+    const skip = [...(current?.querySelectorAll('.blindActions .btn') ?? [])]
+      .find((button) => button.textContent.trim() === '跳局');
+    if (!skip) return false;
+    skip.click();
+    return true;
+  })()`);
+  assert.equal(skippedSmall, true, '闲局应当可以跳过');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
   const skippedBig = await evaluate(client, `(() => {
     const current = document.querySelector('#screen .blindCard.current');
     const skip = [...(current?.querySelectorAll('.blindActions .btn') ?? [])]

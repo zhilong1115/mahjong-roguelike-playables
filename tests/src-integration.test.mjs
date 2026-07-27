@@ -75,10 +75,11 @@ test('买到的长期内容确实改变了后续结算', () => {
   }
   assert.equal(run.status, 'shop');
   run.gold += 100;
-  for (const offer of [...run.shop.items]) {
-    const result = run.buy(offer.slotIndex);
-    if (result.needsKind) run.confirmKind('man:5');
-  }
+  const reliableGeneral = run.shop.items.find(
+    (offer) => getItem('general', offer.id)?.archetype === 'pairs',
+  );
+  assert.ok(reliableGeneral, '第一家请将台应当包含七巧起势福将');
+  assert.equal(run.buy(reliableGeneral.slotIndex).ok, true);
   const owned = {
     generals: [...run.generalIds],
     codex: { ...run.codexLevels },

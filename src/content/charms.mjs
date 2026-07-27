@@ -97,6 +97,7 @@ export function draftCharmOffers(rng, revealedKind, {
   tierSlots = new Array(offerCount).fill('silver'),
   excludeDelayedOmens = false,
   excludeCharmIds = [],
+  preferredArchetype = null,
 } = {}) {
   const slotRoles = ['group', 'pattern', 'wild', 'extra'];
   const chosen = [];
@@ -104,10 +105,14 @@ export function draftCharmOffers(rng, revealedKind, {
   for (let index = 0; index < offerCount; index += 1) {
     const draftRole = slotRoles[index] ?? 'extra';
     const tier = tierSlots[index] ?? 'silver';
-    const pool = rolePool(draftRole, revealedKind, {
+    let pool = rolePool(draftRole, revealedKind, {
       excludeDelayedOmens,
       excludeCharmIds,
     }).filter((item) => item.tier === tier && !chosen.some((picked) => picked.id === item.id));
+    if (draftRole === 'pattern' && preferredArchetype) {
+      const matching = pool.filter((item) => item.archetype === preferredArchetype);
+      if (matching.length) pool = matching;
+    }
     if (!pool.length) break;
     chosen.push(pickContentItem(rng, pool));
   }

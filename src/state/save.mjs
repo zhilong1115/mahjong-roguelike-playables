@@ -34,6 +34,12 @@ function cloneDraft(draft) {
         next: cloneOmen(draft.pendingOmenReplacement.next),
       }
       : null,
+    ...(draft.pendingFateChoice
+      ? { pendingFateChoice: {
+        ...draft.pendingFateChoice,
+        choices: (draft.pendingFateChoice.choices ?? []).map((choice) => ({ ...choice })),
+      } }
+      : {}),
   };
 }
 

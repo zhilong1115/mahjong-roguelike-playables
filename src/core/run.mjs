@@ -29,6 +29,7 @@ import {
   CODEX_MAX_LEVEL,
   CONFIG,
   DECKS,
+  GENERAL_ARCHETYPES,
   GENERAL_LIST,
   blindIndexOf,
   getItem,
@@ -54,7 +55,15 @@ import {
 } from './patterns.mjs';
 import { scoreHand } from './scoring.mjs';
 import { tilesToChange } from './shanten.mjs';
-import { createSeededRng, sortTiles, tileKey } from './tiles.mjs';
+import {
+  TILE_KINDS,
+  createSeededRng,
+  kindName,
+  makeTile,
+  parseKind,
+  sortTiles,
+  tileKey,
+} from './tiles.mjs';
 
 const cloneOmen = (omen) => (omen ? { ...omen } : null);
 
@@ -67,6 +76,28 @@ function avalanche32(value) {
   hash = Math.imul(hash, 0xc2b2ae35) >>> 0;
   hash ^= hash >>> 16;
   return hash >>> 0;
+}
+
+function archetypePotential(looseTiles, revealedGroups, archetype) {
+  const tiles = [...looseTiles, ...revealedGroups.flatMap((group) => group.tiles)];
+  const counts = new Map();
+  for (const tile of tiles) counts.set(tileKey(tile), (counts.get(tileKey(tile)) ?? 0) + 1);
+
+  if (archetype === 'pairs') {
+    return [...counts.values()].reduce((score, count) => score + Math.min(2, count) * 4 + Math.floor(count / 2) * 8, 0);
+  }
+  if (archetype === 'thunder') {
+    return [...counts.values()].reduce((score, count) => score + count * count * 3, 0);
+  }
+
+  let score = revealedGroups.filter((group) => group.kind === 'chow').length * 30;
+  for (const suit of ['man', 'pin', 'sou']) {
+    for (let start = 1; start <= 7; start += 1) {
+      const present = [0, 1, 2].filter((offset) => (counts.get(`${suit}:${start + offset}`) ?? 0) > 0).length;
+      score += present * present;
+    }
+  }
+  return score;
 }
 
 function cloneDraft(draft) {
@@ -84,6 +115,12 @@ function cloneDraft(draft) {
         next: cloneOmen(draft.pendingOmenReplacement.next),
       }
       : null,
+    ...(draft.pendingFateChoice
+      ? { pendingFateChoice: {
+        ...draft.pendingFateChoice,
+        choices: (draft.pendingFateChoice.choices ?? []).map((choice) => ({ ...choice })),
+      } }
+      : {}),
   };
 }
 
@@ -439,6 +476,21 @@ export class Run {
     return tilesToChange(this.looseTiles, this.revealedGroups);
   }
 
+  dominantArchetype() {
+    const counts = new Map();
+    const firstSeen = new Map();
+    for (const [index, generalId] of this.generalIds.entries()) {
+      const archetype = getItem('general', generalId)?.archetype;
+      if (!GENERAL_ARCHETYPES.includes(archetype)) continue;
+      counts.set(archetype, (counts.get(archetype) ?? 0) + 1);
+      if (!firstSeen.has(archetype)) firstSeen.set(archetype, index);
+    }
+    return [...counts.keys()].sort((left, right) => (
+      counts.get(right) - counts.get(left)
+      || firstSeen.get(left) - firstSeen.get(right)
+    ))[0] ?? null;
+  }
+
   /** 现在胡的话能拿多少待结算金：空开运位 + 没用完的换牌 + 财签。 */
   projectedGold() {
     const config = this.config;
@@ -695,6 +747,11 @@ export class Run {
       const excludeCharmIds = !omen && this.pendingOmen?.sourceCharmId
         ? [this.pendingOmen.sourceCharmId]
         : [];
+      if (this.distance() <= 0) {
+        excludeCharmIds.push(...CHARM_LIST
+          .filter((item) => item.effects?.some((effect) => effect.kind === 'fateChooseOne'))
+          .map((item) => item.id));
+      }
       const tierRng = createSeededRng(this.draftSeed(
         slotIndex,
         omen ? 27077 : 17011,
@@ -712,6 +769,7 @@ export class Run {
         tierSlots,
         excludeDelayedOmens,
         excludeCharmIds,
+        preferredArchetype: this.dominantArchetype(),
       });
       if (rolled.length !== offerCount) return null;
       if (omen?.omenId === OMEN_IDS.luckyTier
@@ -750,12 +808,19 @@ export class Run {
   }
 
   draftContentOptions(draft) {
-    return {
+    const options = {
       excludeDelayedOmens: Boolean(draft.appliedOmen) || !this.hasFutureCharmDraft(),
       excludeCharmIds: !draft.appliedOmen && this.pendingOmen?.sourceCharmId
         ? [this.pendingOmen.sourceCharmId]
         : [],
+      preferredArchetype: this.dominantArchetype(),
     };
+    if (this.distance() <= 0) {
+      options.excludeCharmIds.push(...CHARM_LIST
+        .filter((item) => item.effects?.some((effect) => effect.kind === 'fateChooseOne'))
+        .map((item) => item.id));
+    }
+    return options;
   }
 
   /**
@@ -782,6 +847,10 @@ export class Run {
       pool = pool.filter((item) => (
         item.tier === draft.tierSlots[index] && !chosenIds.has(item.id)
       ));
+      if (slotRole === 'pattern' && options.preferredArchetype) {
+        const matching = pool.filter((item) => item.archetype === options.preferredArchetype);
+        if (matching.length) pool = matching;
+      }
 
       // 当前签放到最后：先寻找真正改变内容的完整合法组合，同时保持稳定顺序。
       const currentId = draft.offers?.[index]?.charmId;
@@ -845,6 +914,7 @@ export class Run {
     if (this.status !== 'charm-draft' || !this.draft) return { ok: false, reason: '现在不需要重抽' };
     if (this.draft.rerollsLeft <= 0) return { ok: false, reason: '没有可用的重抽' };
     if (this.draft.pendingOmenReplacement) return { ok: false, reason: '请先决定是否替换待缘' };
+    if (this.draft.pendingFateChoice) return { ok: false, reason: '请先完成或取消改命选择' };
     const group = this.revealedGroups.find((item) => item.id === this.draft.groupId);
     const nextRoll = this.draft.rolls + 1;
     const offers = this.rollDraftOffers(this.draft, group?.kind ?? 'pair', nextRoll);
@@ -872,10 +942,31 @@ export class Run {
   chooseDraftOffer(offerId) {
     if (this.status !== 'charm-draft' || !this.draft) return { ok: false, reason: '现在不需要选签' };
     if (this.draft.pendingOmenReplacement) return { ok: false, reason: '请先决定是否替换待缘' };
+    if (this.draft.pendingFateChoice) return { ok: false, reason: '请先完成或取消改命选择' };
     const offer = this.draft.offers?.find((item) => item.offerId === offerId);
     if (!offer) return { ok: false, reason: '这张灵签不在本次选择里' };
     const charm = getItem('charm', offer.charmId);
     if (!charm) return { ok: false, reason: '灵签内容不存在' };
+
+    const fateEffect = charm.effects?.find((effect) => effect.kind === 'fateChooseOne');
+    if (fateEffect) {
+      const choices = this.fateChoices(fateEffect.archetype);
+      if (!choices.length) return { ok: false, reason: '当前没有能改善成胡的改牌目标' };
+      this.draft = {
+        ...this.draft,
+        pendingFateChoice: {
+          offerId: offer.offerId,
+          charmId: charm.id,
+          archetype: fateEffect.archetype,
+          distanceBefore: this.distance(),
+          selectedTileId: null,
+          choices,
+        },
+      };
+      this.lastEvent = { type: 'fate-choice', text: `${charm.name} · 选择要改变的牌` };
+      this.emit();
+      return { ok: true, needsFateChoice: true, choiceCount: choices.length };
+    }
 
     const nextOmen = charm.omen ? {
       omenId: charm.omen.omenId,
@@ -906,7 +997,7 @@ export class Run {
     return this.finishCharmChoice(offer, charm, nextOmen);
   }
 
-  finishCharmChoice(offer, charm, nextOmen = null) {
+  finishCharmChoice(offer, charm, nextOmen = null, fateChange = null) {
     const group = this.revealedGroups.find((item) => item.id === this.draft.groupId);
     const instance = {
       instanceId: offer.offerId,
@@ -933,17 +1024,150 @@ export class Run {
     this.status = 'playing';
     this.lastEvent = {
       type: 'charm',
-      text: nextOmen
+      text: fateChange
+        ? `${charm.name} · ${kindName(tileKey(fateChange.before))}化为${kindName(tileKey(fateChange.after))} · 还差 ${fateChange.distanceAfter} 张`
+        : nextOmen
         ? `${charm.name} · 待下次求签应验`
         : (goldNow ? `${charm.name} · +${goldNow} 待结算金` : `${charm.name} 生效`),
       charmId: charm.id,
       offerId: offer.offerId,
       goldNow,
       pendingOmen: cloneOmen(this.pendingOmen),
+      fateChange,
     };
     this.refreshStatus();
     this.emit();
-    return { ok: true, charm, instance, goldNow, pendingOmen: cloneOmen(this.pendingOmen) };
+    return {
+      ok: true,
+      charm,
+      instance,
+      goldNow,
+      fateChange,
+      pendingOmen: cloneOmen(this.pendingOmen),
+    };
+  }
+
+  /**
+   * 定向改命：穷举所有「原牌 → 目标牌」组合，只保留真实降低还差张数的合法结果。
+   * potential 只决定 UI 排序，不替玩家自动提交选择。
+   */
+  fateChoices(archetype = 'dragon') {
+    const distanceBefore = this.distance();
+    if (!Number.isFinite(distanceBefore) || distanceBefore <= 0 || !this.looseTiles.length) return [];
+
+    const kindCounts = new Map();
+    for (const tile of [
+      ...this.looseTiles,
+      ...this.revealedGroups.flatMap((group) => group.tiles),
+    ]) {
+      const kind = tileKey(tile);
+      kindCounts.set(kind, (kindCounts.get(kind) ?? 0) + 1);
+    }
+
+    const choices = [];
+    for (let index = 0; index < this.looseTiles.length; index += 1) {
+      const before = this.looseTiles[index];
+      for (const kind of TILE_KINDS) {
+        if (kind === tileKey(before)) continue;
+        // 改命仍使用标准四副牌库，不凭空造出第五张同牌。
+        if ((kindCounts.get(kind) ?? 0) >= 4) continue;
+        const spec = parseKind(kind);
+        const after = makeTile(before.id, spec.suit, spec.rank);
+        const candidate = [...this.looseTiles];
+        candidate[index] = after;
+        const sorted = sortTiles(candidate);
+        const distanceAfter = tilesToChange(sorted, this.revealedGroups);
+        if (distanceAfter >= distanceBefore) continue;
+        const potential = archetypePotential(sorted, this.revealedGroups, archetype);
+        choices.push({
+          tileId: before.id,
+          beforeKind: tileKey(before),
+          targetKind: kind,
+          distanceAfter,
+          potential,
+        });
+      }
+    }
+    return choices;
+  }
+
+  selectFateTile(tileId) {
+    const pending = this.draft?.pendingFateChoice;
+    if (this.status !== 'charm-draft' || !pending) return { ok: false, reason: '现在不需要选择改命牌' };
+    if (!pending.choices.some((choice) => choice.tileId === tileId)) {
+      return { ok: false, reason: '这张牌没有能改善成胡的目标' };
+    }
+    this.draft = {
+      ...this.draft,
+      pendingFateChoice: { ...pending, selectedTileId: tileId },
+    };
+    this.lastEvent = { type: 'fate-source', text: '选择要变成的牌' };
+    this.emit();
+    return { ok: true };
+  }
+
+  backFateTile() {
+    const pending = this.draft?.pendingFateChoice;
+    if (this.status !== 'charm-draft' || !pending) return { ok: false, reason: '现在不在改命选择中' };
+    this.draft = {
+      ...this.draft,
+      pendingFateChoice: { ...pending, selectedTileId: null },
+    };
+    this.lastEvent = { type: 'fate-back', text: '重新选择要改变的牌' };
+    this.emit();
+    return { ok: true };
+  }
+
+  cancelFateChoice() {
+    if (this.status !== 'charm-draft' || !this.draft?.pendingFateChoice) {
+      return { ok: false, reason: '现在不在改命选择中' };
+    }
+    this.draft = { ...this.draft, pendingFateChoice: null };
+    this.lastEvent = { type: 'fate-cancel', text: '返回三签选择' };
+    this.emit();
+    return { ok: true };
+  }
+
+  confirmFateTarget(targetKind) {
+    const pending = this.draft?.pendingFateChoice;
+    if (this.status !== 'charm-draft' || !pending?.selectedTileId) {
+      return { ok: false, reason: '请先选择要改变的牌' };
+    }
+    const savedChoice = pending.choices.find((choice) => (
+      choice.tileId === pending.selectedTileId && choice.targetKind === targetKind
+    ));
+    if (!savedChoice) return { ok: false, reason: '这个改牌目标不在合法列表中' };
+    const before = this.looseTiles.find((tile) => tile.id === savedChoice.tileId);
+    const offer = this.draft.offers?.find((item) => item.offerId === pending.offerId);
+    const charm = getItem('charm', pending.charmId);
+    if (!before || tileKey(before) !== savedChoice.beforeKind || !offer || !charm) {
+      return { ok: false, reason: '改命签状态已经失效' };
+    }
+
+    const physicalTiles = [
+      ...this.looseTiles,
+      ...this.revealedGroups.flatMap((group) => group.tiles),
+    ];
+    if (physicalTiles.filter((tile) => tileKey(tile) === targetKind).length >= 4) {
+      return { ok: false, reason: '牌库中已经有四张这种牌' };
+    }
+
+    const spec = parseKind(savedChoice.targetKind);
+    const after = makeTile(before.id, spec.suit, spec.rank);
+    const nextLoose = sortTiles(this.looseTiles.map((tile) => tile.id === before.id ? after : tile));
+    const distanceBefore = this.distance();
+    const distanceAfter = tilesToChange(nextLoose, this.revealedGroups);
+    if (distanceAfter >= distanceBefore) return { ok: false, reason: '这个目标已经不能改善成胡' };
+    this.looseTiles = nextLoose;
+    this.selectedIds.clear();
+    const fateChange = {
+      before,
+      after,
+      distanceBefore,
+      distanceAfter,
+      archetype: pending.archetype,
+    };
+    return this.finishCharmChoice(offer, charm, null, fateChange);
   }
 
   confirmPendingOmen() {
@@ -1124,19 +1348,37 @@ export class Run {
   }
 
   rollShop(rerolls = 0) {
-    const shelf = shelfFor(this.shopIndex());
+    const shopIndex = this.shopIndex();
+    const shelf = shelfFor(shopIndex);
     const rng = createSeededRng((this.seed + this.clearedBlinds * 31337 + rerolls * 977 + 7) >>> 0);
+    const generalDraft = shelf.every((family) => family === 'general');
+    const stage = generalDraft ? Math.min(3, Math.floor(shopIndex / 2) + 1) : null;
+    const pickedKeys = new Set();
     const items = shelf.map((family, slotIndex) => {
-      const pool = this.shopPool(family);
+      const archetype = generalDraft ? GENERAL_ARCHETYPES[slotIndex] : null;
+      let pool = this.shopPool(family, { stage, archetype })
+        .filter((item) => !pickedKeys.has(`${family}:${item.id}`));
+      if (!pool.length && family === 'general' && archetype) {
+        pool = this.shopPool(family, { archetype })
+          .filter((item) => !pickedKeys.has(`${family}:${item.id}`));
+      }
       if (!pool.length) return null;
       const item = pickContentItem(rng, pool);
+      pickedKeys.add(`${family}:${item.id}`);
       return { slotIndex, family, id: item.id, price: item.price, sold: false };
     }).filter(Boolean);
-    return { rerolls, items, pending: null };
+    return {
+      kind: generalDraft ? 'general-draft' : 'shop',
+      stage,
+      generalPicked: null,
+      rerolls,
+      items,
+      pending: null,
+    };
   }
 
   /** 番谱定向保底：只出匹配下一圈预告、且还没满级的。 */
-  shopPool(family) {
+  shopPool(family, { stage = null, archetype = null } = {}) {
     if (family === 'codex') {
       const upcoming = this.antes[Math.min(this.anteIndex, this.antes.length - 1)].announced;
       const matching = upcoming
@@ -1145,7 +1387,11 @@ export class Run {
       return matching.length ? matching : [CODEX.pureSuit];
     }
     if (family === 'general') {
-      return GENERAL_LIST.filter((item) => !this.generalIds.includes(item.id));
+      return GENERAL_LIST.filter((item) => (
+        !this.generalIds.includes(item.id)
+        && (stage === null || item.stage === stage)
+        && (!archetype || item.archetype === archetype)
+      ));
     }
     if (family === 'paper') {
       return listItems('paper').filter((item) => !this.papers.includes(item.id));
@@ -1164,6 +1410,9 @@ export class Run {
     if (this.gold < this.priceOf(offer)) return { ok: false, reason: '金币不足' };
     if (offer.family === 'general' && this.generalIds.length >= this.config.generalSlots) {
       return { ok: false, reason: '将位已满' };
+    }
+    if (offer.family === 'general' && this.shop.kind === 'general-draft' && this.shop.generalPicked) {
+      return { ok: false, reason: '本次请将已经选择过了' };
     }
     if (offer.family === 'bone' || offer.family === 'seal') {
       this.shop = { ...this.shop, pending: { ...offer } };
@@ -1219,8 +1468,16 @@ export class Run {
     this.shop = {
       ...this.shop,
       pending: null,
+      generalPicked: offer.family === 'general' && this.shop.kind === 'general-draft'
+        ? offer.id
+        : this.shop.generalPicked,
       items: this.shop.items.map(
-        (entry) => (entry.slotIndex === offer.slotIndex ? { ...entry, sold: true } : entry),
+        (entry) => (
+          entry.slotIndex === offer.slotIndex
+          || (offer.family === 'general' && this.shop.kind === 'general-draft' && entry.family === 'general')
+            ? { ...entry, sold: true }
+            : entry
+        ),
       ),
     };
     this.lastEvent = {
@@ -1237,6 +1494,7 @@ export class Run {
 
   rerollShop() {
     if (this.status !== 'shop') return { ok: false, reason: '现在不在百宝阁' };
+    if (this.shop.kind === 'general-draft') return { ok: false, reason: '请将台不可刷新' };
     if (this.gold < this.baseline.rerollCost) return { ok: false, reason: '金币不足' };
     this.gold -= this.baseline.rerollCost;
     const sold = new Set(this.shop.items.filter((item) => item.sold).map((item) => item.slotIndex));

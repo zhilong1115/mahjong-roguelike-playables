@@ -2,12 +2,12 @@
  * 效果解析：五系内容共用同一套 effect 描述，这里是唯一的解释器。
  * 每个 effect 返回它贡献的 `chips / mult / gold`，UI 靠这个逐条播放动画。
  *
- * @typedef {{ chips: number, mult: number, gold: number }} EffectResult
+ * @typedef {{ chips: number, mult: number, gold: number, multFactor: number }} EffectResult
  */
 
 import { isTerminalTile, tileKey } from './tiles.mjs';
 
-const EMPTY = Object.freeze({ chips: 0, mult: 0, gold: 0 });
+const EMPTY = Object.freeze({ chips: 0, mult: 0, gold: 0, multFactor: 1 });
 
 function countGroups(groups, kinds) {
   return groups.filter((group) => kinds.includes(group.kind)).length;
@@ -49,6 +49,9 @@ export function resolveEffect(effect, context) {
     case 'multFlat':
       return { ...EMPTY, mult: effect.value };
 
+    case 'multPerGroup':
+      return { ...EMPTY, mult: countGroups(context.groups, effect.groupKinds) * effect.value };
+
     case 'multIfPattern':
       return context.patterns.includes(effect.pattern)
         ? { ...EMPTY, mult: effect.value }
@@ -57,6 +60,16 @@ export function resolveEffect(effect, context) {
     case 'multIfGroupCount':
       return countGroups(context.groups, effect.groupKinds) >= effect.min
         ? { ...EMPTY, mult: effect.value }
+        : EMPTY;
+
+    case 'multFactorIfPattern':
+      return context.patterns.includes(effect.pattern)
+        ? { ...EMPTY, multFactor: effect.value }
+        : EMPTY;
+
+    case 'multFactorIfGroupCount':
+      return countGroups(context.groups, effect.groupKinds) >= effect.min
+        ? { ...EMPTY, multFactor: effect.value }
         : EMPTY;
 
     case 'goldPerEmptySlot':
@@ -76,13 +89,15 @@ export function resolveEffects(effects, context) {
   let chips = 0;
   let mult = 0;
   let gold = 0;
+  let multFactor = 1;
   for (const effect of effects ?? []) {
     const result = resolveEffect(effect, context);
     chips += result.chips;
     mult += result.mult;
     gold += result.gold;
+    multFactor *= result.multFactor;
   }
-  return { chips, mult, gold };
+  return { chips, mult, gold, multFactor };
 }
 
 /** 牌骨：按最终结构里属于该牌种的每张牌结算。 */
@@ -95,5 +110,5 @@ export function resolveBone(bone, kindKey, context) {
       chips += group.tiles.filter((tile) => tileKey(tile) === kindKey).length * effect.value;
     }
   }
-  return { chips, mult: 0, gold: 0 };
+  return { chips, mult: 0, gold: 0, multFactor: 1 };
 }

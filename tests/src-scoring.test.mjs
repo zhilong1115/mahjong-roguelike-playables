@@ -66,6 +66,7 @@ test('steps 按 0011 的八步顺序排列，并且自洽', () => {
     if (step.source === 'total') break;
     chips += step.chips;
     mult += step.mult;
+    mult = Math.max(1, mult * (step.multFactor ?? 1));
     assert.equal(step.chipsAfter, chips, `${step.label} 的 chipsAfter 不对`);
     assert.equal(step.multAfter, mult, `${step.label} 的 multAfter 不对`);
   }

@@ -33,6 +33,20 @@ function runToShop(seed = SEED, options = {}) {
   return run;
 }
 
+function runToSupportShop(seed = SEED, options = {}) {
+  const run = runToShop(seed, options);
+  run.gold += 100;
+  const general = run.shop.items.find((item) => item.family === 'general');
+  assert.equal(run.buy(general.slotIndex).ok, true);
+  run.leaveShop();
+  startSelectedBlind(run);
+  playHand(run, options);
+  run.advance();
+  assert.equal(run.status, 'shop');
+  assert.equal(run.shop.kind, 'shop');
+  return run;
+}
+
 test('每副开局：14 张结构牌、6 个开运位、5 次换牌', () => {
   const run = new Run({ seed: SEED });
   assert.equal(run.status, 'blind-select', '新局必须先停在选关屏');
@@ -188,8 +202,16 @@ test('牌印 · 亮组触发：问签印给一次整组重抽，重抽结果由 
   }
 });
 
-test('百宝阁：货位类别固定，番谱定向匹配下一轮预告', () => {
-  const run = runToShop();
+test('百宝阁：请将台与长期货架按固定节奏轮换', () => {
+  const first = runToShop();
+  assert.equal(first.shop.kind, 'general-draft');
+  assert.deepEqual(first.shop.items.map((item) => item.family), ['general', 'general', 'general']);
+  assert.deepEqual(
+    first.shop.items.map((offer) => getItem('general', offer.id).archetype).sort(),
+    ['dragon', 'pairs', 'thunder'],
+  );
+
+  const run = runToSupportShop();
   assert.equal(run.status, 'shop');
   const families = run.shop.items.map((item) => item.family);
   assert.deepEqual(families, shelfFor(run.shopIndex()));
@@ -210,7 +232,7 @@ test('百宝阁：货位类别固定，番谱定向匹配下一轮预告', () =>
 });
 
 test('牌骨 / 牌印要先选牌种才扣钱，覆盖旧改造会被记录', () => {
-  const run = runToShop();
+  const run = runToSupportShop();
   const boneOffer = run.shop.items.find((item) => item.family === 'bone');
   const goldBefore = run.gold;
 
@@ -241,7 +263,7 @@ test('牌骨 / 牌印要先选牌种才扣钱，覆盖旧改造会被记录', ()
 });
 
 test('买到的牌骨在下一副真的出现在手上', () => {
-  const run = runToShop();
+  const run = runToSupportShop();
   const boneOffer = run.shop.items.find((item) => item.family === 'bone');
   run.buy(boneOffer.slotIndex);
   run.confirmKind('sou:3');
@@ -252,7 +274,7 @@ test('买到的牌骨在下一副真的出现在手上', () => {
 });
 
 test('番谱可以累计升级，满级后不再出现在货架', () => {
-  const run = runToShop();
+  const run = runToSupportShop();
   const codexOffer = run.shop.items.find((item) => item.family === 'codex');
   const book = getItem('codex', codexOffer.id);
   run.gold += 100;
