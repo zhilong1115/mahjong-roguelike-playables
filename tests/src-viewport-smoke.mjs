@@ -214,13 +214,13 @@ const METRICS_EXPRESSION = `(() => {
   const critical = draftOpen
     ? [...document.querySelectorAll('#draftLayer, #draftPanel, #draftTitle, #draftNotice:not([hidden]), #draftCards, .charmPick, .omenCompare, #draftActions, #draftActions .btn')]
     : screen
-    ? [...document.querySelectorAll('#screen .screenBox, #screen .rowBtns, #screen .shopCard, #screen .blindCard')]
+    ? [...document.querySelectorAll('#screen .screenBox, #screen .rowBtns, #screen .shopCard, #screen .blindCard, #screen .libraryTabs, #screen .libraryGrid')]
     : [...document.querySelectorAll('#app, #side, #slotBar, #table, #handZone, #actionRow, #omenSlot')];
   const clipped = critical.filter(visible).filter((element) => visibleRatio(element) < .98).map(describe);
   const primary = draftOpen
     ? [...document.querySelectorAll('#draftLayer .charmPick, #draftActions .btn')]
     : screen
-    ? [...document.querySelectorAll('#screen .rowBtns .btn, #screen .shopCard, #screen .kindBtn, #screen .blindActions .btn')]
+    ? [...document.querySelectorAll('#screen .rowBtns .btn, #screen .shopCard, #screen .kindBtn, #screen .blindActions .btn, #screen .libraryTab')]
     : [...document.querySelectorAll('#handZone .tile, #btnSwap, #btnReveal, #btnHu, #omenSlot')];
   const actionable = primary.filter((element) => !element.disabled && !element.classList.contains('cant') && !element.classList.contains('sold'));
   const touchTargets = actionable.filter(visible).map(describe);
@@ -256,6 +256,8 @@ const METRICS_EXPRESSION = `(() => {
     omenText: document.querySelector('#omenSlot')?.textContent?.replace(/\\s+/g, ' ').trim() ?? '',
     omenInsideSlots: Boolean(document.querySelector('#slotBar #omenSlot')),
     kindButtons: document.querySelectorAll('#kindGrid .kindBtn').length,
+    libraryCards: document.querySelectorAll('#screen .libraryCard').length,
+    activeLibraryFamily: document.querySelector('#screen .libraryTab.active')?.dataset.family ?? null,
   };
 })()`;
 
@@ -417,7 +419,7 @@ try {
   await client.send('Page.enable');
   await client.send('Runtime.enable');
 
-  // seed 1 能让测试玩家稳定打过东圈闲局，便于覆盖两副制结算与商店流程。
+  // seed 1 能让测试玩家稳定打过东圈闲局，便于覆盖单副结算与商店流程。
   const baseUrl = `http://127.0.0.1:${serverPort}/src/?seed=1`;
   const url = `${baseUrl}&intro=0`;
   const results = [];
@@ -526,6 +528,28 @@ try {
   assert.equal(restoredPick.draftClosed, true, '点继续后数字键 1 应能完成选签');
   assert.equal(restoredPick.picked, firstRestoredCharm, '数字键 1 应选择恢复签局的第一张');
   assert.ok(['btnHu', 'btnReveal', 'btnSwap'].includes(restoredPick.focus), '恢复签局选完后焦点应回到主要操作');
+
+  // 百牌谱：五系页签在 required 六视口都可见、可点，卡牌列表只在面板内滚动。
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url: baseUrl });
+    await waitForPage(client);
+    await click(client, '#screen .titleMenu .libraryOpen');
+    const charmLibrary = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(charmLibrary.screenTitle, '百牌谱', `${viewport.id}: 应打开功能牌图鉴`);
+    assert.equal(charmLibrary.activeLibraryFamily, 'charm', `${viewport.id}: 默认显示灵签`);
+    assert.equal(charmLibrary.libraryCards, 11, `${viewport.id}: 应显示 11 张灵签`);
+    assertMetrics(charmLibrary, viewport, `library-charm-${viewport.id}`, { expectTiles: false });
+    await click(client, '#screen .libraryTab[data-family="general"]');
+    const generalLibrary = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(generalLibrary.activeLibraryFamily, 'general', `${viewport.id}: 福将页签应切换`);
+    assert.equal(generalLibrary.libraryCards, 5, `${viewport.id}: 应显示 5 位福将`);
+    assertMetrics(generalLibrary, viewport, `library-general-${viewport.id}`, { expectTiles: false });
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `library-${viewport.id}`);
+    }
+    results.push({ id: `library-${viewport.id}`, ...generalLibrary });
+  }
 
   for (const viewport of VIEWPORTS) {
     await setViewport(client, viewport);
@@ -709,14 +733,43 @@ try {
   assert.equal(resized.selectedCount, 1, 'resize 后仍然保持已选牌');
   assertMetrics(resized, VIEWPORTS[1], 'resize-state');
 
-  // 选关 → 两副结算 → 百宝阁 → 选牌种 → 下一关选关
+  // 短局通关页在全部 required 视口都要能看到西圈加赛入口
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await evaluate(client, `(() => {
+      const run = globalThis.__tianhu.run;
+      run.anteIndex = 1;
+      run.blindKind = 'boss';
+      run.activeAnteCount = 2;
+      run.totalScore = 4321;
+      run.completedBlinds = [];
+      run.status = 'run-complete';
+      run.lastEvent = { type: 'run-complete', text: '短局通关' };
+      run.emit();
+    })()`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 180));
+    const complete = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(complete.screenTitle, '短局通关', `${viewport.id}: 应显示短局通关页`);
+    assert.equal(
+      await evaluate(client, `Boolean([...document.querySelectorAll('#screen button')]
+        .find((button) => button.textContent.includes('西圈加赛')))`),
+      true,
+      `${viewport.id}: 应显示西圈加赛入口`,
+    );
+    assertMetrics(complete, viewport, `short-complete-${viewport.id}`, { expectTiles: false });
+    results.push({ id: `short-complete-${viewport.id}`, ...complete });
+  }
+
+  // 选关 → 单副结算 → 百宝阁 → 选牌种 → 下一关选关
   await setViewport(client, VIEWPORTS.at(-1));
   await client.send('Page.navigate', { url });
   await waitForPage(client);
   await startCurrentBlind(client, 'settlement-flow');
   await evaluate(client, INSTALL_AUTOPLAY);
   const handsPerBlind = await evaluate(client, 'globalThis.__tianhu.app.state.handCount');
-  assert.equal(handsPerBlind, 2, '当前每关应当打两副');
+  assert.equal(handsPerBlind, 1, '当前每关应当只打一副');
   for (let index = 0; index < handsPerBlind; index += 1) {
     const status = await evaluate(client, 'globalThis.__autoHand(0)');
     assert.ok(['hand-won', 'hand-failed'].includes(status), `第 ${index + 1} 副异常状态 ${status}`);
@@ -732,7 +785,7 @@ try {
   }
 
   const shop = await evaluate(client, METRICS_EXPRESSION);
-  assert.equal(shop.screenTitle, '百宝阁', '两副过关后进入百宝阁');
+  assert.equal(shop.screenTitle, '百宝阁', '单副过关后进入百宝阁');
   for (const viewport of [VIEWPORTS[2], VIEWPORTS[1]]) {
     await setViewport(client, viewport);
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));

@@ -72,6 +72,7 @@ interface PlatformAdapter {
 - 原生 ES Module + JSDoc，零依赖；不引入 TypeScript 与打包器，等内容规模或协作人数上来再迁移。
 - 保留像素 Canvas 牌面渲染器：34 个牌种运行时自绘并缓存，零外部请求。
 - 内容配置就是 `src/content/` 下的纯数据模块，不额外引入 JSON 或代码生成。
+- 五系功能卡由 `src/content/library.mjs` 的单一 `CONTENT_LIBRARY` 管理；抽签、商店、计分和百牌谱共用同一数据对象。下架使用 `enabled: false`，无存档迁移不硬删 id。见 `decisions/0018-unified-content-library.md`。
 - 结算流水线输出有序 steps，动画照着播，不参与算分。
 - 存档存完整手内状态 + `schemaVersion`，不用 seed 重放。
 

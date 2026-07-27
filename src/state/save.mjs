@@ -45,6 +45,7 @@ export function serializeRun(run) {
     deckId: run.deckId,
     status: run.status,
     anteIndex: run.anteIndex,
+    activeAnteCount: run.activeAnteCount,
     blindKind: run.blindKind,
     handIndex: run.handIndex,
     clearedBlinds: run.clearedBlinds,
@@ -115,8 +116,18 @@ export function restoreRun(run, data) {
   run.deckId = save.deckId ?? 'plain';
   run.status = save.status;
   run.anteIndex = save.anteIndex;
+  const standardAnteCount = Math.min(
+    run.antes.length,
+    Math.max(1, run.baseline.standardAnteCount ?? run.antes.length),
+  );
+  run.activeAnteCount = Number.isInteger(save.activeAnteCount)
+    ? Math.min(run.antes.length, Math.max(standardAnteCount, save.activeAnteCount))
+    : (save.anteIndex >= standardAnteCount ? run.antes.length : standardAnteCount);
   run.blindKind = save.blindKind;
-  run.handIndex = save.handIndex;
+  run.handIndex = Math.min(
+    Math.max(0, Number.isInteger(save.handIndex) ? save.handIndex : 0),
+    Math.max(0, run.currentAnte().handsPerBlind - 1),
+  );
   run.clearedBlinds = save.clearedBlinds ?? 0;
   run.blindOutcomes = { ...save.blindOutcomes };
   run.bossIds = [...save.bossIds];

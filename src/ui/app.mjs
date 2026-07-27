@@ -21,6 +21,7 @@ import {
   showBlindSelect,
   showDeckSelect,
   showHelp,
+  showLibrary,
   showSettings,
   showTitle,
 } from './screens.mjs';
@@ -72,6 +73,8 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   let lastScreenStatus = null;
   let screenQueue = Promise.resolve();
   let hasSave = false;
+  // 胡牌那一瞬间就置位：结算动画播完之前，谁都不许把结果屏盖上来
+  let settlementPending = false;
   let draftFocusToken = null;
   let draftReturnFocus = null;
   const timeline = new Timeline();
@@ -705,21 +708,30 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       await timeline.wait(step.source === 'pattern' ? 260 : 190);
     }
 
+    // 收尾三拍：先把乘式砸出来，再滚总分，最后让数字落地停一下
     banner.hidden = false;
     banner.textContent = `${result.chips} × ${result.mult}`;
     pulse(banner, 'slamIn', 380);
+    sfx.mult(9);
+    await timeline.wait(320);
+
     sfx.hu();
     haptic();
     shake($('#app'), Math.min(3, result.score / 900));
-    await countUp(0, result.score, timeline.skipped ? 0 : 620 / (timeline.speed || 1), (value) => {
+    await countUp(0, result.score, timeline.skipped ? 0 : 700 / (timeline.speed || 1), (value) => {
       setPixelText($('#totalBox'), value, 14, '#f0c04a', '#3a2c06', textScale());
     });
+
+    // 落地：总分弹一下、番种名压上来、金币飞进钱包
+    banner.textContent = `${result.patterns.join(' · ')} ${result.score}`;
+    pulse(banner, 'slamIn', 380);
+    pulse($('#totalBox'), 'pulse', 320);
     floatText($('#totalBox'), `+${result.score}`, 'gold', layer);
     if (result.gold) {
       sfx.coin();
       floatText($('#goldV'), `+${result.gold} 金`, 'gold', layer);
     }
-    await timeline.wait(420);
+    await timeline.wait(780);
     return true;
   }
 
@@ -817,8 +829,9 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
   function showRunComplete() {
     const box = makeScreen();
-    box.append(el('div', 'title sh', '通关'));
-    box.append(el('div', 'subtitle', `三圈总分 ${state.totalScore} · 剩余 ${state.gold} 金`));
+    box.append(el('div', 'title sh', state.challengeActive ? '西圈制霸' : '短局通关'));
+    box.append(el('div', 'subtitle',
+      `${state.challengeActive ? '三圈加赛' : '东南两圈'}总分 ${state.totalScore} · 剩余 ${state.gold} 金`));
     const list = el('div', 'lineList');
     for (const blind of state.completedBlinds) {
       const line = el('div', 'lineItem');
@@ -828,13 +841,18 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     }
     box.append(list);
     const buttons = el('div', 'rowBtns');
+    if (state.challengeAvailable) {
+      const challenge = el('button', 'btn red big', '进入西圈加赛 CHALLENGE');
+      challenge.addEventListener('click', () => { closeScreen(); run.continueChallenge(); });
+      buttons.append(challenge);
+    }
     const again = el('button', 'btn green big', '再来一局 PLAY AGAIN');
     again.addEventListener('click', () => startRun({ deckId: settings.deckId }));
     const title = el('button', 'btn grey', '返回标题');
     title.addEventListener('click', () => openTitle());
     buttons.append(again, title);
     box.append(buttons);
-    again.focus();
+    buttons.querySelector('button')?.focus();
     adapter.submitScore?.(state.totalScore);
   }
 
@@ -978,6 +996,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       onDeck: () => openDeckSelect(),
       onSettings: () => openSettings(openTitle),
       onHelp: () => showHelp({ state: state ?? previewState(), onBack: openTitle }),
+      onLibrary: () => showLibrary({ onBack: openTitle }),
     });
   }
 
@@ -1049,7 +1068,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   };
 
   function ensureScreen() {
-    if (locked || $('#screen')) return;
+    if (locked || settlementPending || $('#screen')) return;
     SCREEN_BY_STATUS[state.status]?.();
   }
 
@@ -1060,7 +1079,11 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     screenQueue = screenQueue.then(async () => {
       if (status !== state.status) return;
       if (status === 'hand-won') {
-        if (state.lastHandResult?.steps?.length) await playSettlement(state.lastHandResult);
+        try {
+          if (state.lastHandResult?.steps?.length) await playSettlement(state.lastHandResult);
+        } finally {
+          settlementPending = false;
+        }
         if (state.status === 'hand-won') showHandResult();
         return;
       }
@@ -1078,6 +1101,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     }).catch((error) => {
       console.error('[tianhu] 界面出错', error);
       locked = false;
+      settlementPending = false;
       timeline.end();
       ensureScreen();
     });
@@ -1124,6 +1148,9 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     $('#btnHu').addEventListener('click', doHu);
     $('#btnHelp').addEventListener('click', () => showHelp({
       state: state ?? previewState(),
+      onBack: () => { closeScreen(); ensureScreen(); },
+    }));
+    $('#btnLibrary').addEventListener('click', () => showLibrary({
       onBack: () => { closeScreen(); ensureScreen(); },
     }));
     $('#btnRestart').addEventListener('click', () => openTitle());
@@ -1207,6 +1234,12 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     lastScreenStatus = silent ? state.status : null;
     unsubscribe = run.subscribe((next) => {
       const previous = state?.status;
+      // renderAll 会调 ensureScreen，所以闸门必须在渲染之前就立起来
+      if (next.status === 'hand-won' && previous !== 'hand-won' && next.lastHandResult?.steps?.length) {
+        settlementPending = true;
+      } else if (next.status !== 'hand-won') {
+        settlementPending = false;
+      }
       state = next;
       renderAll();
       syncScreens(previous);

@@ -99,6 +99,34 @@ test('南西圈三张牌墙预览在存档恢复后保持不变', () => {
   assert.equal(legacyV4.previewCount, 3, '旧 v4 存档按圈数补出预览张数');
 });
 
+test('短局圈数往返，并让已经进入西圈的旧 v4 存档继续加赛', () => {
+  const run = new Run({ seed: 20260726 });
+  const saved = serializeRun(run);
+  assert.equal(saved.activeAnteCount, 2);
+
+  const restored = new Run({ seed: 1 });
+  assert.equal(restoreRun(restored, clone(saved)).ok, true);
+  assert.equal(restored.activeAnteCount, 2);
+
+  delete saved.activeAnteCount;
+  saved.anteIndex = 2;
+  const oldWestRun = new Run({ seed: 1 });
+  assert.equal(restoreRun(oldWestRun, clone(saved)).ok, true);
+  assert.equal(oldWestRun.activeAnteCount, 3);
+});
+
+test('旧两副制存档恢复时不会显示第 2/1 副', () => {
+  const saved = serializeRun(new Run({ seed: 20260726 }));
+  delete saved.activeAnteCount;
+  saved.handIndex = 1;
+
+  const restored = new Run({ seed: 1 });
+  assert.equal(restoreRun(restored, clone(saved)).ok, true);
+  assert.equal(restored.handIndex, 0);
+  assert.equal(restored.snapshot().handNumber, 1);
+  assert.equal(restored.snapshot().handCount, 1);
+});
+
 test('v1 → v2 迁移：tileMods 拆成 bones 与 seals', () => {
   const run = buildRun();
   const data = serializeRun(run);

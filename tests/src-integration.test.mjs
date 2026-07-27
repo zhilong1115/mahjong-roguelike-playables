@@ -5,7 +5,7 @@ import { ANTES, CONFIG, getItem } from '../src/content/index.mjs';
 import { Run } from '../src/core/run.mjs';
 import { playHand } from './helpers/auto-play.mjs';
 
-/** 固定 seed 打完整局：三圈 × 三关 × 两副，每个过关点进入百宝阁。 */
+/** 固定 seed 打标准短局：东南两圈 × 三关 × 一副，每个过关点进入百宝阁。 */
 function playRun(seed, { revealTarget = 0, buy = true } = {}) {
   const run = new Run({ seed });
   const log = [];

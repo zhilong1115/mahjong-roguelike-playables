@@ -1,3 +1,5 @@
+import { listContentItems, pickContentItem } from './library.mjs';
+
 /**
  * 灵签内容与求签选池。
  *
@@ -23,140 +25,8 @@ export const OMEN_IDS = Object.freeze({
   extraChoice: 'extraChoice',
 });
 
-/** @param {object} spec */
-function charm(spec) {
-  const draftRole = spec.draftRole ?? spec.role;
-  return Object.freeze({
-    family: 'charm',
-    duration: '本副',
-    match: null,
-    tier: 'silver',
-    functionRole: spec.omen ? 'omen' : 'momentum',
-    ...spec,
-    // `role` 暂时保留，旧 UI / 测试仍把它当作 draftRole 使用。
-    role: draftRole,
-    draftRole,
-    effects: Object.freeze(spec.effects ?? []),
-    omen: spec.omen ? Object.freeze({ ...spec.omen }) : null,
-  });
-}
-
-export const CHARMS = Object.freeze({
-  tailwind: charm({
-    id: 'tailwind',
-    name: '顺风签',
-    glyph: '顺',
-    role: 'group',
-    match: ['chow'],
-    tier: 'silver',
-    text: '本副每个顺子 +20 牌值。',
-    effects: [{ kind: 'chipsPerGroup', groupKinds: ['chow'], value: 20 }],
-  }),
-  carving: charm({
-    id: 'carving',
-    name: '刻福签',
-    glyph: '刻',
-    role: 'group',
-    match: ['pung', 'kong'],
-    tier: 'silver',
-    text: '本副每个刻子或杠 +28 牌值。',
-    effects: [{ kind: 'chipsPerGroup', groupKinds: ['pung', 'kong'], value: 28 }],
-  }),
-  doubleJoy: charm({
-    id: 'doubleJoy',
-    name: '双喜签',
-    glyph: '喜',
-    role: 'group',
-    match: ['pair'],
-    tier: 'silver',
-    text: '本副每个对子 +20 牌值。',
-    effects: [{ kind: 'chipsPerGroup', groupKinds: ['pair'], value: 20 }],
-  }),
-  dragonVein: charm({
-    id: 'dragonVein',
-    name: '龙脉签',
-    glyph: '龙',
-    role: 'pattern',
-    match: ['chow'],
-    tier: 'gold',
-    text: '本副顺子达到 3 组时，番势 +1。',
-    effects: [{ kind: 'multIfGroupCount', groupKinds: ['chow'], min: 3, value: 1 }],
-  }),
-  honorSeal: charm({
-    id: 'honorSeal',
-    name: '镇字签',
-    glyph: '字',
-    role: 'pattern',
-    tier: 'silver',
-    text: '本副每张字牌 +9 牌值。',
-    effects: [{ kind: 'chipsPerTile', suit: 'honor', value: 9 }],
-  }),
-  doubleBless: charm({
-    id: 'doubleBless',
-    name: '倍喜签',
-    glyph: '倍',
-    role: 'wild',
-    tier: 'gold',
-    text: '本副番势 +1。',
-    effects: [{ kind: 'multFlat', value: 1 }],
-  }),
-  wealth: charm({
-    id: 'wealth',
-    name: '财神签',
-    glyph: '财',
-    role: 'wild',
-    functionRole: 'omen',
-    tier: 'silver',
-    text: '立刻 +1 待结算金币。',
-    effects: [{ kind: 'goldNow', value: 1 }],
-  }),
-  reserve: charm({
-    id: 'reserve',
-    name: '余裕签',
-    glyph: '余',
-    role: 'wild',
-    tier: 'silver',
-    text: '胡牌时每个剩余换牌 +20 牌值。',
-    effects: [{ kind: 'chipsPerRemainingSwap', value: 20 }],
-  }),
-  luckyOmen: charm({
-    id: 'luckyOmen',
-    name: '鸿运签',
-    glyph: '鸿',
-    role: 'wild',
-    functionRole: 'omen',
-    tier: 'gold',
-    duration: '本局',
-    text: '留下鸿运兆：本局下一次求签至少出现 1 张金签，该位有 15% 升为彩签；应验后消耗。',
-    omen: { omenId: OMEN_IDS.luckyTier, consumeOn: 'nextCharmDraft' },
-    effects: [],
-  }),
-  wideOmen: charm({
-    id: 'wideOmen',
-    name: '广缘签',
-    glyph: '广',
-    role: 'wild',
-    functionRole: 'omen',
-    tier: 'gold',
-    duration: '本局',
-    text: '留下广缘兆：本局下一次求签改为四选一，仍然只能选 1 张；应验后消耗。',
-    omen: { omenId: OMEN_IDS.extraChoice, consumeOn: 'nextCharmDraft' },
-    effects: [],
-  }),
-  rainbowBless: charm({
-    id: 'rainbowBless',
-    name: '虹福签',
-    glyph: '虹',
-    role: 'wild',
-    functionRole: 'omen',
-    functionRole: 'omen',
-    tier: 'rainbow',
-    text: '本副番势 +1，立刻 +1 待结算金币。',
-    effects: [{ kind: 'multFlat', value: 1 }, { kind: 'goldNow', value: 1 }],
-  }),
-});
-
-export const CHARM_LIST = Object.freeze(Object.values(CHARMS));
+export const CHARM_LIST = Object.freeze(listContentItems('charm', { pool: 'charm-draft' }));
+export const CHARMS = Object.freeze(Object.fromEntries(CHARM_LIST.map((item) => [item.id, item])));
 
 const TIER_FALLBACKS = Object.freeze({
   silver: Object.freeze(['silver']),
@@ -239,7 +109,7 @@ export function draftCharmOffers(rng, revealedKind, {
       excludeCharmIds,
     }).filter((item) => item.tier === tier && !chosen.some((picked) => picked.id === item.id));
     if (!pool.length) break;
-    chosen.push(rng.pick(pool));
+    chosen.push(pickContentItem(rng, pool));
   }
 
   return chosen.map((item, index) => Object.freeze({

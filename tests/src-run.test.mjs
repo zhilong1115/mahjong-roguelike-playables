@@ -128,6 +128,9 @@ test('灵签只在本副生效，下一副清空', () => {
   playHand(run, { revealTarget: 1 });
   assert.ok(run.charmIds.length >= 1);
   run.advance();
+  assert.equal(run.status, 'shop');
+  run.leaveShop();
+  startSelectedBlind(run);
   assert.deepEqual(run.charmIds, []);
   assert.deepEqual(run.revealedGroups, []);
   assert.equal(run.swapsRemaining, CONFIG.swapsPerHand);
@@ -274,7 +277,7 @@ test('福将占将位，位满不能再买', () => {
   assert.match(result.reason, /将位/);
 });
 
-test('两副达标金币入账，未达标不入账且重试会清空本关进度', () => {
+test('单副达标金币入账，未达标不入账且重试会清空本关进度', () => {
   const run = runToShop();
   assert.equal(run.pendingGold, 0);
   assert.equal(run.gold, CONFIG.startingGold + run.completedBlinds[0].banked);
@@ -295,17 +298,14 @@ test('两副达标金币入账，未达标不入账且重试会清空本关进�
   assert.equal(failing.selectBlind().ok, true);
 });
 
-test('流局只吃掉本副，之前的分数保留', () => {
+test('单副流局直接结束本关且不入账', () => {
   const run = startSelectedBlind(new Run({ seed: SEED }));
-  playHand(run);
-  const firstScore = run.blindScore;
-  assert.ok(firstScore > 0);
-  run.advance();
   run.swapsRemaining = 0;
   run.refreshStatus();
   if (run.status === 'hand-failed') {
     run.advance();
-    assert.equal(run.blindScore, firstScore);
+    assert.equal(run.status, 'run-over');
+    assert.equal(run.gold, CONFIG.startingGold);
   }
 });
 
@@ -329,7 +329,7 @@ test('签气在下一关首副发牌后消耗', () => {
   assert.ok(!run.tags.includes('charm'));
 });
 
-test('顺气覆盖整关两副，并在本关结束后消耗', () => {
+test('顺气覆盖整关一副，并在本关结束后消耗', () => {
   const run = new Run({ seed: SEED });
   run.applyTag('swap');
   assert.ok(run.tags.includes('swap'));
@@ -343,6 +343,51 @@ test('顺气覆盖整关两副，并在本关结束后消耗', () => {
   assert.equal(run.status, 'shop');
   assert.equal(run.pendingExtraSwaps, 0);
   assert.ok(!run.tags.includes('swap'));
+});
+
+test('标准局六关五店，通关后可进入西圈三关加赛', () => {
+  const run = new Run({ seed: SEED });
+  let standardClears = 0;
+  let standardShops = 0;
+
+  while (run.status !== 'run-complete') {
+    assert.equal(run.status, 'blind-select');
+    run.selectBlind();
+    run.blindScore = run.blindTarget();
+    run.status = 'hand-won';
+    run.advance();
+    standardClears += 1;
+    if (run.status === 'shop') {
+      standardShops += 1;
+      run.leaveShop();
+    }
+  }
+
+  assert.equal(standardClears, 6);
+  assert.equal(standardShops, 5);
+  assert.equal(run.snapshot().challengeAvailable, true);
+  assert.equal(run.continueChallenge().ok, true);
+  assert.equal(run.anteIndex, 2);
+  assert.equal(run.status, 'blind-select');
+
+  let challengeClears = 0;
+  let challengeShops = 0;
+  while (run.status !== 'run-complete') {
+    run.selectBlind();
+    run.blindScore = run.blindTarget();
+    run.status = 'hand-won';
+    run.advance();
+    challengeClears += 1;
+    if (run.status === 'shop') {
+      challengeShops += 1;
+      run.leaveShop();
+    }
+  }
+
+  assert.equal(challengeClears, 3);
+  assert.equal(challengeShops, 2);
+  assert.equal(run.snapshot().challengeAvailable, false);
+  assert.equal(run.continueChallenge().ok, false);
 });
 
 test('免单气在免费购买第一件商品后消耗', () => {
