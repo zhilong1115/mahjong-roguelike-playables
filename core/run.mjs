@@ -1,9 +1,9 @@
 /**
- * 一局（Run）的状态机。结构见 docs/decisions/0013：
+ * 一局（Run）的状态机。结构见 docs/decisions/0017：
  *
- *   一局 = 三圈（东 / 南 / 西）
+ *   标准局 = 东 / 南两圈；西圈可在通关后选择加赛
  *   一圈 = 三关（闲局 / 庄局 / 圈主）
- *   一关 = 2 副牌打一个累计目标，过关进百宝阁
+ *   一关 = 1 副牌打一个目标，过关进百宝阁
  *
  * 状态：
  *   blind-select 选关屏：三关并排，闲庄可跳
@@ -15,7 +15,7 @@
  *   blind-cleared 本关达标
  *   shop         百宝阁
  *   run-over     本关未达标，本局结束
- *   run-complete 三圈通关
+ *   run-complete 标准局或加赛通关
  *
  * 只处理规则与状态，不碰 DOM。
  */
@@ -33,6 +33,7 @@ import {
   blindIndexOf,
   getItem,
   listItems,
+  pickContentItem,
   pickBoss,
   rollTag,
   shelfFor,
@@ -118,6 +119,10 @@ export class Run {
     this.suitBias = null;
 
     this.anteIndex = 0;
+    this.activeAnteCount = Math.min(
+      this.antes.length,
+      Math.max(1, this.baseline.standardAnteCount ?? this.antes.length),
+    );
     this.blindKind = 'small';
     this.handIndex = 0;
     this.clearedBlinds = 0;
@@ -290,9 +295,9 @@ export class Run {
       this.status = 'blind-select';
       return;
     }
-    if (this.anteIndex >= this.antes.length - 1) {
+    if (this.anteIndex >= this.activeAnteCount - 1) {
       this.status = 'run-complete';
-      this.pendingOmen = null;
+      if (this.activeAnteCount >= this.antes.length) this.pendingOmen = null;
       this.lastEvent = { type: 'run-complete', text: `通关！总分 ${this.totalScore}` };
       return;
     }
@@ -660,7 +665,7 @@ export class Run {
     if (this.emptySlots() > 0) return true;
     if (this.handIndex < this.currentAnte().handsPerBlind - 1) return true;
     const blindIndex = BLIND_ORDER.indexOf(this.blindKind);
-    return this.anteIndex < this.antes.length - 1 || blindIndex < BLIND_ORDER.length - 1;
+    return this.anteIndex < this.activeAnteCount - 1 || blindIndex < BLIND_ORDER.length - 1;
   }
 
   draftSeed(slotIndex, salt, rollIndex = 0) {
@@ -1063,9 +1068,9 @@ export class Run {
     this.tags = this.tags.filter((tagId) => tagId !== 'swap');
 
     const wasLastBlind = this.blindKind === BLIND_ORDER.at(-1);
-    if (wasLastBlind && this.anteIndex >= this.antes.length - 1) {
+    if (wasLastBlind && this.anteIndex >= this.activeAnteCount - 1) {
       this.status = 'run-complete';
-      this.pendingOmen = null;
+      if (this.activeAnteCount >= this.antes.length) this.pendingOmen = null;
       this.lastEvent = { type: 'run-complete', text: `通关！总分 ${this.totalScore}`, banked };
       this.emit();
       return { ok: true, status: this.status };
@@ -1081,6 +1086,23 @@ export class Run {
   /** 本局结束后重开一局（同牌组）。 */
   restart(seed = Math.floor(Math.random() * 1e9)) {
     return this.start(seed, this.deckId);
+  }
+
+  /** 标准短局通关后进入剩余圈数；当前即西圈三关。 */
+  continueChallenge() {
+    if (this.status !== 'run-complete' || this.activeAnteCount >= this.antes.length) {
+      return { ok: false, reason: '现在没有可进入的加赛' };
+    }
+    this.activeAnteCount = this.antes.length;
+    this.anteIndex += 1;
+    this.blindKind = BLIND_ORDER[0];
+    this.handIndex = 0;
+    this.resetBlindProgress();
+    this.clearHand();
+    this.status = 'blind-select';
+    this.lastEvent = { type: 'challenge', text: `进入${this.currentAnte().name}加赛` };
+    this.emit();
+    return { ok: true, status: this.status };
   }
 
   /** 试玩用：本关重来一次，不清空已入账金币与构筑。 */
@@ -1107,7 +1129,7 @@ export class Run {
     const items = shelf.map((family, slotIndex) => {
       const pool = this.shopPool(family);
       if (!pool.length) return null;
-      const item = pool[rng.int(pool.length)];
+      const item = pickContentItem(rng, pool);
       return { slotIndex, family, id: item.id, price: item.price, sold: false };
     }).filter(Boolean);
     return { rerolls, items, pending: null };
@@ -1252,7 +1274,10 @@ export class Run {
 
       anteIndex: this.anteIndex,
       anteNumber: this.anteIndex + 1,
-      anteCount: this.antes.length,
+      anteCount: this.activeAnteCount,
+      challengeAvailable: this.status === 'run-complete' && this.activeAnteCount < this.antes.length,
+      challengeActive: this.activeAnteCount >= this.antes.length
+        && this.anteIndex >= (this.baseline.standardAnteCount ?? 2),
       ante,
       blindKind: this.blindKind,
       blind: BLIND_KINDS[this.blindKind],

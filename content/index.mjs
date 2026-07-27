@@ -1,6 +1,6 @@
 /** 内容注册表：所有内容与关卡结构的统一入口。 */
 
-import { ANTES, BLIND_KINDS, BLIND_ORDER, blindIndexOf } from './antes.mjs';
+import { ANTES, BLIND_KINDS, BLIND_ORDER, STANDARD_ANTE_COUNT, blindIndexOf } from './antes.mjs';
 import { BONES, BONE_LIST } from './bones.mjs';
 import { BOSSES, BOSS_LIST, pickBoss } from './bosses.mjs';
 import { CHARMS, CHARM_LIST, draftCharms } from './charms.mjs';
@@ -8,12 +8,22 @@ import { CODEX, CODEX_BY_PATTERN, CODEX_CHIPS_PER_LEVEL, CODEX_LIST, CODEX_MAX_L
 import { DECKS, DECK_LIST, TILE_BACKS } from './decks.mjs';
 import { FAMILIES, FAMILY_ORDER } from './families.mjs';
 import { GENERALS, GENERAL_LIST } from './generals.mjs';
+import {
+  CONTENT_COUNTS,
+  CONTENT_LIBRARY,
+  CONTENT_POOLS,
+  CONTENT_STATUSES,
+  getContentItem,
+  listContentItems,
+  pickContentItem,
+  validateContentLibrary,
+} from './library.mjs';
 import { PAPERS, PAPER_LIST } from './papers.mjs';
 import { SEALS, SEALS_BY_TRIGGER, SEAL_LIST } from './seals.mjs';
 import { TAGS, TAG_LIST, rollTag } from './tags.mjs';
 
 export {
-  ANTES, BLIND_KINDS, BLIND_ORDER, blindIndexOf,
+  ANTES, BLIND_KINDS, BLIND_ORDER, STANDARD_ANTE_COUNT, blindIndexOf,
   BONES, BONE_LIST,
   BOSSES, BOSS_LIST, pickBoss,
   CHARMS, CHARM_LIST, draftCharms,
@@ -21,6 +31,7 @@ export {
   DECKS, DECK_LIST, TILE_BACKS,
   FAMILIES, FAMILY_ORDER,
   GENERALS, GENERAL_LIST,
+  CONTENT_COUNTS, CONTENT_LIBRARY, CONTENT_POOLS, CONTENT_STATUSES, pickContentItem, validateContentLibrary,
   PAPERS, PAPER_LIST,
   SEALS, SEALS_BY_TRIGGER, SEAL_LIST,
   TAGS, TAG_LIST, rollTag,
@@ -28,6 +39,7 @@ export {
 
 /** 玩法参数。全部是试玩实验值，改这里就能重新标定。 */
 export const CONFIG = Object.freeze({
+  standardAnteCount: STANDARD_ANTE_COUNT,
   fortuneSlots: 6,
   /** 每副的换牌**次数**；一次可以换多张 */
   swapsPerHand: 5,
@@ -55,11 +67,6 @@ export const CONFIG = Object.freeze({
 });
 
 const REGISTRY = Object.freeze({
-  charm: CHARMS,
-  codex: CODEX,
-  general: GENERALS,
-  bone: BONES,
-  seal: SEALS,
   paper: PAPERS,
   deck: DECKS,
   boss: BOSSES,
@@ -71,10 +78,11 @@ const REGISTRY = Object.freeze({
  * @param {string} id
  */
 export function getItem(family, id) {
-  return REGISTRY[family]?.[id] ?? null;
+  return getContentItem(family, id) ?? REGISTRY[family]?.[id] ?? null;
 }
 
-export function listItems(family) {
+export function listItems(family, options = {}) {
+  if (FAMILIES[family]) return listContentItems(family, options);
   return Object.values(REGISTRY[family] ?? {});
 }
 

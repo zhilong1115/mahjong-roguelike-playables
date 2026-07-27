@@ -268,6 +268,25 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .famLine{display:flex;align-items:center;gap:6px;margin:3px 0;}
 .famDot{width:10px;height:10px;border-radius:2px;flex:0 0 10px;}
 
+/* 百牌谱：五系内容库的游戏内视图 */
+.libraryScreen .screenBox{width:min(900px,94vw);display:flex;flex-direction:column;overflow:hidden;}
+.libraryTabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;}
+.libraryTab{min-height:48px;min-width:112px;cursor:pointer;}
+.libraryTab.active{background:#d0a42f;color:#251b08;box-shadow:0 3px 0 #6b4815,inset 0 0 0 2px #ffe08a;}
+.libraryTab:focus-visible{outline:3px solid #fff;outline-offset:2px;}
+.libraryGrid{
+  flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));
+  gap:9px;padding:4px 5px 8px;align-content:start;
+}
+.libraryCard{min-height:158px;padding:9px 7px;gap:5px;justify-content:flex-start;}
+.libraryCard .cName{font-size:13px;}
+.libraryCard .cText{font-size:10px;line-height:1.45;flex:1;display:flex;align-items:center;}
+.libraryCard .cMeta{font-size:9px;text-align:center;}
+.libraryStatus{
+  position:absolute;top:5px;right:5px;border:1px solid rgba(255,255,255,.32);border-radius:3px;
+  background:rgba(0,0,0,.28);color:#f7e9ba;font-size:8px;padding:1px 4px;
+}
+
 #shopGrid{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
 .shopCard{width:136px;padding:8px 6px;cursor:pointer;gap:4px;}
 .shopCard:hover{transform:translateY(-6px);}
@@ -449,6 +468,15 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .blindChip{width:38px;height:38px;font-size:18px;}
   .blindCard .cText{min-height:22px;font-size:9px;}
   .deckCard{width:126px;}
+  .libraryScreen .screenBox{padding:8px 10px;}
+  .libraryScreen .title{font-size:18px;}
+  .libraryScreen .subtitle{margin-bottom:5px;}
+  .libraryTabs{gap:4px;margin-bottom:5px;flex-wrap:nowrap;}
+  .libraryTab{min-width:0;min-height:44px;flex:1;padding:5px 3px;font-size:9px;}
+  .libraryGrid{grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:6px;}
+  .libraryCard{min-height:118px;padding:5px;}
+  .libraryCard .cText{font-size:8px;line-height:1.3;}
+  .libraryScreen .rowBtns{margin-top:5px;}
   #bossBanner{max-width:44%;padding:3px 6px;}
   #deckPile{display:none;}
   #draftPanel{width:min(700px,100%);padding:7px;}
@@ -484,6 +512,9 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #draftCards,#draftLayer[data-offer-count="4"] #draftCards{grid-template-columns:repeat(2,minmax(0,1fr));}
   #draftLayer[data-offer-count="3"] .charmPick:last-child{grid-column:1 / -1;width:calc(50% - 3px);justify-self:center;}
   .charmPick{min-height:128px;}
+  .libraryTabs{justify-content:center;flex-wrap:wrap;overflow:visible;padding:2px;}
+  .libraryTab{min-width:96px;flex:1 1 28%;}
+  .libraryGrid{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 
 @media (max-width:420px){
@@ -501,6 +532,9 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #draftCards{gap:6px;}
   .charmPick{min-height:122px;padding:5px 3px;}
   .shopCard{width:110px;}
+  .libraryCard{min-height:150px;padding:7px 5px;}
+  .libraryCard .cName{font-size:11px;}
+  .libraryCard .cText{font-size:9px;}
   /* 窄竖屏要让回合面板和计分面板挤在同一行，否则牌桌会被压没 */
   #roundPanel{flex:1 1 140px;}
   #scorePanel{flex:1 1 118px;}
