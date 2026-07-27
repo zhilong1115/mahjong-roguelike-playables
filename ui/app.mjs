@@ -116,7 +116,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   }
 
   function cardNode(family, item, {
-    className = '', meta = '', showText = true, interactive = false,
+    className = '', meta = '', showText = true, interactive = false, sealScale = 1,
   } = {}) {
     const info = FAMILIES[family] ?? {
       name: family === 'paper' ? '牌帖' : family,
@@ -127,7 +127,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     const node = el(interactive ? 'button' : 'div', `card family-${family} ${className}`.trim());
     if (interactive) node.type = 'button';
     node.dataset.card = `${family}:${item.id}`;
-    node.append(createSealCanvas(item.glyph ?? info.glyph, { family, scale: 1 }));
+    node.append(createSealCanvas(item.glyph ?? info.glyph, { family, scale: sealScale }));
     node.append(el('div', 'cName', item.name));
     if (showText) node.append(el('div', 'cText', item.text ?? ''));
     node.append(el('div', 'cMeta', meta || `${info.name} · ${item.duration ?? info.duration}`));
@@ -486,6 +486,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         className: `charmPick tier-${tier}`,
         meta: `${index + 1} · ${durationMeta}`,
         interactive: true,
+        sealScale: 2,
       });
       node.dataset.offerId = offer.offerId;
       node.dataset.tier = tier;
@@ -877,6 +878,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       const card = cardNode(offer.family, item, {
         className: `shopCard${offer.sold ? ' sold' : affordable ? '' : ' cant'}`,
         meta: `${info.name} · ${item.duration ?? info.duration}`,
+        sealScale: 2,
       });
       card.prepend(el('div', 'price', price === 0 ? '免费' : `${offer.price} 金`));
       card.append(el('div', 'famTag', info.subtitle ?? '改牌组'));

@@ -13,7 +13,12 @@ import {
   getItem,
   listItems,
 } from '../content/index.mjs';
-import { createSealCanvas, createTileBackCanvas, createTileCanvas, pixelText } from '../render/pixel.mjs';
+import {
+  createLogoCanvas,
+  createSealCanvas,
+  createTileBackCanvas,
+  createTileCanvas,
+} from '../render/pixel.mjs';
 
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -46,12 +51,32 @@ export function closeScreen() {
 
 /* ---------------- 开始界面 ---------------- */
 
+/** 标题页专属背景：牌桌绒面 + 回纹 + 一排牌墙，和局内界面区分开。 */
+function titleBackdrop(back) {
+  const stage = el('div', 'titleBg');
+  stage.setAttribute('aria-hidden', 'true');
+  stage.append(el('div', 'titleGrain'));
+  const mark = el('div', 'titleMark', '麻');
+  stage.append(mark);
+  const wall = el('div', 'titleWall');
+  for (let index = 0; index < 24; index += 1) {
+    const tile = createTileBackCanvas(back, 2);
+    tile.style.setProperty('--i', String(index));
+    wall.append(tile);
+  }
+  stage.append(wall);
+  return stage;
+}
+
 export function showTitle({ deckId, hasSave, onStart, onContinue, onDeck, onSettings, onHelp, onLibrary }) {
   const box = makeScreen('titleScreen');
+  const deck = getItem('deck', deckId);
+  box.parentElement.prepend(titleBackdrop(deck?.back ?? 'plain'));
+
   const logo = el('div', 'titleLogo');
-  logo.append(pixelText('天胡', 22, '#f0c04a', '#7a3020', 0, 3));
+  logo.append(createLogoCanvas(3));
   box.append(logo);
-  box.append(el('div', 'subtitle', 'TIANHU · 麻将构筑肉鸽'));
+  box.append(el('div', 'subtitle titleTagline', '麻将构筑肉鸽 · 亮组求签 · 一路胡到西圈'));
 
   const fan = el('div', 'titleFan');
   for (const [suit, rank] of [['man', 1], ['pin', 5], ['sou', 1], ['honor', 5], ['honor', 6]]) {
@@ -64,7 +89,7 @@ export function showTitle({ deckId, hasSave, onStart, onContinue, onDeck, onSett
   menu.append(button(`btn ${hasSave ? 'play' : 'green'} big`, '开始新局 NEW RUN', onStart));
   const row = el('div', 'rowBtns');
   row.append(
-    button('btn grey', `牌组：${getItem('deck', deckId)?.name ?? '素面'}`, onDeck),
+    button('btn grey', `牌组：${deck?.name ?? '素面'}`, onDeck),
     button('btn grey libraryOpen', '百牌谱', onLibrary),
     button('btn grey', '设置', onSettings),
     button('btn grey', '玩法', onHelp),
@@ -103,7 +128,7 @@ export function showLibrary({ initialFamily = 'charm', onBack }) {
     for (const item of listItems(family)) {
       const card = el('article', `card libraryCard family-${family}`);
       card.dataset.libraryCard = `${family}:${item.id}`;
-      card.append(createSealCanvas(item.glyph ?? FAMILIES[family].glyph, { family, scale: 1 }));
+      card.append(createSealCanvas(item.glyph ?? FAMILIES[family].glyph, { family, scale: 2 }));
       card.append(el('div', 'cName', item.name));
       card.append(el('div', 'cText', item.text));
       let meta = `${FAMILIES[family].name} · ${item.duration}`;
