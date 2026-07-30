@@ -164,8 +164,8 @@ function cutCorners(context, width, height) {
  */
 const TILE_MATERIALS = Object.freeze({
   ivory: {
-    face: '#f6edda', faceLow: '#e0d3b8', high: '#fffdf1', low: '#b7a98c',
-    edge: '#695b43', plate: '#2d8063', plateLow: '#174c3b', mark: null, grain: '#efe5cf',
+    face: '#eee2c6', faceLow: '#d4c19d', high: '#fff8e8', low: '#a89879',
+    edge: '#524331', plate: '#688b74', plateLow: '#314f42', mark: null, grain: '#c8b998',
   },
   // 温玉骨：整张牌是半透的玉料，面色发青白
   warmJade: {
@@ -203,10 +203,10 @@ function tileBody(context, dim, material = 'ivory') {
   const jadeLow = pick(tone.plateLow);
 
   // 深木色外壳与右下侧边，先把牌做成一个有厚度的物件。
-  px(context, 0, 0, TILE_W, TILE_H, '#20170f');
+  px(context, 0, 0, TILE_W, TILE_H, '#171510');
   px(context, 2, 2, TILE_W - 3, TILE_H - 3, edge);
-  px(context, TILE_W - 3, 4, 2, TILE_H - 8, '#493c2b');
-  px(context, 3, TILE_H - 4, TILE_W - 5, 3, '#35291d');
+  px(context, TILE_W - 3, 4, 2, TILE_H - 8, '#3b3227');
+  px(context, 3, TILE_H - 4, TILE_W - 5, 3, '#29231b');
   // 瓷面（上部），双层内框像一圈微微凸起的釉边。
   px(context, 2, 1, TILE_W - 5, TILE_H - 9, faceLow);
   px(context, 3, 2, TILE_W - 7, TILE_H - 11, face);
@@ -216,9 +216,11 @@ function tileBody(context, dim, material = 'ivory') {
       px(context, x, 3, 1, TILE_H - 14, tone.grain);
     }
   }
-  // 象牙也留几颗天然纹点，避免大白块像网页按钮。
+  // 旧象牙 / 宣纸釉面留几颗纤维和拓印斑，避免大白块像网页按钮。
   if (tone.grain && material === 'ivory' && !dim) {
-    for (const [x, y] of [[7, 8], [31, 12], [11, 38], [28, 34], [18, 5]]) px(context, x, y, 1, 1, tone.grain);
+    for (const [x, y] of [[7, 8], [31, 12], [11, 38], [28, 34], [18, 5], [6, 29], [34, 25]]) {
+      px(context, x, y, 1, 1, tone.grain);
+    }
   }
   // 面下缘的弧面与玉色托板。
   px(context, 3, TILE_H - 13, TILE_W - 7, 4, faceLow);
@@ -229,7 +231,7 @@ function tileBody(context, dim, material = 'ivory') {
   px(context, 3, 2, 1, TILE_H - 13, high);
   px(context, TILE_W - 5, 4, 1, TILE_H - 16, low);
   px(context, 4, TILE_H - 14, TILE_W - 9, 1, edge);
-  px(context, 5, 4, TILE_W - 11, 1, dim ? low : '#e0c98f');
+  px(context, 5, 4, TILE_W - 11, 1, dim ? low : '#c8aa72');
   // 左上角一枚材质记号，和图案不打架，但一眼能数出有几张被改造
   if (tone.mark) {
     const mark = pick(tone.mark);
@@ -254,12 +256,12 @@ function sealMark(context, dim) {
 }
 
 function drawDots(context, rank) {
-  const B = '#1b4f9c';
-  const BI = '#3a7fd4';
-  const R = '#b02a2a';
-  const RI = '#dd5a52';
-  const G = '#1a7f4b';
-  const GI = '#3fae74';
+  const B = '#273b45';
+  const BI = '#627982';
+  const R = '#9d3328';
+  const RI = '#c66a54';
+  const G = '#3e6f57';
+  const GI = '#79a184';
   const cx = (TILE_W / 2) | 0;
   const cy = FACE_CY;
   const put = (x, y, r, o, i) => dot(context, x, y, r, o, i);
@@ -310,10 +312,10 @@ function drawDots(context, rank) {
 }
 
 function drawBamboo(context, rank) {
-  const G = '#1e8a55';
-  const D = '#0e5c37';
-  const R = '#b02a2a';
-  const DR = '#7d1f1c';
+  const G = '#52775d';
+  const D = '#294b38';
+  const R = '#a33a2f';
+  const DR = '#70251f';
   const cx = (TILE_W / 2) | 0;
   const cy = FACE_CY;
   if (rank === 1) {
@@ -351,17 +353,17 @@ function tileSource(tile, dim = false, material = 'ivory', sealed = false) {
 
   const cx = (TILE_W / 2) | 0;
   const cy = FACE_CY;
-  const carve = dim ? null : '#ffffff';   // 主色下面垫一层白，做出刻痕的反光
+  const carve = dim ? null : '#f9eed7';   // 主色下面垫一层纸白，像拓印旁边留出的飞白
   if (tile.suit === 'man') {
     glyph(context, '一二三四五六七八九'[tile.rank - 1], cx, 13, 15,
-      dim ? '#4b5566' : '#16233a', { shade: carve });
-    glyph(context, '萬', cx, 34, 20, dim ? '#8d5d5d' : '#a8231f',
+      dim ? '#5d5b55' : '#232722', { shade: carve });
+    glyph(context, '萬', cx, 34, 20, dim ? '#8d655f' : '#9d3328',
       { threshold: 165, weight: 500, levels: 2 });
   } else if (tile.suit === 'honor') {
     if (tile.rank === 7) {
       // 白板：双线方框，比单线更像刻上去的
-      const color = dim ? '#5a6b86' : '#1b3f7a';
-      const inner = dim ? '#7d8ba3' : '#3f6cae';
+      const color = dim ? '#69706d' : '#344d52';
+      const inner = dim ? '#888d85' : '#718b86';
       const top = 9;
       const bottom = TILE_H - 16;
       px(context, 6, top, TILE_W - 12, 1, color);
@@ -373,7 +375,7 @@ function tileSource(tile, dim = false, material = 'ivory', sealed = false) {
       px(context, 8, top + 2, 1, bottom - top - 4, inner);
       px(context, TILE_W - 9, top + 2, 1, bottom - top - 4, inner);
     } else {
-      const color = tile.rank === 5 ? '#b8291f' : (tile.rank === 6 ? '#12704a' : '#16233a');
+      const color = tile.rank === 5 ? '#a03329' : (tile.rank === 6 ? '#426e55' : '#252923');
       // 發 / 東 笔画多，阈值调高换回字腔；中 / 南 / 西 / 北 保留刻痕高光
       const dense = tile.rank === 6 || tile.rank === 1;
       glyph(context, HONOR_GLYPHS[tile.rank], cx, cy, dense ? 26 : 24, color,
@@ -405,20 +407,20 @@ function scaled(source, scale, className = 'pxc') {
 
 const BACK_PALETTE = Object.freeze({
   plain: {
-    base: '#122846', face: '#2b5a95', inner: '#1f4677', line: '#4d8bd0',
-    mark: '#8fc0f0', glyph: '#d8ecff', foot: '#0c1c33',
+    base: '#211f1a', face: '#45443b', inner: '#34352f', line: '#918b76',
+    mark: '#c7bea0', glyph: '#eee2c6', foot: '#12110e',
   },
   jade: {
-    base: '#0f3223', face: '#22664a', inner: '#17503a', line: '#3f9c72',
-    mark: '#7fd4aa', glyph: '#d6f5e6', foot: '#082116',
+    base: '#1f352b', face: '#446957', inner: '#315444', line: '#7ca38b',
+    mark: '#b0c6ad', glyph: '#e2eadc', foot: '#14241d',
   },
   vermilion: {
-    base: '#48120f', face: '#8e2f26', inner: '#6d241d', line: '#c05244',
-    mark: '#f09a86', glyph: '#ffe2d6', foot: '#2e0a08',
+    base: '#481914', face: '#87372d', inner: '#6a2b24', line: '#bd6959',
+    mark: '#dfa08a', glyph: '#f1d9c3', foot: '#2b100d',
   },
   ink: {
-    base: '#0d0f16', face: '#2a2e3d', inner: '#1e2230', line: '#535c7d',
-    mark: '#8f98bd', glyph: '#dfe4f7', foot: '#07080d',
+    base: '#11120f', face: '#292c28', inner: '#1d211e', line: '#676d62',
+    mark: '#9fa393', glyph: '#e2decf', foot: '#090a08',
   },
 });
 
@@ -482,11 +484,11 @@ function backSource(back = 'plain') {
   canvas.height = TILE_H;
   const context = canvas.getContext('2d');
 
-  px(context, 0, 0, TILE_W, TILE_H, '#20170f');
+  px(context, 0, 0, TILE_W, TILE_H, '#171510');
   px(context, 2, 2, TILE_W - 3, TILE_H - 3, tone.base);
   px(context, 3, 2, TILE_W - 6, TILE_H - 11, tone.face);
   px(context, TILE_W - 3, 4, 2, TILE_H - 8, tone.foot);
-  // 景泰蓝式双层细框，中间用短线做回纹节奏。
+  // 乌木 / 旧漆上的双层水墨边，中间以断笔做回纹节奏。
   px(context, 5, 5, TILE_W - 11, 1, tone.line);
   px(context, 5, TILE_H - 15, TILE_W - 11, 1, tone.line);
   px(context, 5, 5, 1, TILE_H - 19, tone.line);
@@ -507,9 +509,9 @@ function backSource(back = 'plain') {
 
   backEmblem(context, back, tone, (TILE_W / 2) | 0, ((TILE_H - 9) / 2) | 0);
 
-  // 玉色托板 + 高光暗边，和牌面同一套立体规则
-  px(context, 2, TILE_H - 9, TILE_W - 5, 5, '#2f7d5c');
-  px(context, 3, TILE_H - 5, TILE_W - 7, 2, '#1d5340');
+  // 温玉托板 + 高光暗边，和牌面同一套立体规则
+  px(context, 2, TILE_H - 9, TILE_W - 5, 5, '#688b74');
+  px(context, 3, TILE_H - 5, TILE_W - 7, 2, '#314f42');
   px(context, 3, 2, TILE_W - 6, 1, tone.line);
   px(context, 3, 2, 1, TILE_H - 12, tone.line);
   px(context, TILE_W - 4, 3, 1, TILE_H - 12, tone.foot);
@@ -650,58 +652,90 @@ export function createSealCanvas(character, { family = 'charm', scale = 2, palet
 
 /* ---------------- 标题 logo ---------------- */
 
-const LOGO_W = 132;
-const LOGO_H = 66;
+const LOGO_W = 240;
+const LOGO_H = 124;
 
 /**
- * 标题像素牌匾：朱漆底 + 双层金框 + 削角，两个大字用黑描边压金面，
- * 下面一条 TIANHU 飘带。整块是一张 canvas，放大后仍然是硬像素。
+ * 标题书画印记：一笔不闭合的墨圈托住「天胡」，右下盖朱砂方印，
+ * 英文只作为小号识别。Logo 自己透明，能落在任意水墨背景上。
  */
 function logoSource() {
-  const hit = cache.get('logo');
+  const hit = cache.get('ink-logo');
   if (hit) return hit;
   const canvas = document.createElement('canvas');
   canvas.width = LOGO_W;
   canvas.height = LOGO_H;
   const context = canvas.getContext('2d');
+  context.imageSmoothingEnabled = true;
 
-  const plateH = 48;
-  // 阴影 → 外框 → 金框 → 朱漆面
-  px(context, 3, 4, LOGO_W - 4, plateH, '#120c07');
-  px(context, 0, 0, LOGO_W - 4, plateH, '#1c1209');
-  px(context, 2, 2, LOGO_W - 8, plateH - 4, '#c99527');
-  px(context, 3, 3, LOGO_W - 10, 1, '#f7dd8e');
-  px(context, 4, 4, LOGO_W - 12, plateH - 8, '#8c2f27');
-  px(context, 4, 4, LOGO_W - 12, 1, '#b8483c');
-  px(context, 4, plateH - 5, LOGO_W - 12, 1, '#5c1a16');
-  // 削角，去掉方块感
-  for (const [x, y] of [[0, 0], [LOGO_W - 5, 0], [0, plateH - 1], [LOGO_W - 5, plateH - 1]]) {
-    context.clearRect(x, y, 1, 1);
+  // 墨圈故意不闭合；三层透明线与飞白短点让它像落在宣纸上的一笔。
+  context.save();
+  context.lineCap = 'round';
+  context.strokeStyle = 'rgba(28,27,22,.78)';
+  context.lineWidth = 10;
+  context.beginPath();
+  context.arc(108, 58, 49, 0.42, Math.PI * 1.84);
+  context.stroke();
+  context.strokeStyle = 'rgba(28,27,22,.28)';
+  context.lineWidth = 4;
+  context.beginPath();
+  context.arc(108, 58, 55, 0.56, Math.PI * 1.72);
+  context.stroke();
+  for (const [x, y, w, a] of [[51, 86, 17, .55], [160, 28, 12, .44], [46, 78, 7, .35]]) {
+    context.fillStyle = `rgba(28,27,22,${a})`;
+    context.fillRect(x, y, w, 2);
   }
-  // 面上的暗色底纹，像老木匾的刻线
-  for (let y = 7; y < plateH - 6; y += 4) {
-    px(context, 6, y, LOGO_W - 16, 1, '#7d2822');
-  }
+  context.restore();
 
-  const cy = (plateH / 2) | 0;
-  glyph(context, '天', 40, cy, 34, '#f5cf5c', { outline: '#170d06', outlineWidth: 2, drop: 1, lift: '#fff0b4' });
-  glyph(context, '胡', 90, cy, 34, '#f5cf5c', { outline: '#170d06', outlineWidth: 2, drop: 1, lift: '#fff0b4' });
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.font = '900 70px "Kaiti SC","STKaiti","KaiTi","Songti SC",serif';
+  context.fillStyle = '#1d1d18';
+  context.shadowColor = 'rgba(255,248,226,.55)';
+  context.shadowBlur = 1;
+  context.fillText('天', 84, 57);
+  context.fillText('胡', 139, 62);
+  // 同字轻微错印一次，模拟拓印墨边，不牺牲字腔。
+  context.globalAlpha = 0.17;
+  context.fillText('天', 83, 58);
+  context.fillText('胡', 140, 61);
+  context.globalAlpha = 1;
+  context.shadowBlur = 0;
 
-  // 飘带
-  const ribbonY = plateH - 4;
-  px(context, 20, ribbonY, LOGO_W - 44, 15, '#151d26');
-  px(context, 21, ribbonY + 1, LOGO_W - 46, 13, '#2f9e63');
-  px(context, 21, ribbonY + 1, LOGO_W - 46, 1, '#5fd193');
-  px(context, 21, ribbonY + 12, LOGO_W - 46, 1, '#1b6e42');
-  glyph(context, 'TIANHU', LOGO_W / 2 - 2, ribbonY + 7, 11, '#f2efe4', { shade: '#0f3a24' });
+  // 朱砂方印。印中只放一个清楚的「胡」字，生成式背景不承担任何文字。
+  context.fillStyle = '#a23b2e';
+  context.fillRect(176, 54, 35, 35);
+  context.strokeStyle = '#6e261f';
+  context.lineWidth = 2;
+  context.strokeRect(178, 56, 31, 31);
+  context.font = '700 22px "Kaiti SC","STKaiti","KaiTi",serif';
+  context.fillStyle = '#f2dfbd';
+  context.fillText('胡', 193.5, 72.5);
 
-  cache.set('logo', canvas);
+  context.textAlign = 'left';
+  context.font = '700 12px Georgia,"Times New Roman",serif';
+  context.fillStyle = '#31332c';
+  context.fillText('T I A N H U', 73, 107);
+  context.fillStyle = 'rgba(162,59,46,.75)';
+  context.fillRect(39, 105, 27, 2);
+  context.fillStyle = 'rgba(49,51,44,.55)';
+  context.fillRect(157, 105, 25, 1);
+
+  cache.set('ink-logo', canvas);
   return canvas;
 }
 
-/** 标题页 logo。scale 越大越锐利，不会糊。 */
-export function createLogoCanvas(scale = 3) {
-  return scaled(logoSource(), scale, 'pxc logoArt');
+/** 标题页 Logo 保留 Canvas 抗锯齿，不走麻将牌的硬像素缩放。 */
+export function createLogoCanvas(scale = 2) {
+  const source = logoSource();
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(source.width * scale);
+  canvas.height = Math.round(source.height * scale);
+  canvas.className = 'logoArt';
+  const context = canvas.getContext('2d');
+  context.imageSmoothingEnabled = true;
+  context.drawImage(source, 0, 0, canvas.width, canvas.height);
+  return canvas;
 }
 
 export function clearPixelCache() {

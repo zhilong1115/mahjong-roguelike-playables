@@ -1,7 +1,7 @@
 /* =========================================================
    天胡 TIANHU · 正式版界面
-   视觉基线延续 V3 街机切片：深玉绿牌桌 + 蓝灰机台 + 扫描线 + 像素牌
-   零外部请求：不引用字体、图片或分析服务
+   视觉基线：宣纸水墨 + 松烟墨 + 朱砂 + 温玉麻将牌
+   零外部请求：只引用项目内图片，不引用外部字体、图片或分析服务
    ========================================================= */
 :root{
   --bg1:#1d3a33; --bg2:#0f2a22;
@@ -916,4 +916,205 @@ body.atTitle #app{opacity:.07;filter:blur(3px);}
   .meld{width:74px;min-height:102px;padding:31px 5px 6px;}
   .meldInkText{font-size:32px;}
   .meldHeroTile canvas{width:58px;}
+}
+
+/* =========================================================
+   0025 · 古典水墨视觉统一
+   宣纸作底、松烟墨定结构、温玉承牌、朱砂只标行动与奖励。
+   这组覆盖刻意放在所有旧版规则之后，方便审美试玩后整组校色。
+   ========================================================= */
+:root{
+  --bg1:#d8ccb0;--bg2:#b7aa8e;
+  --panel:#403c32;--panel2:#353229;--panel3:#292821;
+  --edge:#17150f;
+  --chip:#557d69;--chipL:#a9c4b2;
+  --mult:#a54336;--multL:#e0a08c;
+  --gold:#d1aa54;--goldD:#9b7935;
+  --txt:#f2e8d2;--dim:#c1b59e;
+  --red:#a54336;--green:#557d69;
+  --charm:#76958b;--codex:#8a715f;--general:#b48b4e;--bone:#6f9678;--seal:#a54336;
+}
+body{
+  background-color:#d8ccb0;
+  background-image:linear-gradient(rgba(229,218,190,.18),rgba(114,105,84,.12)),url("assets/art/ink-table-v1.webp");
+  background-size:cover;background-position:center;
+  font-family:"PingFang SC","Hiragino Sans GB","Songti SC","Microsoft YaHei",sans-serif;
+  font-weight:750;
+}
+body::before{
+  background:
+    repeating-linear-gradient(92deg,rgba(61,51,36,.025) 0 1px,transparent 1px 11px),
+    repeating-linear-gradient(3deg,rgba(255,250,232,.035) 0 1px,transparent 1px 8px);
+  mix-blend-mode:multiply;opacity:.55;
+}
+body::after{background:radial-gradient(ellipse at center,transparent 54%,rgba(32,29,22,.38) 100%);}
+#backdrop{opacity:.24;mix-blend-mode:multiply;filter:sepia(.72) saturate(.58) contrast(.92);}
+
+.panel,.screenBox,.sheetBox,#draftPanel{
+  border-color:#17150f;
+  box-shadow:0 4px 0 rgba(22,19,13,.58),inset 0 1px 0 rgba(244,230,196,.12);
+}
+.panel{
+  background:
+    repeating-linear-gradient(95deg,rgba(246,228,187,.025) 0 1px,transparent 1px 9px),
+    linear-gradient(160deg,#484338,#343128);
+}
+.panel.dark{background:linear-gradient(160deg,#3b382f,#2d2b24);}
+.panel.deep{background:linear-gradient(160deg,#302e27,#24231e);}
+#roundChip{background:#536f62;border-color:#1b1a14;color:#f4ead4;border-radius:4px;}
+#targetBox,#omenSlot,.stat,.lineItem{background:#24241f;border-color:#15140f;}
+#targetFill{background:linear-gradient(90deg,#637e6f,#b88d42,#a54336);}
+#chipsBox{background:#557d69;}
+#multBox{background:#a54336;}
+.stat.money{background:#352c1c;border-color:#1d180f;}
+.buildChip{background:linear-gradient(180deg,#544e40,#363229);border-color:#1a1812;}
+.buildChip.family-codex{background:linear-gradient(180deg,#725f50,#463c33);}
+.buildChip.family-bone{background:linear-gradient(180deg,#577662,#344c3e);}
+.buildChip.family-seal{background:linear-gradient(180deg,#874138,#562a25);}
+.buildChip.family-paper{background:linear-gradient(180deg,#696354,#454139);}
+
+/* 六格开运签主动占据一块完整的构筑牌架。 */
+#slotBar{
+  min-height:126px;gap:9px;padding:9px;
+  background:
+    linear-gradient(rgba(20,19,15,.84),rgba(34,31,24,.88)),
+    repeating-linear-gradient(90deg,rgba(228,207,163,.05) 0 1px,transparent 1px 13px);
+  border:4px double #1a1710;border-radius:5px;
+  box-shadow:0 5px 0 rgba(25,21,14,.55),inset 0 0 0 1px rgba(208,178,112,.18);
+}
+.slot{
+  min-height:106px;border-radius:3px;border:2px dashed rgba(74,64,46,.42);padding:8px;
+  color:#25251f;background:
+    linear-gradient(145deg,rgba(251,242,218,.96),rgba(210,192,154,.94)),
+    repeating-linear-gradient(4deg,rgba(69,54,34,.04) 0 1px,transparent 1px 7px);
+}
+.slot::before{border-color:rgba(84,68,42,.16);border-radius:1px;}
+.slot .slotGold{font:900 18px/1 "Kaiti SC","STKaiti","KaiTi",serif;color:#9c3b30;text-shadow:none;}
+.slot .slotIdx{font-size:10px;color:#605845;}
+.slot.filled{
+  grid-template-columns:minmax(62px,78px) minmax(0,1fr);gap:9px;padding:7px;
+  border-color:#30281b;border-top:5px solid #a9aca4;
+  color:#27251e;background:linear-gradient(150deg,#f0e3c5,#cdb88e);
+  box-shadow:0 3px 0 rgba(21,18,12,.42),inset 0 0 0 1px rgba(255,251,232,.55);
+}
+.slot .slotArtwork{max-width:78px;border-color:#3b3020;box-shadow:0 3px 0 rgba(35,28,18,.35);filter:sepia(.12) saturate(.86) contrast(1.04);}
+.slot .charmName{font:900 15px/1.12 "Kaiti SC","STKaiti","KaiTi","Songti SC",serif;color:#29271f;text-shadow:none;}
+.slot .charmTier{font-size:10px;color:#615844;}
+.slot.tier-gold{border-top-color:#b28b39;background:linear-gradient(150deg,#f0e2bb,#c8ae72);}
+.slot.tier-rainbow{border-top-color:#81584d;background:linear-gradient(150deg,#e8dcc1,#b9aa91);}
+.slot.noCharm{background:linear-gradient(150deg,#d9d0ba,#aaa28f);}
+
+/* 牌桌本身是一张低对比水墨长卷，中央留白给亮组。 */
+#table{
+  border:5px solid #2b2419;border-radius:5px;
+  background-image:
+    linear-gradient(rgba(237,225,196,.22),rgba(178,162,126,.18)),
+    url("assets/art/ink-table-v1.webp");
+  background-size:cover;background-position:center;
+  box-shadow:inset 0 0 0 2px rgba(245,229,194,.3),inset 0 14px 28px rgba(45,39,28,.18),0 5px 0 rgba(30,25,17,.5);
+}
+#table::before{inset:7px;border:1px solid rgba(45,39,28,.28);border-radius:1px;}
+#tableMark{opacity:.12;}
+#tableMark .mk{font-family:"Kaiti SC","STKaiti","KaiTi",serif;color:#242a24;}
+#tableMark .mk2{color:#4b4b3e;}
+.meld{
+  background:linear-gradient(160deg,rgba(239,226,194,.92),rgba(182,164,126,.91));
+  border-color:rgba(54,46,32,.72);border-radius:4px;
+  box-shadow:inset 0 0 0 1px rgba(255,250,230,.45),0 5px 0 rgba(38,31,21,.35);
+}
+.meld::before{border-color:rgba(58,48,32,.16);border-radius:1px;}
+.meldInkSub{color:#f1dfbe;background:#8e352b;border-color:#6a241e;}
+.meldHeroTile{filter:drop-shadow(0 6px 2px rgba(49,39,24,.36));}
+#nextBox{color:#f2e8d2;background:rgba(35,33,27,.87);border-color:#17150f;border-radius:3px;}
+
+/* 功能卡像旧册页与签纸，降低上一版电子霓虹感。 */
+.card{border-color:#201b12;background:linear-gradient(150deg,#5a4d38,#322e25 65%,#24231e);}
+.card.family-charm{background:linear-gradient(165deg,#6f6044,#34473d 72%,#252e29);border-top-color:#b99c5c;}
+.card.family-codex{background:linear-gradient(150deg,#665448,#372e2a);border-left-color:#a58b6b;}
+.card.family-general{background:linear-gradient(160deg,#715039,#392e24);}
+.atlasArtwork{filter:sepia(.12) saturate(.84) contrast(1.05);}
+
+.btn{border-color:#17150f;border-radius:4px;text-shadow:1px 2px 0 rgba(0,0,0,.38);}
+.btn.play{background:#4f7564;}
+.btn.green{background:#557d69;}
+.btn.red{background:#9f4136;}
+.btn.grey{background:#655f52;}
+.btn.gold{background:#9b7935;}
+.tile{filter:drop-shadow(0 4px 0 rgba(47,38,24,.42));}
+.tile.sel{filter:drop-shadow(0 8px 0 rgba(47,38,24,.48));}
+
+.screen,.sheet,#draftLayer{background:rgba(31,29,23,.88);}
+.screenBox,.sheetBox,#draftPanel{background:linear-gradient(160deg,#4a453a,#302e27);}
+.blindCard,.deckCard,.settingRow,.omenCompareCard,.sheetRow{background:linear-gradient(160deg,#554f42,#343129);border-color:#1a1812;}
+.blindCard.kind-boss{background:linear-gradient(160deg,#7a382f,#49231f);}
+.lineItem,.helpText .kbd{background:#292821;border-color:#17150f;}
+#tip,.toastItem{background:#282720;border-color:#12110d;border-radius:3px;}
+
+/* 标题页是完整山水扉页；菜单像压在画上的一张半透明册页。 */
+.titleScreen{
+  background:rgba(224,210,180,.24);padding:0;overflow:hidden;color:#24231d;
+}
+.titleBg{
+  background-image:linear-gradient(rgba(231,219,190,.04),rgba(58,52,39,.12)),url("assets/art/ink-title-v1.webp");
+  background-size:cover;background-position:center;
+}
+.titleGrain{
+  inset:0;opacity:.32;mix-blend-mode:multiply;
+  background:repeating-linear-gradient(91deg,rgba(50,42,30,.035) 0 1px,transparent 1px 12px);
+}
+.titleScreen .screenBox{
+  min-width:min(500px,92vw);padding:14px 24px 18px;
+  color:#25241e;background:linear-gradient(160deg,rgba(242,232,207,.91),rgba(210,194,159,.86));
+  border:2px solid rgba(39,33,23,.75);border-radius:2px;
+  box-shadow:0 12px 28px rgba(29,24,16,.28),inset 0 0 0 4px rgba(255,250,231,.22);
+  backdrop-filter:blur(3px) sepia(.2);
+}
+.titleLogo{margin:-6px 0 -2px;}
+.titleLogo canvas{width:min(390px,78vw);filter:drop-shadow(0 5px 4px rgba(52,42,27,.24));}
+.titleTagline{color:#514c3d;font:800 12px/1.4 "Songti SC","STSong",serif;letter-spacing:2px;}
+.titleFan{margin:6px 0 12px;}
+.titleMenu .btn.big{min-width:240px;}
+.titleScreen .btn.grey{background:rgba(226,212,181,.88);color:#2c2a22;text-shadow:none;border-color:#4e4636;}
+.titleScreen .btn.green,.titleScreen .btn.play{background:#4f7564;color:#fff8e7;}
+.titleScreen .rowBtns{margin-top:7px;gap:7px;}
+
+@media (max-height:470px){
+  #slotBar{min-height:82px;gap:5px;padding:5px;border-width:3px;}
+  .slot{min-height:72px;padding:4px;}
+  .slot.filled{grid-template-columns:minmax(42px,54px) minmax(0,1fr);gap:4px;padding:4px;border-top-width:4px;}
+  .slot .slotArtwork{max-width:54px;}
+  .slot .charmName{font-size:10px;}
+  .slot .charmTier{font-size:7px;}
+  .titleScreen .screenBox{padding:4px 16px 8px;min-width:min(470px,88vw);}
+  .titleLogo{margin:-15px 0 -18px;}
+  .titleLogo canvas{width:min(300px,60vw);}
+  .titleTagline{font-size:9px;margin-bottom:0;}
+  .titleFan{margin:0 0 5px;}
+  .titleFan canvas{width:44px;height:auto;}
+  .titleMenu{gap:4px;}
+  .titleScreen .rowBtns{margin-top:2px;gap:4px;}
+}
+
+@media (max-aspect-ratio:0.95){
+  #slotBar{min-height:0;gap:6px;padding:6px;}
+  .slot{min-height:64px;padding:4px;}
+  .slot.filled{grid-template-columns:minmax(36px,44px) minmax(0,1fr);gap:4px;padding:4px;}
+  .slot .slotArtwork{max-width:44px;}
+  .slot .charmName{font-size:10px;}
+  .slot .charmTier{font-size:7px;}
+}
+
+@media (max-width:420px) and (max-aspect-ratio:0.95){
+  #slotBar{gap:4px;padding:4px;}
+  .slot{min-height:56px;padding:3px;}
+  .slot.filled{grid-template-columns:34px minmax(0,1fr);gap:3px;padding:3px;}
+  .slot .slotArtwork{max-width:34px;}
+  #revealZone{padding:4px 4px 43px;}
+  .meld{width:68px;min-height:90px;padding:28px 4px 5px;}
+  .meldInkText{font-size:29px;}
+  .meldHeroTile canvas{width:52px;}
+  .titleScreen .screenBox{min-width:0;width:calc(100vw - 20px);padding:10px 9px 13px;}
+  .titleLogo{margin:-6px 0 -4px;}
+  .titleLogo canvas{width:min(320px,84vw);}
+  .titleScreen .rowBtns{gap:5px;}
 }
