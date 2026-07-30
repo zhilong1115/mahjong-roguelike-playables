@@ -9,13 +9,18 @@ import {
 import { GROUP_NAMES } from '../core/patterns.mjs';
 import { TILE_KINDS, kindName, tileKey, tileName } from '../core/tiles.mjs';
 import {
-  createSealCanvas,
   createTileBackCanvas,
   createTileCanvas,
   pixelText,
   setPixelText,
+  TILE_SIZE,
 } from '../render/pixel.mjs';
+import { createCardArtwork } from '../render/card-art.mjs';
+import { createBackdrop } from '../render/backdrop.mjs';
 import { Timeline, countUp, floatText, pulse, shake } from './animate.mjs';
+import {
+  attachCardMotion, attachTileMotion, impulse, setSpringMotion, springTo,
+} from './spring.mjs';
 import { setAudioEnabled, sfx } from './audio.mjs';
 import {
   closeScreen,
@@ -83,6 +88,9 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
   /* ---------------- 基础工具 ---------------- */
 
+  /** 背景 shader。拿不到 WebGL 就是 null，body 的 CSS 渐变兜底。 */
+  let backdrop = null;
+
   function applySettings(next) {
     settings = { ...settings, ...next };
     try {
@@ -90,6 +98,23 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     } catch { /* 隐私模式下忽略 */ }
     setAudioEnabled(settings.sound);
     timeline.speed = settings.animationSpeed === 0 ? Infinity : settings.animationSpeed;
+    const motion = settings.animationSpeed !== 0;
+    setSpringMotion(motion);
+    backdrop?.setEnabled(motion);
+  }
+
+  /** 背景底色跟着圈和圈主走：打圈主时整个画面转红，压力是看得见的。 */
+  function syncBackdropTone() {
+    if (!backdrop) return;
+    if (!state) {
+      backdrop.setTone('title');
+      return;
+    }
+    if (state.bossActive) {
+      backdrop.setTone('boss');
+      return;
+    }
+    backdrop.setTone(['east', 'south', 'west'][(state.anteNumber ?? 1) - 1] ?? 'default');
   }
 
   function toast(message, duration = 2100) {
@@ -118,7 +143,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   }
 
   function cardNode(family, item, {
-    className = '', meta = '', showText = true, interactive = false, sealScale = 1,
+    className = '', meta = '', showText = true, interactive = false,
   } = {}) {
     const info = FAMILIES[family] ?? {
       name: family === 'paper' ? '牌帖' : family,
@@ -129,7 +154,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     const node = el(interactive ? 'button' : 'div', `card family-${family} ${className}`.trim());
     if (interactive) node.type = 'button';
     node.dataset.card = `${family}:${item.id}`;
-    node.append(createSealCanvas(item.glyph ?? info.glyph, { family, scale: sealScale }));
+    node.append(createCardArtwork(family, item));
     node.append(el('div', 'cName', item.name));
     if (showText) node.append(el('div', 'cText', item.text ?? ''));
     node.append(el('div', 'cMeta', meta || `${info.name} · ${item.duration ?? info.duration}`));
@@ -148,7 +173,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     const rows = portrait ? 2 : 1;
     const widthBudget = (width - 8) / perRow - 3;
     const heightBudget = (height * (portrait ? 0.42 : 0.34)) / rows;
-    const fit = Math.min(3, widthBudget / 34, heightBudget / 46);
+    const fit = Math.min(3, widthBudget / TILE_SIZE.width, heightBudget / TILE_SIZE.height);
     const canvas = Math.max(1, Math.min(3, Math.floor(fit)));
     const display = Math.max(canvas, Math.min(fit, canvas * 1.55));
     if (canvas === tileScale && Math.abs(display - tileDisplay) < 0.02) return false;
@@ -173,8 +198,8 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
   function tileFace(tile) {
     const face = tileCanvas(tile, tileScale);
-    face.style.width = `${Math.round(34 * tileDisplay)}px`;
-    face.style.height = `${Math.round(46 * tileDisplay)}px`;
+    face.style.width = `${Math.round(TILE_SIZE.width * tileDisplay)}px`;
+    face.style.height = `${Math.round(TILE_SIZE.height * tileDisplay)}px`;
     return face;
   }
 
@@ -440,7 +465,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         // 结算按取得顺序播灵签，同名签也能分清是哪一格
         slot.dataset.charmIndex = String(charmSeen);
         charmSeen += 1;
-        slot.append(createSealCanvas(charm.glyph ?? FAMILIES.charm.glyph, { family: 'charm', scale: 1 }));
+        slot.append(createCardArtwork('charm', charm, { className: 'slotArtwork' }));
         const body = el('div', 'slotBody');
         body.append(el('div', 'charmName', charm.name));
         body.append(el('div', 'charmTier', `${TIER_LABEL[tier] ?? '灵签'} · ${GROUP_NAMES[group.kind]}`));
@@ -450,6 +475,8 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
           `${charm.name} · ${TIER_LABEL[tier] ?? '灵签'} · ${GROUP_NAMES[group.kind]}`,
           `${charm.text}（本副）`,
         );
+        // 拿到手的签在顶部轻轻浮着，提醒玩家它还在生效
+        attachCardMotion(slot, { float: 1.8, hoverLift: 6, tilt: 6, depth: 520 });
       } else if (group) {
         // 亮了组但没拿到签（签池不足时的兜底），仍然要占位说明这个开运位已经花掉
         slot.classList.add('filled', 'noCharm');
@@ -466,15 +493,27 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     }
   }
 
-  function meldNode(group, scale = Math.max(1, tileScale - 1)) {
+  const MELD_INK_NAMES = Object.freeze({ pair: '对', chow: '顺', pung: '碰', kong: '杠' });
+  const STACK_INK_NAMES = Object.freeze({ 5: '五', 6: '六', 7: '七', 8: '八' });
+
+  function meldNode(group, scale = Math.max(2, tileScale)) {
     const meld = el('div', `meld${group.revealed ? '' : ' concealed'}`);
     meld.dataset.groupId = group.id;
-    for (const tile of group.tiles) {
-      const wrap = el('span', 'meldTile');
-      wrap.dataset.kind = tileKey(tile);
-      wrap.append(tileCanvas(tile, scale));
-      meld.append(wrap);
-    }
+    meld.dataset.kinds = [...new Set(group.tiles.map(tileKey))].join(' ');
+    meld.dataset.count = String(group.tiles.length);
+
+    const ink = el('div', 'meldInk');
+    const inkName = STACK_INK_NAMES[group.tiles.length] ?? MELD_INK_NAMES[group.kind] ?? '组';
+    ink.append(el('span', 'meldInkText', inkName));
+    ink.append(el('span', 'meldInkSub', group.tiles.length >= 5 ? `${group.tiles.length} 张同牌` : GROUP_NAMES[group.kind]));
+
+    const representative = group.kind === 'chow'
+      ? group.tiles[Math.floor(group.tiles.length / 2)]
+      : group.tiles[0];
+    const wrap = el('span', 'meldTile meldHeroTile');
+    wrap.dataset.kind = tileKey(representative);
+    wrap.append(tileCanvas(representative, scale));
+    meld.append(ink, wrap);
     return meld;
   }
 
@@ -527,6 +566,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         node.style.animationDelay = `${index * 26}ms`;
       }
       node.append(tileFace(tile));
+      attachTileMotion(node, { selected: state.selectedIds.includes(tile.id) });
       const marks = [];
       if (state.bones[kind]) marks.push(getItem('bone', state.bones[kind])?.name);
       if (state.seals[kind]) marks.push(getItem('seal', state.seals[kind])?.name);
@@ -658,7 +698,6 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         className: `charmPick tier-${tier}`,
         meta: `${index + 1} · ${durationMeta}`,
         interactive: true,
-        sealScale: 3,
       });
       node.dataset.offerId = offer.offerId;
       node.dataset.tier = tier;
@@ -701,6 +740,8 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       node.style.animationDelay = `${index * 60}ms`;
       node.classList.add('dealIn');
       cards.append(node);
+      // dealIn 用的是 transform 关键帧，得等它播完再交给弹簧，否则会打架
+      setTimeout(() => attachCardMotion(node, { float: 3.2, hoverLift: 14, tilt: 11 }), 400);
     });
     reroll.hidden = state.draft.rerollsLeft <= 0;
     if (!reroll.hidden) reroll.classList.remove('sm');
@@ -908,8 +949,10 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     if (target.type === 'group') {
       add($(`#revealZone .meld[data-group-id="${target.groupId}"]`));
     } else if (target.type === 'kind') {
-      for (const tile of document.querySelectorAll(`#revealZone .meldTile[data-kind="${target.kind}"]`)) {
-        add(tile);
+      for (const meld of document.querySelectorAll('#revealZone .meld')) {
+        if (meld.dataset.kinds?.split(' ').includes(target.kind)) {
+          add(meld.querySelector('.meldHeroTile') ?? meld);
+        }
       }
       add($(`#buildPanel [data-family="${target.family}"]`));
     } else if (target.type === 'card' && target.family === 'charm') {
@@ -990,11 +1033,19 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         pulse(banner, 'slamIn', 380);
         if (step.mult || step.multFactor > 1) sfx.mult(multIndex++);
       } else {
-        const animation = step.source === 'group' ? 'popScore'
-          : step.source === 'bone' ? 'glowBone'
-            : step.source === 'seal' ? 'glowSeal' : 'slotPop';
+        // 牌骨 / 牌印额外挂一层滤镜光，其余靠弹簧冲量把卡顶起来
+        const glow = step.source === 'bone' ? 'glowBone'
+          : step.source === 'seal' ? 'glowSeal' : null;
+        const heavy = step.source === 'charm' || step.source === 'general' || step.source === 'codex';
+        // impulse 给的是速度不是位移。按 spring.mjs 的刚度 / 阻尼折算，
+        // 峰值位移约等于速度 × 0.035，所以要到「跳 14px」得给 400 上下。
         for (const node of anchors) {
-          pulse(node, animation, 420);
+          if (glow) pulse(node, glow, 420);
+          impulse(node, {
+            lift: heavy ? 560 : 400,
+            scale: heavy ? 5.6 : 4.2,
+            rot: heavy ? (Math.random() < 0.5 ? -260 : 260) : 0,
+          });
           pulse(node, 'spotlight', beat + STEP_LEAD);
         }
       }
@@ -1199,7 +1250,6 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       const card = cardNode(offer.family, item, {
         className: `shopCard${offer.sold ? ' sold' : affordable ? '' : ' cant'}`,
         meta: `${info.name} · ${item.duration ?? info.duration}`,
-        sealScale: 3,
       });
       card.prepend(el('div', 'price', price === 0 ? '免费' : `${offer.price} 金`));
       card.append(el('div', 'famTag', isGeneralDraft ? `第 ${state.shop.stage} 阶 · 三选一` : (info.subtitle ?? '改牌组')));
@@ -1214,6 +1264,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         });
       }
       grid.append(card);
+      attachCardMotion(card, { float: 2.8, hoverLift: 14, tilt: 10 });
     }
     box.append(grid);
 
@@ -1312,6 +1363,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   function openTitle() {
     lastScreenStatus = 'title';
     coverDraftForScreen();
+    backdrop?.setTone('title');
     showTitle({
       deckId: settings.deckId,
       hasSave,
@@ -1581,6 +1633,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       }
       state = next;
       renderAll();
+      syncBackdropTone();
       syncScreens(previous);
     });
     onRunAttached?.(run, { silent });
@@ -1617,6 +1670,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   }
 
   function mount({ initialRun = null, savedRun = false, autoStart = false } = {}) {
+    backdrop = createBackdrop($('#backdrop'));
     applySettings(settings);
     wireInput();
     hasSave = savedRun;

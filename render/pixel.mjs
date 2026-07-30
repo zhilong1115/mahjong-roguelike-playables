@@ -3,13 +3,14 @@
  * 全部离线自绘，不引用外部字体或图片，满足 Playables 的自包含要求。
  */
 
-const TILE_W = 34;
-const TILE_H = 46;
+// 第二轮牌面从 34×46 加宽到 40×54：仍是小像素画，但刻痕、釉面和托板有了呼吸空间。
+const TILE_W = 40;
+const TILE_H = 54;
 const FONT_STACK = '"PingFang SC","Hiragino Sans GB","Heiti SC","Microsoft YaHei","Noto Sans SC",sans-serif';
 const cache = new Map();
 
-/** 象牙面的垂直中心：底部 6px 是玉色托板，图案要整体上移。 */
-const FACE_CY = 20;
+/** 瓷面的垂直中心：底部 8px 是玉色托板和暗边，图案要整体上移。 */
+const FACE_CY = 23;
 
 const HONOR_GLYPHS = Object.freeze({ 1: '東', 2: '南', 3: '西', 4: '北', 5: '中', 6: '發', 7: '' });
 
@@ -163,8 +164,8 @@ function cutCorners(context, width, height) {
  */
 const TILE_MATERIALS = Object.freeze({
   ivory: {
-    face: '#f7f2e4', faceLow: '#e8e0cb', high: '#fffefa', low: '#cdc4ad',
-    edge: '#7d7159', plate: '#2f7d5c', plateLow: '#1d5340', mark: null, grain: null,
+    face: '#f6edda', faceLow: '#e0d3b8', high: '#fffdf1', low: '#b7a98c',
+    edge: '#695b43', plate: '#2d8063', plateLow: '#174c3b', mark: null, grain: '#efe5cf',
   },
   // 温玉骨：整张牌是半透的玉料，面色发青白
   warmJade: {
@@ -201,32 +202,40 @@ function tileBody(context, dim, material = 'ivory') {
   const jade = pick(tone.plate);
   const jadeLow = pick(tone.plateLow);
 
-  // 外框
-  px(context, 0, 0, TILE_W, TILE_H, '#241c13');
-  // 象牙面（上部）
-  px(context, 1, 1, TILE_W - 2, TILE_H - 6, face);
+  // 深木色外壳与右下侧边，先把牌做成一个有厚度的物件。
+  px(context, 0, 0, TILE_W, TILE_H, '#20170f');
+  px(context, 2, 2, TILE_W - 3, TILE_H - 3, edge);
+  px(context, TILE_W - 3, 4, 2, TILE_H - 8, '#493c2b');
+  px(context, 3, TILE_H - 4, TILE_W - 5, 3, '#35291d');
+  // 瓷面（上部），双层内框像一圈微微凸起的釉边。
+  px(context, 2, 1, TILE_W - 5, TILE_H - 9, faceLow);
+  px(context, 3, 2, TILE_W - 7, TILE_H - 11, face);
   // 竹料的竖纹：只有青竹骨有
   if (tone.grain && !dim) {
-    for (let x = 3; x < TILE_W - 3; x += 5) {
-      px(context, x, 2, 1, TILE_H - 10, tone.grain);
+    for (let x = 5; x < TILE_W - 5; x += 6) {
+      px(context, x, 3, 1, TILE_H - 14, tone.grain);
     }
   }
-  // 面下缘微微变深，做出弧面感
-  px(context, 1, TILE_H - 10, TILE_W - 2, 4, faceLow);
-  // 玉色托板（底部）
-  px(context, 1, TILE_H - 6, TILE_W - 2, 4, jade);
-  px(context, 1, TILE_H - 3, TILE_W - 2, 2, jadeLow);
-  // 高光与暗边
-  px(context, 1, 1, TILE_W - 2, 1, high);
-  px(context, 1, 1, 1, TILE_H - 7, high);
-  px(context, TILE_W - 2, 2, 1, TILE_H - 8, low);
-  px(context, 1, TILE_H - 7, TILE_W - 2, 1, edge);
+  // 象牙也留几颗天然纹点，避免大白块像网页按钮。
+  if (tone.grain && material === 'ivory' && !dim) {
+    for (const [x, y] of [[7, 8], [31, 12], [11, 38], [28, 34], [18, 5]]) px(context, x, y, 1, 1, tone.grain);
+  }
+  // 面下缘的弧面与玉色托板。
+  px(context, 3, TILE_H - 13, TILE_W - 7, 4, faceLow);
+  px(context, 2, TILE_H - 9, TILE_W - 5, 5, jade);
+  px(context, 3, TILE_H - 5, TILE_W - 7, 2, jadeLow);
+  // 左上釉光、右侧阴影和内侧细金线。
+  px(context, 3, 2, TILE_W - 7, 1, high);
+  px(context, 3, 2, 1, TILE_H - 13, high);
+  px(context, TILE_W - 5, 4, 1, TILE_H - 16, low);
+  px(context, 4, TILE_H - 14, TILE_W - 9, 1, edge);
+  px(context, 5, 4, TILE_W - 11, 1, dim ? low : '#e0c98f');
   // 左上角一枚材质记号，和图案不打架，但一眼能数出有几张被改造
   if (tone.mark) {
     const mark = pick(tone.mark);
-    px(context, 2, 2, 4, 4, mark);
-    px(context, 2, 2, 3, 1, high);
-    px(context, 5, 3, 1, 3, edge);
+    px(context, 3, 3, 5, 5, mark);
+    px(context, 3, 3, 4, 1, high);
+    px(context, 7, 4, 1, 4, edge);
   }
   roundCorners(context, TILE_W, TILE_H, '#0e0b07');
 }
@@ -236,11 +245,12 @@ function sealMark(context, dim) {
   const body = dim ? '#8d6560' : '#c0392b';
   const light = dim ? '#a8807a' : '#e8695a';
   const dark = dim ? '#5c4340' : '#7d1f1c';
-  const x = TILE_W - 8;
-  px(context, x, 2, 6, 6, dark);
-  px(context, x + 1, 3, 4, 4, body);
-  px(context, x + 1, 3, 4, 1, light);
-  px(context, x + 2, 4, 2, 2, light);
+  const x = TILE_W - 10;
+  px(context, x, 3, 7, 7, dark);
+  px(context, x + 1, 4, 5, 5, body);
+  px(context, x + 1, 4, 5, 1, light);
+  px(context, x + 2, 5, 1, 3, light);
+  px(context, x + 4, 5, 1, 3, dark);
 }
 
 function drawDots(context, rank) {
@@ -343,17 +353,17 @@ function tileSource(tile, dim = false, material = 'ivory', sealed = false) {
   const cy = FACE_CY;
   const carve = dim ? null : '#ffffff';   // 主色下面垫一层白，做出刻痕的反光
   if (tile.suit === 'man') {
-    glyph(context, '一二三四五六七八九'[tile.rank - 1], cx, 12, 14,
+    glyph(context, '一二三四五六七八九'[tile.rank - 1], cx, 13, 15,
       dim ? '#4b5566' : '#16233a', { shade: carve });
-    glyph(context, '萬', cx, 29, 18, dim ? '#8d5d5d' : '#a8231f',
+    glyph(context, '萬', cx, 34, 20, dim ? '#8d5d5d' : '#a8231f',
       { threshold: 165, weight: 500, levels: 2 });
   } else if (tile.suit === 'honor') {
     if (tile.rank === 7) {
       // 白板：双线方框，比单线更像刻上去的
       const color = dim ? '#5a6b86' : '#1b3f7a';
       const inner = dim ? '#7d8ba3' : '#3f6cae';
-      const top = 8;
-      const bottom = TILE_H - 14;
+      const top = 9;
+      const bottom = TILE_H - 16;
       px(context, 6, top, TILE_W - 12, 1, color);
       px(context, 6, bottom, TILE_W - 12, 1, color);
       px(context, 6, top, 1, bottom - top, color);
@@ -366,7 +376,7 @@ function tileSource(tile, dim = false, material = 'ivory', sealed = false) {
       const color = tile.rank === 5 ? '#b8291f' : (tile.rank === 6 ? '#12704a' : '#16233a');
       // 發 / 東 笔画多，阈值调高换回字腔；中 / 南 / 西 / 北 保留刻痕高光
       const dense = tile.rank === 6 || tile.rank === 1;
-      glyph(context, HONOR_GLYPHS[tile.rank], cx, cy, dense ? 23 : 21, color,
+      glyph(context, HONOR_GLYPHS[tile.rank], cx, cy, dense ? 26 : 24, color,
         dense ? { threshold: 165, weight: 500, levels: 2 } : { shade: carve });
     }
   } else if (tile.suit === 'pin') {
@@ -472,28 +482,38 @@ function backSource(back = 'plain') {
   canvas.height = TILE_H;
   const context = canvas.getContext('2d');
 
-  px(context, 0, 0, TILE_W, TILE_H, '#241c13');
-  px(context, 1, 1, TILE_W - 2, TILE_H - 6, tone.base);
-  px(context, 2, 2, TILE_W - 4, TILE_H - 8, tone.face);
-  // 内嵌细线框
-  px(context, 4, 4, TILE_W - 8, 1, tone.line);
-  px(context, 4, TILE_H - 11, TILE_W - 8, 1, tone.line);
-  px(context, 4, 4, 1, TILE_H - 15, tone.line);
-  px(context, TILE_W - 5, 4, 1, TILE_H - 15, tone.line);
-  // 四角小方块
-  for (const [x, y] of [[3, 3], [TILE_W - 5, 3], [3, TILE_H - 12], [TILE_W - 5, TILE_H - 12]]) {
-    px(context, x, y, 2, 2, tone.mark);
+  px(context, 0, 0, TILE_W, TILE_H, '#20170f');
+  px(context, 2, 2, TILE_W - 3, TILE_H - 3, tone.base);
+  px(context, 3, 2, TILE_W - 6, TILE_H - 11, tone.face);
+  px(context, TILE_W - 3, 4, 2, TILE_H - 8, tone.foot);
+  // 景泰蓝式双层细框，中间用短线做回纹节奏。
+  px(context, 5, 5, TILE_W - 11, 1, tone.line);
+  px(context, 5, TILE_H - 15, TILE_W - 11, 1, tone.line);
+  px(context, 5, 5, 1, TILE_H - 19, tone.line);
+  px(context, TILE_W - 6, 5, 1, TILE_H - 19, tone.line);
+  px(context, 7, 7, TILE_W - 15, 1, tone.inner);
+  px(context, 7, TILE_H - 17, TILE_W - 15, 1, tone.inner);
+  px(context, 7, 7, 1, TILE_H - 23, tone.inner);
+  px(context, TILE_W - 8, 7, 1, TILE_H - 23, tone.inner);
+  for (let x = 9; x < TILE_W - 10; x += 6) {
+    px(context, x, 5, 3, 1, tone.mark);
+    px(context, x, TILE_H - 15, 3, 1, tone.mark);
+  }
+  // 四角角花。
+  for (const [x, y] of [[4, 4], [TILE_W - 8, 4], [4, TILE_H - 18], [TILE_W - 8, TILE_H - 18]]) {
+    px(context, x, y, 4, 2, tone.mark);
+    px(context, x, y, 2, 4, tone.mark);
   }
 
-  backEmblem(context, back, tone, (TILE_W / 2) | 0, ((TILE_H - 6) / 2) | 0);
+  backEmblem(context, back, tone, (TILE_W / 2) | 0, ((TILE_H - 9) / 2) | 0);
 
   // 玉色托板 + 高光暗边，和牌面同一套立体规则
-  px(context, 1, TILE_H - 6, TILE_W - 2, 4, '#2f7d5c');
-  px(context, 1, TILE_H - 3, TILE_W - 2, 2, '#1d5340');
-  px(context, 1, 1, TILE_W - 2, 1, tone.line);
-  px(context, 1, 1, 1, TILE_H - 7, tone.line);
-  px(context, TILE_W - 2, 2, 1, TILE_H - 8, tone.foot);
-  px(context, 1, TILE_H - 7, TILE_W - 2, 1, tone.foot);
+  px(context, 2, TILE_H - 9, TILE_W - 5, 5, '#2f7d5c');
+  px(context, 3, TILE_H - 5, TILE_W - 7, 2, '#1d5340');
+  px(context, 3, 2, TILE_W - 6, 1, tone.line);
+  px(context, 3, 2, 1, TILE_H - 12, tone.line);
+  px(context, TILE_W - 4, 3, 1, TILE_H - 12, tone.foot);
+  px(context, 3, TILE_H - 10, TILE_W - 6, 1, tone.foot);
   roundCorners(context, TILE_W, TILE_H, '#0e0b07');
 
   cache.set(key, canvas);

@@ -18,8 +18,9 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;}
+/* 这层渐变只在拿不到 WebGL 时可见；正常情况下被 #backdrop 的 shader 盖住 */
 body{
-  background:radial-gradient(circle at 50% 38%, #2b5648 0%, var(--bg1) 45%, var(--bg2) 100%);
+  background:radial-gradient(circle at 50% 38%, #23483d 0%, var(--bg1) 45%, var(--bg2) 100%);
   font-family:"PingFang SC","Hiragino Sans GB","Heiti SC","Microsoft YaHei",sans-serif;
   font-weight:800;color:var(--txt);overflow:hidden;user-select:none;
   -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;
@@ -34,6 +35,17 @@ body::after{
   background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%);
 }
 canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
+/* 背景 shader：铺满、置底、不吃事件。半分辨率画上来所以要拉伸 */
+#backdrop{
+  position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;
+  display:block;
+}
+/* 弹簧接管 transform 的元素，不能再被 CSS 过渡或关键帧碰 */
+.sprung{transition:none !important;will-change:transform;}
+/* 标题页开着时把牌桌压到几乎看不见，只留 shader 和 logo */
+/* 加一点模糊：不糊的话「0 / 400」这种数字还认得出来，读起来像脏东西而不是背景 */
+body.atTitle #app{opacity:.07;filter:blur(3px);}
+#app{transition:opacity .35s ease, filter .35s ease;}
 
 /* ---------- 骨架 ---------- */
 /* overflow:hidden 很重要：发牌等动画会把牌暂时位移到边界外，
@@ -142,30 +154,70 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 #sideBtns{display:flex;gap:4px;}
 #sideBtns .btn{flex:1;}
 
-/* ---------- 五系卡面：颜色 + 轮廓 + 单字，三重区分 ---------- */
+/* ---------- 五系卡面：真实卡图 + 不同实体物件 ---------- */
 .card{
-  position:relative;border:3px solid var(--edge);background:linear-gradient(180deg,#4a5a6b,#38455a);
-  box-shadow:0 3px 0 rgba(0,0,0,.4);display:flex;flex-direction:column;align-items:center;gap:2px;
-  padding:4px 3px;transition:transform .12s;overflow:hidden;
+  position:relative;border:3px solid #17120c;
+  background:linear-gradient(145deg,#4a3d2b 0%,#2d271f 58%,#1b1c1b 100%);
+  box-shadow:0 4px 0 rgba(0,0,0,.48),inset 0 0 0 1px rgba(255,231,170,.15);
+  display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 5px;
+  transition:border-color .12s,filter .12s;overflow:hidden;transform-style:preserve-3d;
 }
-/* 卡面内的一层斜纹与顶部高光，靠它把纯色块变成「印出来的卡」 */
+/* 金粉、旧纸纤维与顶部釉光；卡图在上，纹理不能盖住文字。 */
 .card::before{
   content:'';position:absolute;inset:0;pointer-events:none;
   background:
-    linear-gradient(180deg,rgba(255,255,255,.16) 0 2px,transparent 2px),
-    repeating-linear-gradient(135deg, rgba(255,255,255,.05) 0 2px, transparent 2px 9px);
+    linear-gradient(180deg,rgba(255,246,211,.20) 0 2px,transparent 2px),
+    repeating-linear-gradient(96deg,rgba(255,241,190,.035) 0 1px,transparent 1px 7px),
+    radial-gradient(circle at 18% 22%,rgba(238,190,80,.12) 0 1px,transparent 1.5px);
+  background-size:auto,auto,13px 17px;
 }
 .card > *{position:relative;z-index:1;}
 .card .cName{font-size:10px;line-height:1.1;text-align:center;}
-.card .cText{font-size:9px;color:#eee6d4;text-align:center;line-height:1.3;}
+.card .cText{font-size:9px;color:#f0e6cf;text-align:left;line-height:1.38;}
 .card .cMeta{font-size:8px;color:#ffe9a8;}
-.card.family-charm{border-radius:3px 3px 8px 8px;background:linear-gradient(180deg,#2f6f86,#1d4a5e);border-top:5px solid var(--charm);}
-.card.family-codex{border-radius:3px 8px 8px 3px;background:linear-gradient(180deg,#5b4790,#382a5c);border-left:6px double var(--codex);}
-.card.family-general{border-radius:9px 9px 4px 4px;background:linear-gradient(180deg,#8a5a3e,#5e3a28);border-color:#2a1a12;box-shadow:0 3px 0 rgba(0,0,0,.45), inset 0 0 0 2px rgba(224,164,74,.35);}
-.card.family-bone{border-radius:6px;background:linear-gradient(180deg,#2f7d5c,#1d5340);clip-path:polygon(0 8%,8% 0,92% 0,100% 8%,100% 92%,92% 100%,8% 100%,0 92%);}
-.card.family-seal{border-radius:2px;background:linear-gradient(180deg,#9c3b33,#6d2620);border-width:4px;}
+.card.family-charm{border-radius:4px 4px 11px 11px;background:linear-gradient(165deg,#584a30,#233a34 68%,#142821);border-top:6px solid #d6b45e;}
+.card.family-codex{border-radius:4px 10px 10px 4px;background:linear-gradient(150deg,#342b4e,#201b31);border-left:7px double #b49add;}
+.card.family-general{border-radius:11px 11px 5px 5px;background:linear-gradient(160deg,#704127,#30251d);border-color:#24150d;box-shadow:0 4px 0 rgba(0,0,0,.5),inset 0 0 0 2px rgba(224,164,74,.35);}
+.card.family-bone{border-radius:7px;background:linear-gradient(155deg,#2c7155,#173c31);clip-path:polygon(0 8%,8% 0,92% 0,100% 8%,100% 92%,92% 100%,8% 100%,0 92%);}
+.card.family-seal{border-radius:3px;background:linear-gradient(150deg,#8d3129,#431b18);border-width:4px;}
+
+.cardArtwork{
+  width:70px;aspect-ratio:1;flex:0 0 auto;overflow:hidden;position:relative;
+  border:2px solid rgba(18,14,9,.86);box-shadow:0 3px 0 rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,245,205,.18);
+  background-color:#d9c69b;background-repeat:no-repeat;
+}
+.atlasArtwork{image-rendering:auto;background-repeat:no-repeat;}
+.art-charm{
+  background-image:url("assets/art/charm-atlas-v1.webp");background-size:500% 400%;
+  background-position:var(--art-x) var(--art-y);border-radius:2px 2px 7px 7px;
+}
+.art-general{
+  aspect-ratio:3/4;background-image:url("assets/art/general-atlas-v1.webp");background-size:400% 300%;
+  background-position:var(--art-x) var(--art-y);border-radius:7px 7px 3px 3px;
+}
+.objectArtwork{display:grid;place-items:center;background:#1b2327;}
+.artObject{display:block;position:relative;width:68%;height:72%;}
+.artObject::before,.artObject::after,.artAccent,.artMark{position:absolute;content:'';display:block;}
+.artMark{inset:0;display:grid;place-items:center;font-family:"Kaiti SC","STKaiti","KaiTi",serif;font-size:22px;line-height:1;}
+.art-codex{background:linear-gradient(145deg,#57477f,#251d3a);}
+.art-codex .artObject{background:#d8c18c;border:3px solid #24180e;border-radius:2px 6px 6px 2px;box-shadow:inset 5px 0 0 #9d7850;}
+.art-codex .artObject::before{left:8px;right:5px;top:8px;height:2px;background:#8a2e27;box-shadow:0 7px 0 #6c5134,0 14px 0 #6c5134,0 21px 0 #6c5134;}
+.art-codex .artMark{color:#6e211c;font-size:13px;writing-mode:vertical-rl;}
+.art-bone{background:radial-gradient(circle at 35% 30%,#aef0cd,#2e8b67 44%,#143e32 72%);}
+.art-bone .artObject{transform:rotate(-7deg);background:linear-gradient(135deg,#f5f0d6,#9ed0ae);border:3px solid #254f3e;clip-path:polygon(20% 0,80% 0,100% 20%,85% 45%,100% 75%,78% 100%,22% 100%,0 76%,15% 46%,0 20%);}
+.art-bone .artObject::before{inset:12% 18%;border-left:2px solid rgba(35,91,65,.7);border-right:1px solid rgba(35,91,65,.5);transform:skew(-14deg);}
+.art-bone .artMark{color:#1d694b;text-shadow:1px 1px #e9ffef;}
+.art-seal{background:radial-gradient(circle,#c85543 0 30%,#591d19 72%);}
+.art-seal .artObject{background:#a62f28;border:4px solid #e5b77a;box-shadow:inset 0 0 0 3px #6c1d19;transform:rotate(-4deg);}
+.art-seal .artObject::before{left:18%;right:18%;bottom:-20%;height:24%;background:#d5a16d;border:2px solid #4b1714;}
+.art-seal .artMark{color:#f4d7a1;text-shadow:2px 2px #5d1613;}
+.art-paper{background:linear-gradient(145deg,#bca67c,#6a5737);}
+.art-paper .artObject{background:#e4d6ad;border:3px solid #654526;transform:rotate(3deg);}
+.art-paper .artObject::before{inset:8px;border-top:2px solid #9b332a;border-bottom:2px solid #9b332a;}
+.art-paper .artMark{color:#6c2822;}
 
 .buildCard{width:100%;flex-direction:row;align-items:center;gap:5px;padding:4px;}
+.buildCard .cardArtwork{width:28px;border-width:1px;box-shadow:0 2px 0 rgba(0,0,0,.35);}
 .buildCard .cName{text-align:left;}
 .buildCard .cMeta{margin-left:auto;}
 .buildSlot{
@@ -176,28 +228,33 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .kindTag{font-size:8px;color:#cfe6ff;background:rgba(0,0,0,.3);border-radius:3px;padding:0 3px;}
 
 /* ---------- 开运位 ---------- */
-#slotBar{flex:0 0 auto;display:flex;gap:5px;padding:5px;background:rgba(0,0,0,.24);border:3px solid var(--edge);border-radius:8px;}
+#slotBar{
+  flex:0 0 auto;display:flex;gap:7px;padding:7px;background:rgba(4,14,11,.5);
+  border:3px solid #17140e;border-radius:10px;perspective:900px;
+  box-shadow:inset 0 0 0 1px rgba(226,190,92,.13),0 4px 0 rgba(0,0,0,.35);
+}
 /* 开运位就是灵签栏。亮出的碰 / 顺 / 杠在牌桌中央，这里只放签。 */
 .slot{
-  flex:1 1 0;min-width:0;border-radius:7px;border:3px dashed rgba(255,255,255,.14);
-  background:rgba(255,255,255,.03);min-height:54px;padding:3px;
+  flex:1 1 0;min-width:0;border-radius:8px;border:2px dashed rgba(221,198,139,.28);
+  background:linear-gradient(155deg,rgba(221,198,139,.08),rgba(0,0,0,.12));min-height:82px;padding:5px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;
 }
-.slot .slotGold{font-size:11px;color:var(--gold);}
-.slot .slotIdx{font-size:8px;color:var(--dim);}
+.slot::before{content:'';position:absolute;inset:4px;border:1px solid rgba(221,198,139,.1);border-radius:5px;pointer-events:none;}
+.slot .slotGold{font-size:13px;color:#f4cf70;text-shadow:2px 2px #261b0b;}
+.slot .slotIdx{font-size:9px;color:#c5b894;}
 .slot.filled{
-  flex-direction:row;align-items:center;justify-content:flex-start;gap:5px;padding:4px 5px;
-  border-style:solid;border-color:var(--edge);
-  background:linear-gradient(180deg,#2f6f86,#1d4a5e);box-shadow:0 3px 0 rgba(0,0,0,.4);
-  border-top:4px solid var(--charm);
+  display:grid;grid-template-columns:minmax(42px,52px) minmax(0,1fr);align-items:center;justify-content:start;
+  gap:7px;padding:6px;border-style:solid;border-color:#20160d;
+  background:linear-gradient(150deg,#655339,#203b34 72%);box-shadow:0 4px 0 rgba(0,0,0,.42),inset 0 0 0 1px rgba(255,223,145,.17);
+  border-top:4px solid #c6d1d7;
 }
-.slot.filled canvas{flex:0 0 auto;filter:drop-shadow(0 2px 0 rgba(0,0,0,.4));}
+.slot .slotArtwork{width:100%;max-width:52px;border-width:1px;box-shadow:0 2px 0 rgba(0,0,0,.42);}
 .slot .slotBody{display:flex;flex-direction:column;min-width:0;line-height:1.15;text-align:left;}
 .slot .charmName{
-  font-size:11px;color:#fff3c8;text-align:left;line-height:1.15;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-size:12px;color:#fff0bd;text-align:left;line-height:1.18;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
 }
-.slot .charmTier{font-size:8px;color:#bcd8e4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.slot .charmTier{font-size:9px;color:#cdd8d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .slot.tier-gold{border-top-color:var(--gold);background:linear-gradient(180deg,#77602d,#3c5360);}
 .slot.tier-rainbow{
   border-top-color:transparent;
@@ -215,7 +272,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
     radial-gradient(ellipse at 50% 42%, rgba(122,206,168,.20) 0%, rgba(0,0,0,0) 60%),
     repeating-linear-gradient(45deg, rgba(255,255,255,.022) 0 1px, transparent 1px 6px),
     repeating-linear-gradient(-45deg, rgba(0,0,0,.05) 0 1px, transparent 1px 6px),
-    linear-gradient(180deg,#1c4438 0%,#12312a 100%);
+    linear-gradient(180deg,rgba(20,52,42,.62) 0%,rgba(11,33,28,.78) 100%);
   border:3px solid #0b1e19;
   box-shadow:inset 0 0 0 2px rgba(255,255,255,.05), inset 0 12px 26px rgba(0,0,0,.4), 0 4px 0 rgba(0,0,0,.35);
   display:flex;align-items:center;justify-content:center;overflow:hidden;
@@ -224,13 +281,34 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 #tableMark{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:.09;pointer-events:none;gap:4px;}
 #tableMark .mk{font-size:104px;line-height:1;color:#eafff4;}
 #tableMark .mk2{font-size:13px;letter-spacing:7px;color:#eafff4;}
-#revealZone{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;padding:6px 92px 6px 8px;position:relative;z-index:2;}
+#revealZone{display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:center;padding:12px 98px 10px 12px;position:relative;z-index:2;}
 .meld{
-  display:flex;gap:1px;padding:4px;border-radius:7px;position:relative;
-  background:linear-gradient(180deg,rgba(0,0,0,.16),rgba(0,0,0,.32));
-  border:2px solid rgba(0,0,0,.42);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 2px 0 rgba(0,0,0,.3);
+  width:clamp(96px,11vw,132px);min-height:clamp(132px,18vh,186px);display:grid;place-items:end center;
+  padding:38px 9px 10px;border-radius:12px;position:relative;
+  background:
+    radial-gradient(circle at 50% 68%,rgba(236,205,126,.16),transparent 52%),
+    linear-gradient(160deg,rgba(13,37,30,.68),rgba(4,18,15,.9));
+  border:2px solid rgba(221,188,105,.33);
+  box-shadow:inset 0 0 0 1px rgba(255,245,202,.06),0 5px 0 rgba(0,0,0,.32);
 }
 .meld.concealed{border-style:dashed;border-color:rgba(255,255,255,.22);}
+.meld::before{content:'';position:absolute;inset:6px;border:1px solid rgba(234,207,145,.1);border-radius:8px;pointer-events:none;}
+.meldInk{position:absolute;left:4px;right:4px;top:-7px;height:58px;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.meldInk::before{
+  content:'';position:absolute;width:76px;height:46px;border-radius:48% 52% 45% 55%;
+  background:radial-gradient(ellipse,rgba(239,226,190,.96) 0 35%,rgba(219,203,163,.65) 52%,transparent 73%);
+  filter:blur(.4px);transform:rotate(-4deg);opacity:.9;
+}
+.meldInk::after{content:'';position:absolute;width:92px;height:20px;background:radial-gradient(ellipse,rgba(6,14,12,.55),transparent 70%);filter:blur(5px);top:30px;}
+.meldInkText{
+  position:relative;z-index:2;font-family:"Kaiti SC","STKaiti","KaiTi","Noto Serif CJK SC","Songti SC",serif;
+  font-size:43px;font-weight:900;line-height:1;color:#15130f;transform:rotate(-4deg) skew(-4deg);
+  text-shadow:1px 0 rgba(0,0,0,.72),-1px 1px rgba(0,0,0,.32),3px 4px 4px rgba(10,12,9,.28);
+  filter:contrast(1.25);
+}
+.meldInkSub{position:absolute;right:7px;bottom:-1px;z-index:3;font-family:"Kaiti SC","STKaiti","KaiTi",serif;font-size:9px;color:#e5c879;background:#67241e;border:1px solid #d28e6f;padding:1px 3px;transform:rotate(3deg);}
+.meldHeroTile{display:flex;align-items:flex-end;justify-content:center;position:relative;z-index:2;filter:drop-shadow(0 6px 2px rgba(0,0,0,.5));}
+.meldHeroTile canvas{width:clamp(68px,7.6vw,98px);height:auto;}
 #nextBox{position:absolute;right:8px;top:50%;transform:translateY(-50%);text-align:center;z-index:3;background:rgba(0,0,0,.3);border:2px solid rgba(0,0,0,.4);border-radius:7px;padding:4px 6px;}
 #nextTile{margin:2px 0;display:flex;gap:3px;align-items:flex-end;justify-content:center;}
 #nextTile .nextSecond{opacity:.55;}
@@ -262,7 +340,10 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   border-radius:5px;background:#302913;color:#ffe89c;font-size:10px;text-align:center;
 }
 #draftNotice[hidden]{display:none;}
-#draftCards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;justify-content:center;flex:1;min-height:0;}
+#draftCards{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;justify-content:center;
+  flex:1;min-height:0;perspective:1100px;
+}
 #draftLayer[data-offer-count="4"] #draftCards{grid-template-columns:repeat(4,minmax(0,1fr));}
 #draftActions{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:0;flex-wrap:wrap;}
 #draftLayer{padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));}
@@ -273,8 +354,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   padding:14px 12px 12px;cursor:pointer;gap:7px;
   color:var(--txt);font-family:inherit;font-weight:800;justify-content:flex-start;
 }
-.charmPick canvas,.shopCard canvas{width:90px;height:114px;}
-.charmPick canvas{margin:6px 0 4px;filter:drop-shadow(0 3px 0 rgba(0,0,0,.42));}
+.charmPick .cardArtwork,.shopCard .cardArtwork{width:132px;max-height:178px;margin:6px 0 4px;box-shadow:0 5px 0 rgba(0,0,0,.45),0 0 0 2px rgba(245,211,126,.16);}
 .charmPick .cName{font-size:22px;line-height:1.15;letter-spacing:1px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
 .charmPick .cText{
   font-size:14px;line-height:1.6;flex:1;display:flex;align-items:center;padding:0 4px;
@@ -282,8 +362,8 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .charmPick .cMeta{
   width:100%;font-size:11px;padding:5px 0 0;border-top:1px solid rgba(255,255,255,.16);
 }
-.charmPick:focus-visible{transform:translateY(-6px);outline:none;border-color:var(--gold);}
-@media (hover:hover){.charmPick:hover{transform:translateY(-6px);border-color:var(--gold);}}
+.charmPick:focus-visible{outline:none;border-color:var(--gold);}
+@media (hover:hover){.charmPick:hover{border-color:var(--gold);}}
 /* 顶部两条带：左上职责、整行签阶，卡面一眼能读出「这是什么签」 */
 .charmPick .cRole{
   align-self:flex-start;font-size:12px;color:#12181f;background:rgba(255,233,168,.92);
@@ -337,15 +417,19 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .fateArrow{font-size:30px;color:var(--gold);}
 
 /* ---------- 手牌 ---------- */
-#handZone{flex:0 0 auto;display:flex;justify-content:center;align-items:flex-end;gap:3px;flex-wrap:wrap;padding:8px 2px 2px;min-height:0;}
+#handZone{
+  flex:0 0 auto;display:flex;justify-content:center;align-items:flex-end;gap:3px;flex-wrap:wrap;
+  padding:8px 2px 2px;min-height:0;perspective:900px;
+}
 .tile{
   position:relative;flex:0 0 auto;cursor:pointer;background:none;border:0;padding:0;
   display:flex;align-items:flex-end;justify-content:center;min-width:44px;min-height:48px;
-  transition:transform .13s cubic-bezier(.34,1.56,.64,1);
+  transition:filter .13s ease;
   filter:drop-shadow(0 3px 0 rgba(0,0,0,.45));
+  transform-style:preserve-3d;
 }
-.tile:hover{transform:translateY(-8px);}
-.tile.sel{transform:translateY(-20px);}
+/* 抬起 / 选中的位移由 spring.mjs 驱动，这里只留视觉标记 */
+.tile.sel{filter:drop-shadow(0 8px 0 rgba(0,0,0,.5));}
 .tile.sel::after{content:'';position:absolute;inset:-3px;border:3px solid var(--gold);border-radius:5px;pointer-events:none;}
 .tile:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
 /* 被牌骨 / 牌印改造过的牌，牌面下方挂一条彩带 */
@@ -402,7 +486,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   gap:10px;padding:4px 5px 8px;align-content:start;
 }
 .libraryCard{min-height:210px;padding:10px 8px 8px;gap:5px;justify-content:flex-start;}
-.libraryCard canvas{margin:2px 0;filter:drop-shadow(0 3px 0 rgba(0,0,0,.42));}
+.libraryCard .cardArtwork{width:86px;max-height:114px;margin:2px 0;box-shadow:0 3px 0 rgba(0,0,0,.42);}
 .libraryCard .cName{font-size:15px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
 .libraryCard .cText{font-size:11px;line-height:1.5;flex:1;display:flex;align-items:center;}
 .libraryCard .cMeta{width:100%;font-size:9px;text-align:center;padding-top:3px;border-top:1px solid rgba(255,255,255,.16);}
@@ -415,17 +499,16 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .shopScreen .screenBox{width:min(1240px,96vw);max-height:94dvh;display:flex;flex-direction:column;padding:18px 20px;}
 .shopScreen .title{font-size:34px;}
 .shopScreen .subtitle{font-size:14px;margin-bottom:14px;}
-#shopGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;flex:1;min-height:0;}
+#shopGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;flex:1;min-height:0;perspective:1100px;}
 .shopCard{
   width:100%;max-width:320px;justify-self:center;min-height:min(420px,56dvh);
   padding:14px 12px 12px;cursor:pointer;gap:7px;justify-content:flex-start;
 }
-.shopCard canvas{margin:8px 0 4px;filter:drop-shadow(0 3px 0 rgba(0,0,0,.42));}
 .shopCard .cName{font-size:22px;letter-spacing:1px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
 .shopCard .cText{font-size:14px;line-height:1.6;flex:1;display:flex;align-items:center;padding:0 4px;}
 .shopCard .cMeta{width:100%;font-size:11px;padding-top:5px;border-top:1px solid rgba(255,255,255,.16);}
 .shopCard .famTag{font-size:11px;padding:1px 7px;}
-.shopCard:hover{transform:translateY(-6px);}
+.shopCard:hover{border-color:var(--gold);}
 .shopCard.cant{filter:grayscale(.6) brightness(.7);cursor:default;}
 .shopCard.sold{filter:grayscale(.9) brightness(.45);cursor:default;}
 .shopCard .price{position:absolute;top:6px;right:6px;background:var(--gold);color:#3a2c06;font-size:15px;padding:2px 10px;border-radius:5px;border:2px solid #0f1319;z-index:2;box-shadow:0 2px 0 rgba(0,0,0,.4);}
@@ -483,9 +566,6 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   100%{opacity:0;transform:translate(-50%,-44px) scale(.9);}
 }
 
-.popScore{animation:popScore .34s cubic-bezier(.34,1.56,.64,1);}
-@keyframes popScore{0%{transform:translateY(0) scale(1);}45%{transform:translateY(-16px) scale(1.1);}100%{transform:translateY(0) scale(1);}}
-
 .jiggle{animation:jiggle .34s ease;}
 @keyframes jiggle{0%{transform:rotate(0) scale(1);}30%{transform:rotate(-5deg) scale(1.12);}60%{transform:rotate(4deg) scale(1.08);}100%{transform:rotate(0) scale(1);}}
 
@@ -510,14 +590,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   80%{transform:translate(calc(var(--shake) * 0.6), 0);}
 }
 
-/* 结算时被点名的那张卡：跳一下 + 一圈金色高光，玩家才知道分从哪儿来 */
-.slotPop{animation:slotPop .42s cubic-bezier(.34,1.56,.64,1);}
-@keyframes slotPop{
-  0%{transform:translateY(0) scale(1);}
-  35%{transform:translateY(-10px) scale(1.14);}
-  70%{transform:translateY(2px) scale(.98);}
-  100%{transform:translateY(0) scale(1);}
-}
+/* 结算时被点名的那张卡：弹簧冲量把它顶起来（见 spring.mjs），这里只负责那圈金光 */
 .spotlight{
   position:relative;z-index:20;
   box-shadow:0 0 0 3px var(--gold),0 0 16px 4px rgba(240,192,74,.55) !important;
@@ -536,15 +609,13 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 /* ---------- 外层：标题 / 牌组 / 设置 / 选关 ---------- */
 /* 标题页有自己的一整块背景，不复用局内的半透明遮罩 */
 .titleScreen{
-  background:
-    radial-gradient(ellipse at 50% 22%, rgba(120,205,168,.20) 0%, rgba(0,0,0,0) 58%),
-    linear-gradient(180deg,#12362b 0%,#0d2a22 46%,#071a15 100%);
+  background:linear-gradient(180deg,rgba(7,26,21,.28) 0%,rgba(4,16,13,.55) 100%);
   padding:0;overflow:hidden;
 }
 .titleBg{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;}
 /* 回纹地纹：两条斜向重复渐变交叉出中式菱格 */
 .titleGrain{
-  position:absolute;inset:-10%;opacity:.5;
+  position:absolute;inset:-10%;opacity:.32;
   background:
     repeating-linear-gradient(45deg, rgba(255,255,255,.045) 0 2px, transparent 2px 22px),
     repeating-linear-gradient(-45deg, rgba(255,255,255,.045) 0 2px, transparent 2px 22px),
@@ -667,15 +738,23 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .buildChip .chipName{font-size:9px;}
   .buildChip .chipCount{font-size:7px;}
   #sideBtns .btn{font-size:8px;padding:3px 4px;min-height:26px;min-width:30px;}
-  .slot{min-height:38px;border-width:2px;}
+  #slotBar{gap:4px;padding:4px;}
+  .slot{min-height:56px;border-width:2px;padding:3px;}
   .slot .slotGold{font-size:10px;}
   .slot .slotIdx{font-size:7px;}
-  .slot.filled{gap:3px;padding:2px 4px;border-top-width:3px;}
+  .slot.filled{grid-template-columns:minmax(28px,34px) minmax(0,1fr);gap:3px;padding:3px;border-top-width:3px;}
+  .slot .slotArtwork{max-width:34px;}
   .slot .charmName{font-size:9px;}
   .slot .charmTier{font-size:7px;}
   #tableMark .mk{font-size:60px;}
   #tableMark .mk2{display:none;}
-  #revealZone{padding:4px 76px 4px 6px;gap:6px;}
+  #revealZone{padding:6px 76px 4px 6px;gap:6px;}
+  .meld{width:76px;min-height:104px;padding:31px 5px 6px;border-radius:8px;}
+  .meldInk{height:44px;top:-6px;}
+  .meldInk::before{width:58px;height:36px;}
+  .meldInkText{font-size:32px;}
+  .meldInkSub{font-size:7px;right:1px;bottom:0;}
+  .meldHeroTile canvas{width:58px;}
   #patternBanner{font-size:24px;}
   .btn{padding:6px 10px;font-size:12px;min-height:44px;}
   #draftActions .btn{min-height:48px;}
@@ -700,9 +779,8 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #deckPile{display:none;}
   #draftPanel{width:min(980px,100%);padding:8px 10px;gap:6px;}
   #draftCards{gap:8px;}
-  .charmPick canvas,.shopCard canvas{width:52px;height:66px;}
+  .charmPick .cardArtwork,.shopCard .cardArtwork{width:58px;max-height:78px;margin:2px 0;}
   .charmPick{min-height:196px;max-width:210px;padding:6px 6px 5px;gap:3px;}
-  .charmPick canvas{margin:2px 0;}
   .charmPick .cName{font-size:15px;}
   .charmPick .cText{font-size:11px;line-height:1.4;}
   .charmPick .cRole{font-size:9px;padding:1px 6px;}
@@ -721,7 +799,6 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .shopScreen .subtitle{font-size:11px;margin-bottom:6px;}
   #shopGrid{gap:8px;}
   .shopCard{min-height:196px;max-width:220px;padding:6px 6px 5px;gap:3px;}
-  .shopCard canvas{margin:2px 0;}
   .shopCard .cName{font-size:15px;}
   .shopCard .cText{font-size:11px;line-height:1.4;}
   .shopCard .cMeta,.shopCard .famTag{font-size:9px;}
@@ -750,9 +827,14 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .buildSlot{width:44px;flex:0 0 44px;min-height:40px;}
   #sideBtns{flex-direction:column;}
   #main{flex:1;}
-  #slotBar{flex-wrap:wrap;}
-  .slot{flex:1 1 28%;min-height:42px;}
-  #revealZone{padding:6px 8px 56px;}
+  #slotBar{flex-wrap:wrap;gap:5px;}
+  .slot{flex:1 1 28%;min-height:54px;}
+  .slot.filled{grid-template-columns:minmax(30px,36px) minmax(0,1fr);}
+  .slot .slotArtwork{max-width:36px;}
+  #revealZone{padding:8px 8px 56px;gap:7px;}
+  .meld{width:82px;min-height:116px;padding:34px 6px 7px;}
+  .meldInkText{font-size:35px;}
+  .meldHeroTile canvas{width:64px;}
   #nextBox{right:6px;bottom:4px;top:auto;transform:none;}
   #tableMark .mk{font-size:76px;}
   #handZone{gap:2px;}
@@ -780,9 +862,10 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .blindCard .cText{font-size:9px;min-height:38px;}
   .blindTarget{font-size:12px;}
   .blindActions .btn{width:100%;min-width:0;padding:6px 2px;font-size:10px;}
+  #actionHint{display:none;}
   #draftPanel{padding:10px 8px;}
   #draftCards{gap:8px;}
-  .charmPick canvas,.shopCard canvas{width:66px;height:84px;}
+  .charmPick .cardArtwork,.shopCard .cardArtwork{width:74px;max-height:98px;}
   .charmPick{padding:8px 6px 6px;gap:4px;}
   .charmPick .cName{font-size:16px;}
   .charmPick .cText{font-size:11px;line-height:1.45;}
@@ -805,4 +888,32 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #roundName{font-size:12px;}
   #totalBox{font-size:16px;}
   .buildCard{min-width:76px;}
+}
+
+/* 窄竖屏有亮组时，必须给牌桌留出一整张「大牌＋墨字」的高度。
+   上方常驻信息改成紧凑机台条；触控按钮仍保持 48px。 */
+@media (max-width:420px) and (max-aspect-ratio:0.95){
+  #side{gap:4px;}
+  #roundPanel,#scorePanel,#statPanel{padding:5px;}
+  #roundMeta{font-size:7px;}
+  #targetBox{margin-top:3px;padding:3px 5px;}
+  #targetVal{min-height:17px;}
+  #targetBar{height:5px;margin-top:2px;}
+  #pendingLine{font-size:8px;margin-top:2px;}
+  #omenSlot{min-height:44px;margin-top:3px;padding:2px 5px;}
+  #buildPanel{flex:0 0 70px;height:70px;padding:4px;gap:3px;}
+  #buildBar{max-height:52px;gap:3px;}
+  #buildPanel > .lbl{font-size:8px;}
+  .buildChip{min-height:44px;}
+  #sideBtns .btn{min-height:44px;}
+  #slotBar{gap:4px;padding:4px;}
+  .slot{min-height:48px;padding:2px;}
+  .slot.filled{grid-template-columns:30px minmax(0,1fr);gap:3px;padding:2px;}
+  .slot .slotArtwork{max-width:30px;}
+  .slot .charmName{font-size:8px;}
+  .slot .charmTier{font-size:6px;}
+  #revealZone{padding:5px 5px 48px;gap:5px;}
+  .meld{width:74px;min-height:102px;padding:31px 5px 6px;}
+  .meldInkText{font-size:32px;}
+  .meldHeroTile canvas{width:58px;}
 }
