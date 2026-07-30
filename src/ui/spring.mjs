@@ -42,6 +42,8 @@ function makeState(element, options) {
     element,
     // lift 单位是 px，rx/ry/rot 是 deg，scale 是倍率
     lift: channel(0, 210, 17),
+    // 拖拽用的水平位移。刚度调高，手感要跟得紧
+    x: channel(0, 420, 26),
     scale: channel(1, 240, 15),
     rx: channel(0, 190, 18),
     ry: channel(0, 190, 18),
@@ -64,7 +66,7 @@ function write(state, time) {
   const lift = state.lift.value + bob;
   const parts = [];
   if (state.depth) parts.push(`perspective(${state.depth}px)`);
-  parts.push(`translate3d(0, ${(-lift).toFixed(2)}px, 0)`);
+  parts.push(`translate3d(${state.x.value.toFixed(2)}px, ${(-lift).toFixed(2)}px, 0)`);
   if (state.rx.value || state.ry.value) {
     parts.push(`rotateX(${state.rx.value.toFixed(2)}deg)`);
     parts.push(`rotateY(${state.ry.value.toFixed(2)}deg)`);
@@ -87,6 +89,7 @@ function tick(stamp) {
       continue;
     }
     let moving = false;
+    moving = step(state.x, delta) || moving;
     moving = step(state.lift, delta) || moving;
     moving = step(state.scale, delta) || moving;
     moving = step(state.rx, delta) || moving;
@@ -160,7 +163,7 @@ export function impulse(element, { lift = 0, scale = 0, rot = 0 } = {}) {
 export function springReset(element) {
   const state = states.get(element);
   if (!state) return;
-  springTo(element, { lift: 0, scale: 1, rx: 0, ry: 0, rot: 0 });
+  springTo(element, { x: 0, lift: 0, scale: 1, rx: 0, ry: 0, rot: 0 });
 }
 
 /**
@@ -205,17 +208,19 @@ export function attachTileMotion(element, { selected = false } = {}) {
   const restLift = selected ? 20 : 0;
   const restRot = selected ? -2.5 : 0;
   springFor(element, { depth: 520 });
-  springTo(element, { lift: restLift, rot: restRot, scale: selected ? 1.06 : 1 });
+  springTo(element, { x: 0, lift: restLift, rot: restRot, scale: selected ? 1.06 : 1 });
 
   if (element.dataset.sprungTile === '1') return;
   element.dataset.sprungTile = '1';
   if (!matchMedia('(hover:hover)').matches) return;
 
   element.addEventListener('pointerenter', () => {
+    if (element.dataset.dragging === '1') return;
     const base = element.classList.contains('sel') ? 20 : 0;
     springTo(element, { lift: base + 9, scale: 1.07 });
   });
   element.addEventListener('pointerleave', () => {
+    if (element.dataset.dragging === '1') return;
     const isSelected = element.classList.contains('sel');
     springTo(element, {
       lift: isSelected ? 20 : 0,
@@ -230,7 +235,7 @@ export function setSpringMotion(on) {
   motionEnabled = Boolean(on) && !REDUCED;
   if (motionEnabled) return;
   for (const state of active) {
-    for (const key of ['lift', 'scale', 'rx', 'ry', 'rot']) {
+    for (const key of ['x', 'lift', 'scale', 'rx', 'ry', 'rot']) {
       state[key].value = state[key].target;
       state[key].velocity = 0;
     }

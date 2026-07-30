@@ -417,9 +417,11 @@ body.atTitle #app{opacity:.07;filter:blur(3px);}
 .fateArrow{font-size:30px;color:var(--gold);}
 
 /* ---------- 手牌 ---------- */
+/* 操作栏在手牌上方，但 DOM 里在它前面：手牌要压在按钮上层，
+   拖起来的牌才能盖过按钮往上走 */
 #handZone{
   flex:0 0 auto;display:flex;justify-content:center;align-items:flex-end;gap:3px;flex-wrap:wrap;
-  padding:8px 2px 2px;min-height:0;perspective:900px;
+  padding:4px 2px 2px;min-height:0;perspective:900px;position:relative;z-index:5;
 }
 .tile{
   position:relative;flex:0 0 auto;cursor:pointer;background:none;border:0;padding:0;
@@ -427,7 +429,16 @@ body.atTitle #app{opacity:.07;filter:blur(3px);}
   transition:filter .13s ease;
   filter:drop-shadow(0 3px 0 rgba(0,0,0,.45));
   transform-style:preserve-3d;
+  /* 拖拽要吃掉浏览器的滚动 / 长按手势 */
+  touch-action:none;
 }
+/* 正在被拖的那张：抬到最上层，并且让指针「穿过」它，
+   否则 elementFromPoint 只会命中这张牌，永远找不到底下的按钮 */
+.dragTile{
+  z-index:60;pointer-events:none;cursor:grabbing;
+  filter:drop-shadow(0 14px 10px rgba(0,0,0,.55));
+}
+body.dragging{cursor:grabbing;}
 /* 抬起 / 选中的位移由 spring.mjs 驱动，这里只留视觉标记 */
 .tile.sel{filter:drop-shadow(0 8px 0 rgba(0,0,0,.5));}
 .tile.sel::after{content:'';position:absolute;inset:-3px;border:3px solid var(--gold);border-radius:5px;pointer-events:none;}
@@ -457,8 +468,30 @@ body.atTitle #app{opacity:.07;filter:blur(3px);}
 .btn.big{font-size:16px;padding:10px 20px;}
 .btn.ready{animation:ready 1s ease-in-out infinite;}
 @keyframes ready{0%,100%{filter:brightness(1);}50%{filter:brightness(1.35);}}
-#actionRow{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding-bottom:2px;}
-#actionHint{max-width:300px;}
+#actionRow{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
+  padding:2px 0 4px;position:relative;z-index:4;
+}
+/* 按钮宽度必须固定：文案从「换牌」变成「换掉 3 张」如果会撑宽，
+   拖拽过程中落点就会从指针底下跑掉。 */
+#actionRow .btn{min-width:118px;}
+/* 提示单独占一行：它的长度绝不能影响按钮的位置，理由同上 */
+#actionHint{flex:0 0 100%;max-width:none;text-align:center;min-height:14px;}
+/* 拖拽时把可用按钮标成落点 */
+body.dragging #actionRow .btn:not(:disabled){outline:3px dashed rgba(240,192,74,.75);outline-offset:3px;}
+#actionRow .btn.dropHot{
+  outline:4px solid var(--gold);outline-offset:3px;filter:brightness(1.4);
+  transform:translateY(-3px) scale(1.06);
+}
+/* 落在牌桌上会做什么，直接写在牌桌中央 */
+#dropHint{
+  position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:6;pointer-events:none;
+  background:rgba(12,24,20,.86);border:3px solid var(--goldD);border-radius:9px;
+  padding:6px 14px;font-size:14px;color:#ffe9a8;text-shadow:2px 2px 0 rgba(0,0,0,.6);
+  box-shadow:0 4px 0 rgba(0,0,0,.45);white-space:nowrap;
+}
+#dropHint.idle{border-color:rgba(255,255,255,.28);color:var(--dim);}
+#dropHint[hidden]{display:none;}
 
 /* ---------- 覆盖屏 ---------- */
 .screen{position:fixed;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(6,14,12,.86);gap:12px;padding:16px;overflow:auto;}
@@ -760,7 +793,8 @@ body.atTitle #app{opacity:.07;filter:blur(3px);}
   #draftActions .btn{min-height:48px;}
   .tile{min-height:44px;min-width:44px;}
   #actionHint{display:none;}
-  #handZone{padding:4px 2px 0;gap:2px;}
+  #handZone{padding:2px 2px 0;gap:2px;}
+  #dropHint{font-size:11px;padding:4px 10px;bottom:6px;}
   .blindCard{width:150px;padding:6px;}
   .blindChip{width:38px;height:38px;font-size:18px;}
   .blindCard .cText{min-height:22px;font-size:9px;}
@@ -852,6 +886,8 @@ body.atTitle #app{opacity:.07;filter:blur(3px);}
 }
 
 @media (max-width:420px){
+  /* 胡牌出现时是三个按钮，118px 会挤到第二行 */
+  #actionRow .btn{min-width:100px;}
   .screen{padding:8px;}
   .screenBox{max-height:calc(100dvh - 16px);padding:12px 10px;}
   .blindScreen .screenBox{width:100%;min-width:0;}
