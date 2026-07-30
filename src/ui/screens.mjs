@@ -15,10 +15,10 @@ import {
 } from '../content/index.mjs';
 import {
   createLogoCanvas,
-  createSealCanvas,
   createTileBackCanvas,
   createTileCanvas,
 } from '../render/pixel.mjs';
+import { createCardArtwork } from '../render/card-art.mjs';
 
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -39,6 +39,9 @@ export function makeScreen(extraClass = '') {
   document.querySelector('#screen')?.remove();
   // 明细弹层是局内的轻量浮层，任何覆盖屏出现时都不该压在它下面
   document.querySelector('#sheet')?.remove();
+  // 标题页现在是半透的（要让背景 shader 透出来），底下的牌桌 UI 必须压暗，
+  // 否则左侧机台和开运位会从 logo 后面透出来，很脏。
+  document.body.classList.toggle('atTitle', extraClass.includes('titleScreen'));
   const screen = el('div', `screen ${extraClass}`.trim());
   screen.id = 'screen';
   const box = el('div', 'screenBox');
@@ -49,6 +52,7 @@ export function makeScreen(extraClass = '') {
 
 export function closeScreen() {
   document.querySelector('#screen')?.remove();
+  document.body.classList.remove('atTitle');
 }
 
 /* ---------------- 开始界面 ---------------- */
@@ -130,7 +134,7 @@ export function showLibrary({ initialFamily = 'charm', onBack }) {
     for (const item of listItems(family)) {
       const card = el('article', `card libraryCard family-${family}`);
       card.dataset.libraryCard = `${family}:${item.id}`;
-      card.append(createSealCanvas(item.glyph ?? FAMILIES[family].glyph, { family, scale: 2 }));
+      card.append(createCardArtwork(family, item));
       card.append(el('div', 'cName', item.name));
       card.append(el('div', 'cText', item.text));
       let meta = `${FAMILIES[family].name} · ${item.duration}`;

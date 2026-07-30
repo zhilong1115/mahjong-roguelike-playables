@@ -24,6 +24,7 @@ const MIME = Object.freeze({
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
 });
 
 function getFreePort() {
@@ -608,6 +609,34 @@ try {
       await capture(client, artifactDir, `draft-${viewport.id}`);
     }
     results.push({ id: `draft-${viewport.id}`, ...metrics });
+
+    // 视觉夹具：选签后，顶部开运位放完整签面；中央亮组只放一张代表牌与水墨字标。
+    const meldFixture = await evaluate(client, `(() => {
+      const run = globalThis.__tianhu.run;
+      const group = run.revealedGroups[0];
+      group.charmId = 'doubleJoy';
+      group.charmTier = 'gold';
+      run.draft = null;
+      run.status = 'playing';
+      run.emit();
+      return true;
+    })()`);
+    assert.equal(meldFixture, true, `${viewport.id}: 应能建立亮组视觉夹具`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+    const compactMeld = await evaluate(client, `(() => ({
+      melds: document.querySelectorAll('#revealZone .meld').length,
+      heroTiles: document.querySelectorAll('#revealZone .meldHeroTile canvas').length,
+      ink: document.querySelector('#revealZone .meldInkText')?.textContent?.trim() ?? '',
+      slotArtwork: document.querySelectorAll('#slotBar .slotArtwork').length,
+    }))()`);
+    assert.deepEqual(compactMeld, { melds: 1, heroTiles: 1, ink: '对', slotArtwork: 1 },
+      `${viewport.id}: 一组只能显示一张代表牌、水墨字标和一张完整签面`);
+    const meldMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assertMetrics(meldMetrics, viewport, `meld-${viewport.id}`, { tileCount: meldMetrics.tileCount });
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `meld-${viewport.id}`);
+    }
+    results.push({ id: `meld-${viewport.id}`, ...meldMetrics });
   }
 
   // 金色改命：required 六视口都要完成「选原牌 → 选目标牌」，并可用 Esc 返回上一步。

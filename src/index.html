@@ -4,9 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>天胡 TIANHU</title>
+<link rel="preload" href="assets/art/charm-atlas-v1.webp" as="image" type="image/webp">
+<link rel="preload" href="assets/art/general-atlas-v1.webp" as="image" type="image/webp">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<!-- 背景 shader 画在最底层；拿不到 WebGL 就留空，body 的 CSS 渐变兜底 -->
+<canvas id="backdrop" aria-hidden="true"></canvas>
 <div id="app">
   <aside id="side">
     <section class="panel" id="roundPanel">
