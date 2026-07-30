@@ -82,16 +82,19 @@
       </div>
       <div id="bossBanner" hidden></div>
       <div id="patternBanner" hidden></div>
+      <!-- 拖拽时告诉玩家松手会发生什么 -->
+      <div id="dropHint" hidden></div>
     </div>
 
-    <div id="handZone"></div>
-
+    <!-- 操作栏在手牌上方：拖着牌往上走，第一个碰到的就是按钮 -->
     <div id="actionRow">
       <button class="btn play" id="btnSwap" type="button">换牌</button>
       <button class="btn green" id="btnReveal" type="button">亮组</button>
-      <button class="btn gold" id="btnHu" type="button">胡牌 HU</button>
-      <div id="actionHint" class="hintLine">选中要换的牌可以一次换多张；选 2–4 张合法组合就能亮组</div>
+      <button class="btn gold" id="btnHu" type="button" hidden>胡牌 HU</button>
+      <div id="actionHint" class="hintLine">点或拖起手牌都能出：拖到上面的按钮上松手即可</div>
     </div>
+
+    <div id="handZone"></div>
   </main>
 
   <section id="draftLayer" role="dialog" aria-modal="true" aria-labelledby="draftTitle" hidden>

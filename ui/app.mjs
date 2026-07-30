@@ -550,6 +550,16 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
   function renderHand({ dealt = false } = {}) {
     const zone = $('#handZone');
+    // 拖拽进行中绝对不能重建手牌：正在被拖的那个节点会被换掉，拖拽当场断掉。
+    // 拖起一张未选中的牌时会改选择，那次 emit 就会走到这里。
+    if (dragging?.active) {
+      for (const node of zone.querySelectorAll('.tile')) {
+        const selected = state.selectedIds.includes(node.dataset.tileId);
+        node.classList.toggle('sel', selected);
+        if (node !== dragging.node) attachTileMotion(node, { selected });
+      }
+      return;
+    }
     zone.replaceChildren();
     state.looseTiles.forEach((tile, index) => {
       const kind = tileKey(tile);
@@ -567,12 +577,17 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       }
       node.append(tileFace(tile));
       attachTileMotion(node, { selected: state.selectedIds.includes(tile.id) });
+      attachTileDrag(node, tile);
       const marks = [];
       if (state.bones[kind]) marks.push(getItem('bone', state.bones[kind])?.name);
       if (state.seals[kind]) marks.push(getItem('seal', state.seals[kind])?.name);
       if (marks.length) bindTip(node, tileName(tile), `${marks.join(' · ')}（本局，这个牌种的四张牌都有）`);
       node.addEventListener('click', () => {
         if (locked) return;
+        if (node.dataset.suppressClick === '1') {
+          delete node.dataset.suppressClick;
+          return;
+        }
         sfx.select();
         run.toggleTile(tile.id);
       });
@@ -591,20 +606,154 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     swapButton.disabled = !state.swapPreview.valid || !playable || locked;
     revealButton.textContent = state.revealPreview.valid ? `亮${state.revealPreview.name}` : '亮组';
     revealButton.disabled = !state.revealPreview.valid || !playable || locked;
+    // 胡牌平时不占位：只有真的能胡时才出现，出现本身就是提示
+    huButton.hidden = !state.canHu;
     huButton.disabled = !state.canHu || locked;
     huButton.classList.toggle('ready', state.canHu && !locked);
 
     let hint;
-    if (!count) {
+    if (dragging?.active) {
+      hint = dropHintText() ?? '拖到上面的按钮或牌桌上松手；放在这里松手不会出牌';
+    } else if (!count) {
       hint = state.canHu
         ? '现在就能胡：直接结算，或继续亮组换三签选一。'
-        : `还差 ${state.distance} 张成牌。换牌可以一次换多张，没用完的每次换 ${state.goldPerUnusedSwap} 金。`;
+        : `还差 ${state.distance} 张成牌。点或拖起手牌都能出，没用完的换牌每次换 ${state.goldPerUnusedSwap} 金。`;
     } else if (state.revealPreview.valid) {
       hint = state.revealPreview.text;
     } else {
       hint = state.swapPreview.text;
     }
     $('#actionHint').textContent = hint;
+  }
+
+  /* ---------------- 拖拽出牌 ---------------- */
+
+  /**
+   * 拖起一张手牌往上走，第一个碰到的就是操作栏。
+   * 松手落在按钮上执行那个动作；落在牌桌上执行默认动作；落回手牌只当点选。
+   */
+  let dragging = null;
+  const DRAG_THRESHOLD = 8;
+
+  /** 落在牌桌上时的默认动作：能亮组就亮组，否则换牌。 */
+  function defaultDropAction() {
+    if (!state) return null;
+    if (state.revealPreview?.valid) return { id: 'reveal', label: `亮${state.revealPreview.name}`, run: doReveal };
+    if (state.swapPreview?.valid) {
+      return {
+        id: 'swap',
+        label: `换掉 ${state.selectedIds.length} 张`,
+        run: doSwap,
+      };
+    }
+    return null;
+  }
+
+  function dropHintText() {
+    if (!dragging?.active) return null;
+    if (dragging.hotButton) return `松手：${dragging.hotButton.textContent.trim()}`;
+    // 只有真的悬在牌桌上才提示默认动作。松手落在别处必须什么都不做，
+    // 否则「拖着看看又放回去」会白白吃掉一次换牌。
+    if (!dragging.overTable) return null;
+    const fallback = defaultDropAction();
+    return fallback ? `松手：${fallback.label}` : null;
+  }
+
+  function paintDropState() {
+    const hint = $('#dropHint');
+    const text = dropHintText();
+    hint.hidden = !dragging?.active;
+    hint.classList.toggle('idle', !text);
+    hint.textContent = text ?? '松手不会出牌';
+    for (const button of document.querySelectorAll('#actionRow .btn')) {
+      button.classList.toggle('dropHot', button === dragging?.hotButton);
+    }
+  }
+
+  function endDrag({ commit = false } = {}) {
+    if (!dragging) return;
+    const { node, pointerId, active, hotButton, overTable } = dragging;
+    const wasActive = active;
+    dragging = null;
+    document.body.classList.remove('dragging');
+    delete node.dataset.dragging;
+    node.classList.remove('dragTile');
+    try { node.releasePointerCapture(pointerId); } catch { /* 指针已经没了 */ }
+    paintDropState();
+
+    // 复位：选中状态由 renderHand 重新给静止姿态，这里先把偏移收回去
+    springTo(node, {
+      x: 0,
+      lift: node.classList.contains('sel') ? 20 : 0,
+      rot: node.classList.contains('sel') ? -2.5 : 0,
+      scale: node.classList.contains('sel') ? 1.06 : 1,
+    });
+
+    if (!wasActive || !commit) return;
+    if (hotButton && !hotButton.disabled) {
+      hotButton.click();
+      return;
+    }
+    // 落在牌桌上才执行默认动作；落回手牌或落在空处一律作废
+    const fallback = overTable ? defaultDropAction() : null;
+    if (fallback) fallback.run();
+    else renderActions();
+  }
+
+  function attachTileDrag(node, tile) {
+    node.addEventListener('pointerdown', (event) => {
+      if (locked || event.button > 0 || dragging) return;
+      dragging = {
+        node,
+        tileId: tile.id,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        active: false,
+        hotButton: null,
+        overTable: false,
+      };
+      try { node.setPointerCapture(event.pointerId); } catch { /* 不支持就退回普通点击 */ }
+    });
+
+    node.addEventListener('pointermove', (event) => {
+      if (!dragging || dragging.node !== node || event.pointerId !== dragging.pointerId) return;
+      const dx = event.clientX - dragging.startX;
+      const dy = event.clientY - dragging.startY;
+      if (!dragging.active) {
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+        dragging.active = true;
+        node.dataset.dragging = '1';
+        node.classList.add('dragTile');
+        document.body.classList.add('dragging');
+        // 拖一张没选的牌 = 只出这一张；拖一张已选的牌 = 出整个选择
+        if (!state.selectedIds.includes(tile.id)) {
+          run.clearSelection();
+          run.toggleTile(tile.id);
+        }
+      }
+      event.preventDefault();
+      springTo(node, { x: dx, lift: -dy, scale: 1.14, rot: Math.max(-14, Math.min(14, dx * 0.07)) });
+      const under = document.elementFromPoint(event.clientX, event.clientY);
+      const button = under?.closest?.('#actionRow .btn:not(:disabled)') ?? null;
+      dragging.overTable = Boolean(under?.closest?.('#table'));
+      if (button !== dragging.hotButton) {
+        dragging.hotButton = button;
+        if (button) sfx.select();
+      }
+      paintDropState();
+      renderActions();
+    });
+
+    node.addEventListener('pointerup', (event) => {
+      if (!dragging || dragging.node !== node || event.pointerId !== dragging.pointerId) return;
+      const wasActive = dragging.active;
+      endDrag({ commit: true });
+      // 拖过就不再当点击，否则松手会顺手把选中状态翻回去
+      if (wasActive) node.dataset.suppressClick = '1';
+    });
+
+    node.addEventListener('pointercancel', () => endDrag({ commit: false }));
   }
 
   function renderDraft() {
@@ -633,7 +782,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         requestAnimationFrame(() => {
           if (state?.draft) return;
           const fallback = [$('#btnHu'), $('#btnReveal'), $('#btnSwap')]
-            .find((node) => node && !node.disabled);
+            .find((node) => node && !node.disabled && !node.hidden);
           const target = previousFocus?.isConnected && !previousFocus.matches?.(':disabled')
             ? previousFocus
             : fallback;
@@ -1544,6 +1693,14 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     });
 
     document.addEventListener('pointerdown', () => timeline.skip(), { capture: true });
+
+    // 兜底：setPointerCapture 失败时 pointerup 不会落在那张牌上，
+    // 没有这一条 dragging 会永远挂着，之后再也拖不动。
+    // 必须走冒泡阶段——捕获阶段会抢在牌自己的 pointerup 之前，把正常的落点吃掉。
+    for (const type of ['pointerup', 'pointercancel']) {
+      addEventListener(type, () => { if (dragging) endDrag({ commit: false }); });
+    }
+    addEventListener('blur', () => { if (dragging) endDrag({ commit: false }); });
 
     document.addEventListener('keydown', (event) => {
       // 明细弹层开着的时候独占键盘，否则 Esc 会顺手把手牌选择也清了

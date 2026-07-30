@@ -299,6 +299,9 @@ export function showHelp({ state, onBack }) {
        闲局和庄局可以<b>跳局</b>换一张手气，圈主必须打，而且带一条特殊规则。</p>
     <p>每关只打 <b>${state.handCount} 副</b>牌，过关后立即进百宝阁。手上永远 14 张，
        凑成<b>四组面子 + 一对将</b>或<b>七个对子</b>就能胡。</p>
+    <p><b>怎么出牌</b>：点手牌选中，再按上方的按钮；或者<b>直接拖起手牌往上拖</b>——
+       松手落在按钮上就执行那个动作，落在牌桌上会执行默认动作（能亮组就亮组，否则换牌）。
+       拖一张没选中的牌只出这一张，拖一张已选中的牌则出整组选择。</p>
     <p><b>换牌</b>：选中几张就一次换掉几张，只消耗 1 次换牌机会，每副 ${state.swapsPerHand} 次。
        <b>没用完的换牌，胡牌时每次换 ${state.goldPerUnusedSwap} 金。</b></p>
     <p><b>亮组</b>：选 2–4 张合法组合，花掉一个<b>开运位</b>，立刻三签选一。
@@ -317,7 +320,7 @@ export function showHelp({ state, onBack }) {
     families.append(line);
   }
   text.append(families);
-  text.append(el('p', 'lbl', '快捷键：Enter 换牌 · R 亮组 · H 胡牌 · Esc 取消 · 1/2/3/4 选灵签 · 结算时点一下快进'));
+  text.append(el('p', 'lbl', '快捷键：Enter 换牌 · R 亮组 · H 胡牌 · Esc 取消 · 1/2/3/4 选灵签 · 结算时点一下快进（胡牌按钮只在能胡时出现）'));
   box.append(text);
   const row = el('div', 'rowBtns');
   row.append(button('btn green big', '返回', onBack));
