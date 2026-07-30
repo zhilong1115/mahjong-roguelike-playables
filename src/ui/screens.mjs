@@ -39,8 +39,8 @@ export function makeScreen(extraClass = '') {
   document.querySelector('#screen')?.remove();
   // 明细弹层是局内的轻量浮层，任何覆盖屏出现时都不该压在它下面
   document.querySelector('#sheet')?.remove();
-  // 标题页现在是半透的（要让背景 shader 透出来），底下的牌桌 UI 必须压暗，
-  // 否则左侧机台和开运位会从 logo 后面透出来，很脏。
+  // 标题页有独立水墨扉页，但仍留少量透明度给动态墨色；底下牌桌必须压暗，
+  // 否则 HUD 和开运位会从册页后面透出来。
   document.body.classList.toggle('atTitle', extraClass.includes('titleScreen'));
   const screen = el('div', `screen ${extraClass}`.trim());
   screen.id = 'screen';
@@ -57,27 +57,18 @@ export function closeScreen() {
 
 /* ---------------- 开始界面 ---------------- */
 
-/** 标题页专属背景：牌桌绒面 + 回纹 + 一排牌墙，和局内界面区分开。 */
-function titleBackdrop(back) {
+/** 标题页专属背景：水墨山月留白，Logo 与菜单由代码另外叠上。 */
+function titleBackdrop() {
   const stage = el('div', 'titleBg');
   stage.setAttribute('aria-hidden', 'true');
   stage.append(el('div', 'titleGrain'));
-  const mark = el('div', 'titleMark', '麻');
-  stage.append(mark);
-  const wall = el('div', 'titleWall');
-  for (let index = 0; index < 24; index += 1) {
-    const tile = createTileBackCanvas(back, 2);
-    tile.style.setProperty('--i', String(index));
-    wall.append(tile);
-  }
-  stage.append(wall);
   return stage;
 }
 
 export function showTitle({ deckId, hasSave, onStart, onContinue, onDeck, onSettings, onHelp, onLibrary }) {
   const box = makeScreen('titleScreen');
   const deck = getItem('deck', deckId);
-  box.parentElement.prepend(titleBackdrop(deck?.back ?? 'plain'));
+  box.parentElement.prepend(titleBackdrop());
 
   const logo = el('div', 'titleLogo');
   logo.append(createLogoCanvas(3));

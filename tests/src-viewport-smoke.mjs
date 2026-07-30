@@ -245,6 +245,9 @@ const METRICS_EXPRESSION = `(() => {
     handScrollWidth: handZone?.scrollWidth ?? 0,
     handClientWidth: handZone?.clientWidth ?? 0,
     slotCount: document.querySelectorAll('#slotBar .slot').length,
+    slotBarHeight: Math.round((document.querySelector('#slotBar')?.getBoundingClientRect().height ?? 0) * 10) / 10,
+    smallestSlotHeight: Math.min(...[...document.querySelectorAll('#slotBar .slot')]
+      .filter(visible).map((slot) => slot.getBoundingClientRect().height)),
     buildCards: document.querySelectorAll('#buildBar .buildCard').length,
     selectedCount: document.querySelectorAll('#handZone .tile.sel').length,
     screenTitle: screen?.querySelector('.title')?.textContent ?? null,
@@ -447,6 +450,7 @@ try {
   await waitForPage(client);
   const titleMetrics = await evaluate(client, METRICS_EXPRESSION);
   assertMetrics(titleMetrics, VIEWPORTS[0], 'title-mobile-narrow', { expectTiles: false });
+  await capture(client, artifactDir, 'title-mobile-narrow-portrait');
   assert.equal(await evaluate(client, `localStorage.getItem('tianhu.run.v4')`), null,
     '标题背景不应自动生成存档');
   await click(client, '#screen .titleMenu > .btn.big');
@@ -578,6 +582,11 @@ try {
     await startCurrentBlind(client, viewport.id);
     const metrics = await evaluate(client, METRICS_EXPRESSION);
     assertMetrics(metrics, viewport, viewport.id);
+    const expectedSlotHeight = viewport.id === 'mobile-landscape' ? 71.5
+      : viewport.width <= 420 ? 55.5
+        : viewport.width / viewport.height < .95 ? 63.5 : 105.5;
+    assert.ok(metrics.smallestSlotHeight >= expectedSlotHeight,
+      `${viewport.id}: 大开运位高度 ${metrics.smallestSlotHeight}/${expectedSlotHeight}`);
     await capture(client, artifactDir, viewport.id);
     results.push({ id: viewport.id, ...metrics });
   }

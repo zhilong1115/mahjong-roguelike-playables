@@ -24,3 +24,13 @@ test('两张离线 WebP 图谱存在且总计低于 600 KB', async () => {
   const sizes = await Promise.all(paths.map((path) => stat(path).then((entry) => entry.size)));
   assert.ok(sizes.reduce((sum, size) => sum + size, 0) < 600 * 1024);
 });
+
+test('两张水墨背景离线存在且总计低于 900 KB', async () => {
+  const paths = [
+    new URL('../src/assets/art/ink-table-v1.webp', import.meta.url),
+    new URL('../src/assets/art/ink-title-v1.webp', import.meta.url),
+  ];
+  await Promise.all(paths.map((path) => access(path)));
+  const sizes = await Promise.all(paths.map((path) => stat(path).then((entry) => entry.size)));
+  assert.ok(sizes.reduce((sum, size) => sum + size, 0) < 900 * 1024);
+});
