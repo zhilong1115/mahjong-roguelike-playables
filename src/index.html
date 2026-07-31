@@ -14,8 +14,8 @@
 <!-- 背景 shader 画在最底层；拿不到 WebGL 就留空，body 的 CSS 渐变兜底 -->
 <canvas id="backdrop" aria-hidden="true"></canvas>
 <div id="app">
-  <aside id="side">
-    <section class="panel" id="roundPanel">
+  <aside id="side" aria-label="牌局状态">
+    <section class="panel" id="roundPanel" aria-label="关卡进度">
       <div class="rowFlex">
         <div id="roundChip">壹</div>
         <div class="grow">
@@ -31,7 +31,7 @@
       </div>
     </section>
 
-    <section class="panel dark" id="scorePanel">
+    <section class="panel dark" id="scorePanel" aria-label="当前牌势">
       <div id="handName" class="sh">尚未成牌</div>
       <div id="calcRow">
         <div class="calcBox" id="chipsBox">0</div>
@@ -41,12 +41,10 @@
       <div id="totalBox" class="sh">0</div>
     </section>
 
-    <section class="panel deep" id="statPanel">
+    <section class="panel deep" id="statPanel" aria-label="本副资源">
       <div class="statRow">
         <div class="stat"><div class="v" id="swapV">4</div><div class="n" id="swapLabel">换牌 SWAPS</div></div>
-        <div class="stat"><div class="v" id="distV">2</div><div class="n">还差 TO HU</div></div>
         <div class="stat money"><div class="v" id="goldV">4</div><div class="n">金币 GOLD</div></div>
-        <div class="stat"><div class="v" id="slotV">12金</div><div class="n" id="slotLabel">空位 6 SLOTS</div></div>
       </div>
       <button id="omenSlot" type="button" aria-label="待缘位为空">
         <span class="omenLabel">待缘位</span>
@@ -55,18 +53,18 @@
       </button>
     </section>
 
-    <section class="panel deep grow" id="buildPanel">
-      <div class="lbl">常驻构筑 BUILD</div>
-      <div id="buildBar"></div>
-      <!-- 摘要固定在面板底部，福将再多也不会把它挤出可视区 -->
-      <div id="buildChips"></div>
-      <div id="sideBtns">
-        <button class="btn grey sm" id="btnHelp" type="button">玩法</button>
-        <button class="btn grey sm" id="btnLibrary" type="button">百牌谱</button>
-        <button class="btn grey sm" id="btnRestart" type="button">重开</button>
-      </div>
-    </section>
   </aside>
+
+  <section class="panel deep" id="buildPanel" aria-label="本局构筑">
+    <div class="lbl buildTitle">本局构筑 BUILD</div>
+    <div id="buildBar" aria-label="福将位"></div>
+    <div id="buildChips" aria-label="番谱、牌骨、牌印与牌帖"></div>
+    <nav id="sideBtns" aria-label="辅助操作">
+      <button class="btn grey sm" id="btnHelp" type="button">玩法</button>
+      <button class="btn grey sm" id="btnLibrary" type="button">百牌谱</button>
+      <button class="btn grey sm" id="btnRestart" type="button">重开</button>
+    </nav>
+  </section>
 
   <main id="main">
     <div id="slotBar" aria-label="开运位"></div>
@@ -86,6 +84,10 @@
       <div id="dropHint" hidden></div>
     </div>
 
+  </main>
+
+  <!-- 横屏底部横跨全宽：左侧状态栏不能再挤占十四张手牌。 -->
+  <section id="handDock" aria-label="出牌区">
     <!-- 操作栏在手牌上方：拖着牌往上走，第一个碰到的就是按钮 -->
     <div id="actionRow">
       <button class="btn play" id="btnSwap" type="button">换牌</button>
@@ -95,7 +97,7 @@
     </div>
 
     <div id="handZone"></div>
-  </main>
+  </section>
 
   <section id="draftLayer" role="dialog" aria-modal="true" aria-labelledby="draftTitle" hidden>
     <div id="draftPanel">

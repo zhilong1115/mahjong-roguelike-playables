@@ -15,6 +15,10 @@ const VIEWPORTS = [
   { id: 'square-embed', width: 960, height: 960 },
   { id: 'desktop-hd', width: 1280, height: 720 },
 ];
+const COMPACT_LANDSCAPES = [
+  // 真人手机反馈来自比 required 844×390 更窄的横屏；这一档专门防止第 14 张掉到第二行。
+  { id: 'phone-compact-landscape', width: 667, height: 375 },
+];
 
 const MIME = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -216,18 +220,26 @@ const METRICS_EXPRESSION = `(() => {
     ? [...document.querySelectorAll('#draftLayer, #draftPanel, #draftTitle, #draftNotice:not([hidden]), #draftCards, .charmPick, .omenCompare, .fateChooser, .fateHand, .fateTargetGrid, #draftActions, #draftActions .btn')]
     : screen
     ? [...document.querySelectorAll('#screen .screenBox, #screen .rowBtns, #screen .shopCard, #screen .blindCard, #screen .libraryTabs, #screen .libraryGrid')]
-    : [...document.querySelectorAll('#app, #side, #slotBar, #table, #handZone, #actionRow, #omenSlot')];
+    : [...document.querySelectorAll('#app, #side, #buildPanel, #slotBar, #table, #handDock, #handZone, #actionRow, #omenSlot')];
   const clipped = critical.filter(visible).filter((element) => visibleRatio(element) < .98).map(describe);
   const primary = draftOpen
     ? [...document.querySelectorAll('#draftLayer .charmPick, #draftLayer .fateOption, #draftActions .btn')]
     : screen
     ? [...document.querySelectorAll('#screen .rowBtns .btn, #screen .shopCard, #screen .kindBtn, #screen .blindActions .btn, #screen .libraryTab')]
-    : [...document.querySelectorAll('#handZone .tile, #btnSwap, #btnReveal, #btnHu, #omenSlot')];
+    : [...document.querySelectorAll('#handZone .tile, #btnSwap, #btnReveal, #btnHu, #omenSlot, #buildPanel .buildChip')];
   const actionable = primary.filter((element) => !element.disabled && !element.classList.contains('cant') && !element.classList.contains('sold'));
   const touchTargets = actionable.filter(visible).map(describe);
   const blockedTargets = actionable.filter(visible).filter((element) => !centerIsReachable(element)).map(describeBlocked);
   const tileRects = [...document.querySelectorAll('#handZone .tile canvas')].filter(visible).map(describe);
   const handZone = document.querySelector('#handZone');
+  const handDock = document.querySelector('#handDock');
+  const main = document.querySelector('#main');
+  const side = document.querySelector('#side');
+  const sortedTileTops = tileRects.map((rect) => rect.top).sort((a, b) => a - b);
+  const handRowTops = [];
+  for (const top of sortedTileTops) {
+    if (!handRowTops.length || top - handRowTops.at(-1) > 20) handRowTops.push(top);
+  }
   const charmCards = [...document.querySelectorAll('.charmPick')];
   return {
     viewport: { width: innerWidth, height: innerHeight },
@@ -244,6 +256,13 @@ const METRICS_EXPRESSION = `(() => {
     handOverflow: handZone ? handZone.scrollWidth > handZone.clientWidth + 1 : false,
     handScrollWidth: handZone?.scrollWidth ?? 0,
     handClientWidth: handZone?.clientWidth ?? 0,
+    handRows: handRowTops.length,
+    handDockWidth: Math.round((handDock?.getBoundingClientRect().width ?? 0) * 10) / 10,
+    handDockTop: Math.round((handDock?.getBoundingClientRect().top ?? 0) * 10) / 10,
+    mainWidth: Math.round((main?.getBoundingClientRect().width ?? 0) * 10) / 10,
+    sideBottom: Math.round((side?.getBoundingClientRect().bottom ?? 0) * 10) / 10,
+    hudStatCount: document.querySelectorAll('#statPanel .stat').length,
+    buildPanelParent: document.querySelector('#buildPanel')?.parentElement?.id ?? null,
     slotCount: document.querySelectorAll('#slotBar .slot').length,
     slotBarHeight: Math.round((document.querySelector('#slotBar')?.getBoundingClientRect().height ?? 0) * 10) / 10,
     smallestSlotHeight: Math.min(...[...document.querySelectorAll('#slotBar .slot')]
@@ -582,11 +601,41 @@ try {
     await startCurrentBlind(client, viewport.id);
     const metrics = await evaluate(client, METRICS_EXPRESSION);
     assertMetrics(metrics, viewport, viewport.id);
-    const expectedSlotHeight = viewport.id === 'mobile-landscape' ? 71.5
+    assert.equal(metrics.hudStatCount, 2, `${viewport.id}: 资源组只保留换牌与金币`);
+    assert.equal(metrics.buildPanelParent, 'app', `${viewport.id}: 本局构筑应独立于左侧状态栏`);
+    if (viewport.width / viewport.height >= .95) {
+      assert.equal(metrics.handRows, 1, `${viewport.id}: 横屏 14 张手牌必须单排`);
+      assert.ok(metrics.handDockWidth > metrics.mainWidth + 100,
+        `${viewport.id}: 手牌区必须使用左栏下方宽度 ${metrics.handDockWidth}/${metrics.mainWidth}`);
+      assert.ok(metrics.sideBottom <= metrics.handDockTop + 1,
+        `${viewport.id}: 左栏不能伸进手牌区 ${metrics.sideBottom}/${metrics.handDockTop}`);
+    } else {
+      assert.ok(metrics.handRows <= 2, `${viewport.id}: 竖屏手牌最多两排`);
+    }
+    const expectedSlotHeight = viewport.id === 'mobile-landscape' ? 57.5
       : viewport.width <= 420 ? 55.5
         : viewport.width / viewport.height < .95 ? 63.5 : 105.5;
     assert.ok(metrics.smallestSlotHeight >= expectedSlotHeight,
       `${viewport.id}: 大开运位高度 ${metrics.smallestSlotHeight}/${expectedSlotHeight}`);
+    await capture(client, artifactDir, viewport.id);
+    results.push({ id: viewport.id, ...metrics });
+  }
+
+  // 紧凑真机横屏：不是 required 平台矩阵，但直接覆盖本次真人反馈。
+  for (const viewport of COMPACT_LANDSCAPES) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await startCurrentBlind(client, viewport.id);
+    const metrics = await evaluate(client, METRICS_EXPRESSION);
+    assertMetrics(metrics, viewport, viewport.id);
+    assert.equal(metrics.handRows, 1, `${viewport.id}: 14 张手牌必须单排`);
+    assert.ok(metrics.handDockWidth > metrics.mainWidth + 100,
+      `${viewport.id}: 手牌必须横跨左栏下方 ${metrics.handDockWidth}/${metrics.mainWidth}`);
+    assert.ok(metrics.sideBottom <= metrics.handDockTop + 1,
+      `${viewport.id}: 左栏必须在手牌上方结束 ${metrics.sideBottom}/${metrics.handDockTop}`);
+    assert.ok(metrics.smallestSlotHeight >= 57.5,
+      `${viewport.id}: 紧凑开运位仍要可读 ${metrics.smallestSlotHeight}`);
     await capture(client, artifactDir, viewport.id);
     results.push({ id: viewport.id, ...metrics });
   }
