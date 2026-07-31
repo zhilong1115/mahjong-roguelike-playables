@@ -166,9 +166,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
   function refreshScale() {
     const main = $('#main');
-    const handZone = $('#handZone');
-    // 0027：手牌已经横跨整屏，必须按真实手牌区而不是右侧牌桌区算牌宽。
-    const width = handZone.clientWidth || document.documentElement.clientWidth || 844;
+    const width = main.clientWidth || document.documentElement.clientWidth || 844;
     const height = main.clientHeight || document.documentElement.clientHeight || 390;
     const portrait = matchMedia('(max-aspect-ratio:0.95)').matches;
     const perRow = portrait ? 7 : 14;
@@ -227,7 +225,17 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
     setPixelText($('#swapV'), state.swapsRemaining, 11, '#59c4ff', '#000', scale);
     $('#swapLabel').textContent = `换牌 ·剩余×${state.goldPerUnusedSwap}金`;
+    setPixelText(
+      $('#distV'),
+      state.canHu ? '可胡' : (Number.isFinite(state.distance) ? state.distance : '—'),
+      11,
+      state.canHu ? '#3fae74' : '#ff8b83',
+      '#000',
+      scale,
+    );
     setPixelText($('#goldV'), state.gold, 11, '#f0c04a', '#000', scale);
+    setPixelText($('#slotV'), `${state.projectedGold}金`, 11, '#f0c04a', '#000', scale);
+    $('#slotLabel').textContent = `空位 ${state.emptySlots} SLOTS`;
 
     const omenSlot = $('#omenSlot');
     const omen = state.pendingOmen;
@@ -287,9 +295,6 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     bar.replaceChildren();
 
     // 福将：一位一卡，空位也要看得见。将位多了就在这块里滚动。
-    const ownedGeneralCount = state.generalIds.filter(Boolean).length;
-    bar.append(el('div', 'buildGroupLabel', `福将 ${ownedGeneralCount}/${state.generalSlots}`));
-    bar.setAttribute('aria-label', `福将 ${ownedGeneralCount}/${state.generalSlots} 位`);
     const generals = el('div', 'generalRow');
     for (let index = 0; index < state.generalSlots; index += 1) {
       const generalId = state.generalIds[index];
@@ -307,8 +312,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
     // 摘要不放在滚动区里：福将占满时它必须还看得见
     const chips = el('div', 'chipRow');
-    const chipPanel = $('#buildChips');
-    chipPanel.replaceChildren(el('div', 'buildGroupLabel', '番谱 · 牌骨 · 牌印'), chips);
+    $('#buildChips').replaceChildren(chips);
     const codexOwned = Object.entries(state.codexLevels).filter(([, level]) => level > 0);
     const boneEntries = Object.entries(state.bones);
     const sealEntries = Object.entries(state.seals);
@@ -1109,8 +1113,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     } else if (target.type === 'pattern') {
       add($('#patternBanner'));
     } else if (target.id === 'slots') {
-      // 0027 删除了重复的侧栏空位数字；结算应直接点亮真正产生收益的六格开运位。
-      add($('#slotBar'));
+      add($('#slotV'));
     } else if (target.id === 'swaps') {
       add($('#swapV'));
     } else if (target.id === 'total') {
