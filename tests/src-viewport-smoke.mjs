@@ -220,19 +220,18 @@ const METRICS_EXPRESSION = `(() => {
     ? [...document.querySelectorAll('#draftLayer, #draftPanel, #draftTitle, #draftNotice:not([hidden]), #draftCards, .charmPick, .omenCompare, .fateChooser, .fateHand, .fateTargetGrid, #draftActions, #draftActions .btn')]
     : screen
     ? [...document.querySelectorAll('#screen .screenBox, #screen .rowBtns, #screen .shopCard, #screen .blindCard, #screen .libraryTabs, #screen .libraryGrid')]
-    : [...document.querySelectorAll('#app, #side, #buildPanel, #slotBar, #table, #handDock, #handZone, #actionRow, #omenSlot')];
+    : [...document.querySelectorAll('#app, #side, #buildPanel, #slotBar, #table, #handZone, #actionRow, #omenSlot')];
   const clipped = critical.filter(visible).filter((element) => visibleRatio(element) < .98).map(describe);
   const primary = draftOpen
     ? [...document.querySelectorAll('#draftLayer .charmPick, #draftLayer .fateOption, #draftActions .btn')]
     : screen
     ? [...document.querySelectorAll('#screen .rowBtns .btn, #screen .shopCard, #screen .kindBtn, #screen .blindActions .btn, #screen .libraryTab')]
-    : [...document.querySelectorAll('#handZone .tile, #btnSwap, #btnReveal, #btnHu, #omenSlot, #buildPanel .buildChip')];
+    : [...document.querySelectorAll('#handZone .tile, #btnSwap, #btnReveal, #btnHu, #omenSlot')];
   const actionable = primary.filter((element) => !element.disabled && !element.classList.contains('cant') && !element.classList.contains('sold'));
   const touchTargets = actionable.filter(visible).map(describe);
   const blockedTargets = actionable.filter(visible).filter((element) => !centerIsReachable(element)).map(describeBlocked);
   const tileRects = [...document.querySelectorAll('#handZone .tile canvas')].filter(visible).map(describe);
   const handZone = document.querySelector('#handZone');
-  const handDock = document.querySelector('#handDock');
   const main = document.querySelector('#main');
   const side = document.querySelector('#side');
   const sortedTileTops = tileRects.map((rect) => rect.top).sort((a, b) => a - b);
@@ -257,10 +256,8 @@ const METRICS_EXPRESSION = `(() => {
     handScrollWidth: handZone?.scrollWidth ?? 0,
     handClientWidth: handZone?.clientWidth ?? 0,
     handRows: handRowTops.length,
-    handDockWidth: Math.round((handDock?.getBoundingClientRect().width ?? 0) * 10) / 10,
-    handDockTop: Math.round((handDock?.getBoundingClientRect().top ?? 0) * 10) / 10,
     mainWidth: Math.round((main?.getBoundingClientRect().width ?? 0) * 10) / 10,
-    sideBottom: Math.round((side?.getBoundingClientRect().bottom ?? 0) * 10) / 10,
+    sideWidth: Math.round((side?.getBoundingClientRect().width ?? 0) * 10) / 10,
     hudStatCount: document.querySelectorAll('#statPanel .stat').length,
     buildPanelParent: document.querySelector('#buildPanel')?.parentElement?.id ?? null,
     slotCount: document.querySelectorAll('#slotBar .slot').length,
@@ -601,18 +598,14 @@ try {
     await startCurrentBlind(client, viewport.id);
     const metrics = await evaluate(client, METRICS_EXPRESSION);
     assertMetrics(metrics, viewport, viewport.id);
-    assert.equal(metrics.hudStatCount, 2, `${viewport.id}: 资源组只保留换牌与金币`);
-    assert.equal(metrics.buildPanelParent, 'app', `${viewport.id}: 本局构筑应独立于左侧状态栏`);
+    assert.equal(metrics.hudStatCount, 4, `${viewport.id}: 恢复四项资源状态`);
+    assert.equal(metrics.buildPanelParent, 'side', `${viewport.id}: 本局构筑应回到左栏`);
     if (viewport.width / viewport.height >= .95) {
       assert.equal(metrics.handRows, 1, `${viewport.id}: 横屏 14 张手牌必须单排`);
-      assert.ok(metrics.handDockWidth > metrics.mainWidth + 100,
-        `${viewport.id}: 手牌区必须使用左栏下方宽度 ${metrics.handDockWidth}/${metrics.mainWidth}`);
-      assert.ok(metrics.sideBottom <= metrics.handDockTop + 1,
-        `${viewport.id}: 左栏不能伸进手牌区 ${metrics.sideBottom}/${metrics.handDockTop}`);
     } else {
       assert.ok(metrics.handRows <= 2, `${viewport.id}: 竖屏手牌最多两排`);
     }
-    const expectedSlotHeight = viewport.id === 'mobile-landscape' ? 57.5
+    const expectedSlotHeight = viewport.id === 'mobile-landscape' ? 71.5
       : viewport.width <= 420 ? 55.5
         : viewport.width / viewport.height < .95 ? 63.5 : 105.5;
     assert.ok(metrics.smallestSlotHeight >= expectedSlotHeight,
@@ -630,10 +623,10 @@ try {
     const metrics = await evaluate(client, METRICS_EXPRESSION);
     assertMetrics(metrics, viewport, viewport.id);
     assert.equal(metrics.handRows, 1, `${viewport.id}: 14 张手牌必须单排`);
-    assert.ok(metrics.handDockWidth > metrics.mainWidth + 100,
-      `${viewport.id}: 手牌必须横跨左栏下方 ${metrics.handDockWidth}/${metrics.mainWidth}`);
-    assert.ok(metrics.sideBottom <= metrics.handDockTop + 1,
-      `${viewport.id}: 左栏必须在手牌上方结束 ${metrics.sideBottom}/${metrics.handDockTop}`);
+    assert.equal(metrics.hudStatCount, 4, `${viewport.id}: 不为换行问题删除状态`);
+    assert.equal(metrics.buildPanelParent, 'side', `${viewport.id}: 构筑仍在左栏`);
+    assert.ok(metrics.sideWidth <= 116.5, `${viewport.id}: 左栏应进入紧凑档 ${metrics.sideWidth}`);
+    assert.ok(metrics.mainWidth >= 535, `${viewport.id}: 主牌区应得到足够宽度 ${metrics.mainWidth}`);
     assert.ok(metrics.smallestSlotHeight >= 57.5,
       `${viewport.id}: 紧凑开运位仍要可读 ${metrics.smallestSlotHeight}`);
     await capture(client, artifactDir, viewport.id);

@@ -1155,83 +1155,64 @@ body::after{background:radial-gradient(ellipse at center,transparent 54%,rgba(32
   .titleScreen .rowBtns{gap:5px;}
 }
 
-/* =========================================================
-   0027 · 横屏全宽手牌与紧凑状态分组
-   左栏只占手牌上方；构筑成为横向带；十四张手牌使用整屏宽度。
-   ========================================================= */
-#app{
-  display:grid;
-  grid-template-columns:212px minmax(0,1fr);
-  grid-template-rows:auto minmax(0,1fr) auto;
-  grid-template-areas:
-    "side build"
-    "side main"
-    "hand hand";
-  align-items:stretch;
-}
-#side{grid-area:side;width:auto;min-width:0;}
-#main{grid-area:main;}
-#handDock{
-  grid-area:hand;display:flex;flex-direction:column;gap:2px;
-  min-width:0;min-height:0;
-}
-
-/* 本局构筑与牌桌同宽：福将一组，其他长期改造一组。 */
-#buildPanel{
-  grid-area:build;display:grid;
-  grid-template-columns:auto minmax(210px,.9fr) minmax(300px,1.3fr) auto;
-  align-items:stretch;gap:6px;min-width:0;min-height:0;overflow:hidden;
-}
-#buildPanel > .buildTitle{
-  align-self:center;writing-mode:vertical-rl;font-size:8px;letter-spacing:1px;
-}
-#buildBar,#buildChips{
-  display:flex;flex-direction:column;gap:2px;min-width:0;min-height:0;overflow:hidden;
-}
-.buildGroupLabel{
-  flex:0 0 auto;font-size:8px;line-height:1;color:#d4c6aa;letter-spacing:.5px;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-.generalRow{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;overflow:hidden;}
-.chipRow{flex-wrap:nowrap;gap:4px;min-width:0;}
-.buildChip{flex:1 1 0;min-height:44px;}
-#sideBtns{align-self:stretch;display:flex;gap:4px;margin:0;}
-#sideBtns .btn{flex:1;}
-
-/* 横屏时禁止手牌自动换行；宽度由整屏底栏和 refreshScale() 共同保证。 */
-#handZone{width:100%;flex-wrap:nowrap;}
-
+/* 0028 · 矮横屏仍保留左栏层级，但四组必须完整落在一屏。 */
 @media (max-height:470px) and (min-aspect-ratio:0.951){
-  #app{
-    grid-template-columns:132px minmax(0,1fr);
-    grid-template-rows:auto minmax(0,1fr) auto;
-  }
-  #side{gap:4px;}
-  #roundPanel,#scorePanel,#statPanel{flex:0 0 auto;}
-  #buildPanel{
-    grid-template-columns:auto minmax(146px,.75fr) minmax(184px,1.25fr) auto;
-    gap:4px;padding:4px;min-height:58px;
-  }
-  #buildPanel > .buildTitle{font-size:7px;}
-  .buildGroupLabel{font-size:7px;}
-  .generalRow{gap:2px;}
-  .generalRow .buildCard{min-width:0;padding:2px;gap:2px;}
-  .generalRow .buildCard .cardArtwork{width:24px;}
-  .generalRow .buildSlot{width:auto;min-height:38px;}
-  .buildChip{min-width:0;min-height:44px;padding:2px 3px;gap:3px;}
-  #sideBtns .btn{min-width:44px;min-height:44px;padding:3px 4px;font-size:8px;}
-  /* 关卡与当前牌势在矮横屏改为紧凑算式，不重复堆叠派生结果。 */
+  #side{gap:3px;}
+  #side .panel{padding:3px 4px;}
+  #roundChip{width:25px;height:25px;flex-basis:25px;font-size:13px;}
+  #roundName{font-size:9px;}
   #roundMeta{display:none;}
-  #targetBox{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:2px 4px;}
+  #targetBox{
+    display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;
+    gap:1px 3px;margin-top:2px;padding:2px 3px;
+  }
   #targetBox > .lbl{display:none;}
-  #targetVal{grid-column:1;min-height:15px;}
-  #pendingLine{grid-column:2;margin:0;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  #targetBar{grid-column:1 / -1;width:100%;margin:0;}
-  #scorePanel{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"hand hand" "calc total";align-items:center;column-gap:4px;}
-  #handName{grid-area:hand;}
+  #targetVal{grid-column:1;min-height:13px;}
+  #targetVal canvas{max-height:13px;width:auto;}
+  #pendingLine{
+    grid-column:2;margin:0;text-align:right;font-size:6px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  #targetBar{grid-column:1 / -1;width:100%;height:4px;margin:1px 0 0;}
+  #scorePanel{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"hand hand" "calc total";align-items:center;column-gap:4px;
+  }
+  #handName{grid-area:hand;font-size:8px;min-height:10px;}
   #calcRow{grid-area:calc;margin:1px 0 0;}
-  #totalBox{grid-area:total;margin:1px 0 0;min-width:34px;}
-  #totalBox::before{content:'=';margin-right:3px;color:#b9ab90;font-size:11px;}
+  .calcBox{min-height:20px;}
+  .calcBox canvas,#totalBox canvas{max-height:14px;width:auto;}
+  #totalBox{grid-area:total;margin:1px 0 0;min-width:30px;min-height:20px;}
+  #totalBox::before{content:'=';margin-right:2px;color:#b9ab90;font-size:9px;}
+  #statPanel{padding:3px 4px;}
+  .statRow{gap:2px;flex-wrap:nowrap;}
+  .stat{min-width:0;flex:1 1 0;padding:1px;}
+  .stat .v{min-height:13px;}
+  .stat .v canvas{max-height:13px;width:auto;max-width:100%;}
+  .stat .n{font-size:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #omenSlot{min-height:44px;margin-top:2px;padding:2px 3px;column-gap:3px;}
+  #omenSlot .omenLabel{font-size:7px;}
+  #omenName{font-size:7px;}
+  #omenTiming{font-size:6px;}
+  #buildPanel{flex:1 1 0;min-height:0;padding:3px 4px;gap:3px;}
+  #buildBar{flex:0 0 auto;max-height:none;overflow:hidden;}
+  .generalRow{grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;}
+  .generalRow .buildCard{min-width:0;min-height:32px;padding:2px;gap:1px;}
+  .generalRow .buildCard .cardArtwork{width:22px;}
+  .generalRow .buildCard .cName{font-size:7px;}
+  .generalRow .buildSlot{width:auto;min-height:32px;}
+  .chipRow{flex-wrap:nowrap;gap:2px;}
+  .buildChip{flex:1 1 0;min-height:44px;padding:2px;gap:2px;}
+  .buildChip .chipGlyph{flex-basis:15px;width:15px;height:15px;font-size:9px;}
+  .buildChip .chipName{font-size:7px;}
+  .buildChip .chipCount{font-size:6px;}
+  #sideBtns{gap:2px;}
+  #sideBtns .btn{min-width:0;min-height:44px;padding:2px;font-size:7px;}
+}
+
+/* 只有窄手机横屏再缩左栏并轻微叠边，844×390 不改变手牌间距。 */
+@media (max-width:720px) and (max-height:470px) and (min-aspect-ratio:0.951){
+  #side{width:116px;flex-basis:116px;gap:3px;}
   #slotBar{min-height:68px;gap:4px;padding:4px;border-width:3px;}
   .slot{min-height:58px;padding:3px;}
   .slot.filled{grid-template-columns:minmax(32px,42px) minmax(0,1fr);gap:3px;padding:3px;border-top-width:3px;}
@@ -1240,41 +1221,6 @@ body::after{background:radial-gradient(ellipse at center,transparent 54%,rgba(32
   .slot .charmTier{font-size:7px;}
   #actionRow{padding:0 0 2px;}
   #actionRow .btn{min-width:104px;min-height:44px;}
-  #handZone{padding:1px 2px 0;}
-}
-
-/* 竖屏仍然是完整可玩布局：状态两层、构筑一条、手牌 7×2。 */
-@media (max-aspect-ratio:0.95){
-  #app{display:flex;flex-direction:column;}
-  #side{
-    display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr);
-    grid-template-areas:"round score" "stats stats";
-    align-items:stretch;width:auto;flex:0 0 auto;gap:4px;
-  }
-  #roundPanel{grid-area:round;}
-  #scorePanel{grid-area:score;}
-  #statPanel{grid-area:stats;}
-  #buildPanel{
-    flex:0 0 70px;height:70px;display:grid;
-    grid-template-columns:auto minmax(160px,.9fr) minmax(180px,1.1fr) 48px;
-    padding:4px;gap:4px;
-  }
-  #buildPanel > .buildTitle{font-size:8px;}
-  #buildBar,#buildChips{max-height:none;overflow:hidden;}
-  .generalRow{grid-template-columns:repeat(4,minmax(44px,1fr));overflow-x:auto;}
-  .chipRow{overflow-x:auto;}
-  .buildChip{flex:0 0 82px;min-width:82px;min-height:44px;}
-  #sideBtns{display:flex;flex-direction:column;margin:0;gap:3px;}
-  #sideBtns .btn{flex:1;min-width:44px;min-height:0;padding:2px;font-size:8px;}
-  #main{flex:1 1 auto;min-height:0;}
-  #handDock{flex:0 0 auto;}
-  #handZone{flex-wrap:wrap;}
-}
-
-@media (max-width:420px) and (max-aspect-ratio:0.95){
-  #buildPanel{grid-template-columns:auto 100px minmax(0,1fr) 48px;}
-  .generalRow{grid-template-columns:repeat(4,minmax(0,1fr));overflow:hidden;}
-  .generalRow .buildCard{min-width:0;}
-  .chipRow{overflow:hidden;}
-  .buildChip{flex:1 1 0;min-width:0;}
+  #handZone{flex-wrap:nowrap;gap:0;padding:1px 2px 0;overflow:visible;}
+  #handZone .tile + .tile{margin-left:-7px;}
 }
