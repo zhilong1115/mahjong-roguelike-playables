@@ -1350,3 +1350,51 @@ button.satchelSlot.tier-rainbow{border-top-color:#81584d;background:linear-gradi
   .satchelArtwork{width:min(38px,38%);max-height:50px;}
   .satchelName{font-size:9px;}.satchelAction{font-size:6px;}
 }
+
+/* ---------- 教学关引导层 ---------- */
+/* 四块遮罩围出一个洞：洞里那一处照常可点，其余全挡掉，
+   所以教学脚本不会被玩家点歪。跳过按钮在说明卡里，永远在最上层。 */
+#coach{position:fixed;inset:0;z-index:880;pointer-events:none;}
+.coachMask{
+  position:fixed;background:rgba(8,10,9,.72);pointer-events:auto;
+  transition:opacity .2s ease;
+}
+#coach.waiting .coachMask{opacity:0;pointer-events:none;}
+#coach.waiting .coachRing{opacity:0;}
+#coach.waiting .coachCard{opacity:0;}
+.coachRing{
+  position:fixed;border:3px solid var(--gold);border-radius:10px;pointer-events:none;
+  box-shadow:0 0 0 3px rgba(240,192,74,.28), 0 0 22px 6px rgba(240,192,74,.35);
+  animation:coachRing 1.5s ease-in-out infinite;transition:opacity .2s ease;
+}
+@keyframes coachRing{
+  0%,100%{box-shadow:0 0 0 3px rgba(240,192,74,.26), 0 0 18px 4px rgba(240,192,74,.28);}
+  50%{box-shadow:0 0 0 5px rgba(240,192,74,.42), 0 0 30px 10px rgba(240,192,74,.48);}
+}
+.coachCard{
+  position:fixed;z-index:2;pointer-events:auto;width:min(360px,86vw);
+  background:linear-gradient(180deg,rgba(38,36,30,.97),rgba(22,21,18,.97));
+  border:3px solid var(--edge);border-radius:12px;padding:12px 14px;
+  box-shadow:0 8px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+  transition:opacity .2s ease;
+}
+.coachStep{font-size:10px;color:var(--dim);letter-spacing:1px;}
+.coachTitle{font-size:17px;color:var(--gold);margin:2px 0 6px;text-shadow:2px 2px 0 rgba(0,0,0,.55);}
+.coachBody{font-size:13px;line-height:1.65;color:#efe7d6;font-weight:700;}
+.coachActions{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;}
+/* 教学的两个按钮也要守 44px 触控下限——.btn.sm 默认只有 34px 高 */
+.coachActions .btn{min-height:44px;min-width:88px;padding:8px 14px;font-size:13px;border-width:2px;}
+.coachActions .btn[hidden]{display:none;}
+/* 教学期间不要让牌桌上的提示条抢注意力 */
+body.coaching #actionHint{opacity:.35;}
+
+@media (max-height:470px){
+  .coachCard{width:min(320px,58vw);padding:8px 10px;}
+  .coachTitle{font-size:14px;margin:1px 0 4px;}
+  .coachBody{font-size:11px;line-height:1.5;}
+  .coachActions{margin-top:6px;}
+  .coachActions .btn{min-height:44px;min-width:80px;padding:6px 10px;font-size:12px;}
+}
+@media (max-width:420px){
+  .coachCard{width:calc(100vw - 24px);}
+}

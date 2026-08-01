@@ -11,6 +11,9 @@ const params = new URLSearchParams(location.search);
 const seedParam = Number.parseInt(params.get('seed') ?? '', 10);
 const deckParam = params.get('deck');
 const skipTitle = params.get('intro') === '0';
+// ?tutorial=1 强制直达教学，?tutorial=0 让“开始新局”跳过首次教学（自动化测试用）
+const tutorialParam = params.get('tutorial');
+const wantTutorial = tutorialParam === '1' ? true : (tutorialParam === '0' ? false : null);
 
 const storage = createLocalStorage();
 const adapter = createWebAdapter({ storage });
@@ -36,15 +39,20 @@ const saveCoordinator = createSaveCoordinator({
   debounceMs: 400,
 });
 let stopWatchingSaves = null;
+let activeRunShouldPersist = false;
 const scheduleSave = (run) => {
   saveCoordinator.schedule(serializeRun(run));
 };
 const flushSave = (run) => {
   return saveCoordinator.flush(serializeRun(run));
 };
-const watchSaves = (run, { silent = false } = {}) => {
+const watchSaves = (run, { silent = false, persist = true } = {}) => {
   stopWatchingSaves?.();
+  stopWatchingSaves = null;
+  activeRunShouldPersist = persist;
   saveCoordinator.cancelScheduled();
+  // 教学局不落档：否则打完教学，标题页会出现「继续上局」并接回教学牌
+  if (!persist) return;
   stopWatchingSaves = run.subscribe((state) => {
     const critical = state.status === 'charm-draft'
       || ['charm', 'draft-reroll', 'omen', 'omen-replace'].includes(state.lastEvent?.type);
@@ -56,10 +64,11 @@ const watchSaves = (run, { silent = false } = {}) => {
 };
 
 const app = createApp({ createRun, adapter, storage, onRunAttached: watchSaves });
-app.mount({ initialRun, savedRun, autoStart: skipTitle });
+app.mount({ initialRun, savedRun, autoStart: skipTitle, tutorial: wantTutorial });
 
 adapter.onLifecycle((event) => {
-  if (event === 'pause' && app.run) void flushSave(app.run);
+  // 标题背景 Run 与教学 Run 都是临时态，切后台 / 刷新也不能把它们写成正式存档。
+  if (event === 'pause' && app.run && activeRunShouldPersist) void flushSave(app.run);
   if (event === 'audio') setAudioEnabled(adapter.isAudioEnabled());
 });
 

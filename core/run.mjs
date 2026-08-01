@@ -45,7 +45,7 @@ import {
   draftCharmOffers,
   rollCharmTierSlots,
 } from '../content/charms.mjs';
-import { createSolvableDeal } from './deal.mjs';
+import { HAND_FLAVORS, createSolvableDeal } from './deal.mjs';
 import {
   classifySelection,
   findHuSolutions,
@@ -61,6 +61,7 @@ import {
   kindName,
   makeTile,
   parseKind,
+  parseTileNotation,
   shuffleInPlace,
   sortTiles,
   tileKey,
@@ -443,6 +444,46 @@ export class Run {
     }
 
     this.refreshStatus();
+  }
+
+  /**
+   * 用固定牌谱替换当前这一副，跳过随机发牌。
+   *
+   * 只给教学关用：教学的每一步都要能预期「点这里会发生什么」，
+   * 靠 seed 去撞出一副合适的牌太脆——换个平衡数值教学就崩了。
+   * 牌谱记法见 `parseTileNotation`（例：`111m 234m 99p E`）。
+   *
+   * @param {{hand:string|string[], wall:string|string[], flavorId?:string, swaps?:number}} script
+   */
+  loadScriptedHand({ hand, wall = [], flavorId = 'mixed', swaps = null }) {
+    const build = (notation, prefix) => parseTileNotation(notation)
+      .map((spec, index) => makeTile(`${prefix}${index}`, spec.suit, spec.rank));
+
+    this.looseTiles = sortTiles(build(hand, 'th'));
+    this.wall = build(wall, 'tw');
+    this.discard = [];
+    this.flavor = HAND_FLAVORS[flavorId] ?? HAND_FLAVORS.mixed;
+    this.previewCount = Math.min(2, this.wall.length);
+    this.revealedGroups = [];
+    this.selectedIds = new Set();
+    this.swapsRemaining = swaps ?? this.effectiveConfig().swapsPerHand;
+    this.charmIds = [];
+    this.charmInstances = [];
+    this.charmGold = 0;
+    this.satchel = [];
+    this.activeChoice = null;
+    this.bonusSwapsRemaining = 0;
+    this.fateSatchelUsed = false;
+    this.wallShuffleCount = 0;
+    this.draft = null;
+    this.omenTriggeredThisHand = false;
+    this.usedSealKinds = new Set();
+    this.lastHandResult = null;
+    this.status = 'playing';
+    this.lastEvent = { type: 'deal', text: '教学牌局' };
+    this.refreshStatus();
+    this.emit();
+    return { ok: true };
   }
 
   /* ---------------- 查询 ---------------- */
