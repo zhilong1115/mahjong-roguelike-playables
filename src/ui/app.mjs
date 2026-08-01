@@ -22,6 +22,7 @@ import {
   attachCardMotion, attachTileMotion, impulse, setSpringMotion, springTo,
 } from './spring.mjs';
 import { setAudioEnabled, sfx } from './audio.mjs';
+import { TUTORIAL_SCRIPT, createTutorial } from './tutorial.mjs';
 import {
   closeScreen,
   makeScreen,
@@ -53,6 +54,7 @@ const ROLE_LABEL = {
 const TIER_LABEL = { silver: '银签', gold: '金签', rainbow: '彩签' };
 const TIER_MARKS = { silver: '◆', gold: '◆◆', rainbow: '◆◆◆' };
 const SETTINGS_KEY = 'tianhu.settings.v1';
+const TUTORIAL_KEY = 'tianhu.tutorial.v1';
 const DEFAULT_SETTINGS = { sound: true, animationSpeed: 1, haptics: true, deckId: 'plain' };
 
 function loadSettings() {
@@ -1743,12 +1745,13 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     showTitle({
       deckId: settings.deckId,
       hasSave,
-      onStart: () => startRun({ deckId: settings.deckId }),
+      onStart: () => startFromTitle(),
       onContinue: () => resumeRun(),
       onDeck: () => openDeckSelect(),
       onSettings: () => openSettings(openTitle),
       onHelp: () => showHelp({ state: state ?? previewState(), onBack: openTitle }),
       onLibrary: () => showLibrary({ onBack: openTitle }),
+      onTutorial: () => startTutorial({ after: 'title' }),
     });
   }
 
@@ -2020,7 +2023,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
   /* ---------------- 启动 ---------------- */
 
-  function attach(nextRun, { silent = false } = {}) {
+  function attach(nextRun, { silent = false, persist = true } = {}) {
     unsubscribe?.();
     run = nextRun;
     state = run.snapshot();
@@ -2039,7 +2042,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       syncBackdropTone();
       syncScreens(previous);
     });
-    onRunAttached?.(run, { silent });
+    onRunAttached?.(run, { silent, persist });
     refreshScale();
     if (silent) {
       renderSide();
@@ -2072,20 +2075,93 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     return run;
   }
 
-  function mount({ initialRun = null, savedRun = false, autoStart = false } = {}) {
+  /* ---------------- 教学关 ---------------- */
+
+  let tutorial = null;
+  /** 教学开始前挂的那个 Run，结束后要还回去，否则「继续上局」会接到教学牌上。 */
+  let preTutorialRun = null;
+  let tutorialAfter = 'title';
+  let tutorialPreference = null;
+
+  function tutorialSeen() {
+    try {
+      return localStorage.getItem(TUTORIAL_KEY) === 'done';
+    } catch {
+      return false;
+    }
+  }
+
+  function markTutorialSeen() {
+    try {
+      localStorage.setItem(TUTORIAL_KEY, 'done');
+    } catch { /* 隐私模式下忽略 */ }
+  }
+
+  function startTutorial({ after = 'title' } = {}) {
+    if (tutorial && !tutorial.finished) return tutorial;
+    closeScreen();
+    preTutorialRun = run;
+    tutorialAfter = after;
+    const lesson = createRun({ seed: 20260730, deckId: 'plain' });
+    lesson.start();
+    lesson.selectBlind();
+    lesson.loadScriptedHand(TUTORIAL_SCRIPT);
+    // persist:false —— 教学局绝不能落档
+    attach(lesson, { persist: false });
+    tutorial = createTutorial({ run: lesson, onFinish: finishTutorial });
+    return tutorial;
+  }
+
+  function finishTutorial() {
+    markTutorialSeen();
+    tutorial = null;
+    closeScreen();
+    const destination = tutorialAfter;
+    const previousRun = preTutorialRun;
+    preTutorialRun = null;
+    tutorialAfter = 'title';
+    if (destination === 'new-run') {
+      startRun({ deckId: settings.deckId });
+      return;
+    }
+    if (previousRun) attach(previousRun, { silent: true });
+    openTitle();
+  }
+
+  function startFromTitle() {
+    // “有旧存档”或“已经完成 / 跳过教学”都算老玩家。老玩家点开始不再被教程截断。
+    // tutorial=0 是自动化和调试的显式旁路；tutorial=1 只负责加载时强制预览教学。
+    const firstPlayer = !hasSave && !tutorialSeen();
+    if (tutorialPreference !== false && firstPlayer) {
+      return startTutorial({ after: 'new-run' });
+    }
+    return startRun({ deckId: settings.deckId });
+  }
+
+  function mount({
+    initialRun = null, savedRun = false, autoStart = false, tutorial: wantTutorial = null,
+  } = {}) {
     backdrop = createBackdrop($('#backdrop'));
     applySettings(settings);
     wireInput();
     hasSave = savedRun;
-    if (initialRun) attach(initialRun, { silent: !autoStart });
+    tutorialPreference = wantTutorial;
+    // 没有旧存档时，标题页背后的 Run 只负责画面展示；任何生命周期事件都不能保存它。
+    if (initialRun) attach(initialRun, {
+      silent: !autoStart,
+      persist: autoStart || savedRun,
+    });
     adapter.signalFirstFrame?.();
-    if (!autoStart) openTitle();
+    // 普通玩家永远先看标题页。?tutorial=1 只作为开发 / QA 的强制直达入口。
+    if (wantTutorial === true) startTutorial({ after: 'title' });
+    else if (!autoStart) openTitle();
     adapter.signalReady?.();
   }
 
   return {
     mount,
     startRun,
+    startTutorial,
     attach,
     openTitle,
     get run() { return run; },

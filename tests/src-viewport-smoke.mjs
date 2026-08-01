@@ -465,14 +465,76 @@ try {
   await client.send('Runtime.enable');
 
   // seed 1 能让测试玩家稳定打过东圈闲局，便于覆盖单副结算与商店流程。
-  const baseUrl = `http://127.0.0.1:${serverPort}/src/?seed=1`;
+  // tutorial=0：教学关会在「无存档 + 没看过」时自动接管首屏，这里要显式关掉
+  const baseUrl = `http://127.0.0.1:${serverPort}/src/?seed=1&tutorial=0`;
   const url = `${baseUrl}&intro=0`;
   const results = [];
 
+  // 首次进入流程：加载先看标题；点开始才教学；教学结束后直接开局。
+  // 同时覆盖“旧玩家有存档但没有本机教学标记”时开始新局不再被教学截断。
+  const onboardingUrl = `http://127.0.0.1:${serverPort}/src/?onboarding=1`;
+  await setViewport(client, VIEWPORTS[0]);
+  await client.send('Page.navigate', { url: onboardingUrl });
+  await waitForPage(client);
+  await evaluate(client, `localStorage.clear()`);
+  // 不在页面里 location.reload()：CDP 可能在旧 document 销毁前就读到旧的 __tianhu，
+  // 随后的点击会被导航吞掉。换一个可核对的 URL，确保测到的是新 document。
+  const freshOnboardingUrl = `${onboardingUrl}&fresh=1`;
+  await client.send('Page.navigate', { url: freshOnboardingUrl });
+  await waitUntil(client, `location.search.includes('fresh=1')`, { label: '首次进入测试的新页面' });
+  await waitForPage(client);
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#screen .titleMenu'))`), true,
+    '首次加载必须先显示标题菜单');
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#coach'))`), false,
+    '首次加载不能自动用教学接管首屏');
+  await click(client, '#screen .titleMenu > .btn.big');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+  const firstStart = await evaluate(client, `(() => ({
+    coach: Boolean(document.querySelector('#coach .coachCard')),
+    status: globalThis.__tianhu.run.status,
+    tutorial: localStorage.getItem('tianhu.tutorial.v1'),
+    save: Boolean(localStorage.getItem('tianhu.run.v5')),
+    screenTitle: document.querySelector('#screen .title')?.textContent ?? null,
+  }))()`);
+  assert.equal(firstStart.coach, true,
+    `首次点击开始后必须进入教学：${JSON.stringify(firstStart)}`);
+  assert.equal(await evaluate(client, `globalThis.__tianhu.run.status`), 'playing',
+    '首次点击开始应进入教学牌局');
+  await click(client, '#coach .coachActions .btn.grey');
+  await waitUntil(client, `!document.querySelector('#coach') && globalThis.__tianhu.run.status === 'blind-select'`, {
+    label: '跳过教学后直接开始新局',
+  });
+  assert.equal(await evaluate(client, `localStorage.getItem('tianhu.tutorial.v1')`), 'done',
+    '跳过教学也应记录已经处理过首次引导');
+  await waitUntil(client, `Boolean(localStorage.getItem('tianhu.run.v5'))`, { label: '教学后新局存档' });
+
+  // 模拟旧玩家换设备 / 清掉本机教学标记，但仍有云端或本地 Run 存档。
+  await evaluate(client, `localStorage.removeItem('tianhu.tutorial.v1')`);
+  await client.send('Page.navigate', { url: onboardingUrl });
+  await waitForPage(client);
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#screen .titleMenu'))`), true,
+    '旧玩家加载后也先显示标题菜单');
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#coach'))`), false,
+    '旧玩家不能因为缺少教学标记而自动进教学');
+  assert.equal(await evaluate(client, `(() => {
+    const start = [...document.querySelectorAll('#screen .titleMenu > .btn.big')]
+      .find((button) => button.textContent.includes('开始新局'));
+    start?.click();
+    return Boolean(start);
+  })()`), true, '旧玩家应能点开始新局');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#coach'))`), false,
+    '有旧存档的玩家点开始应直接开局');
+  assert.equal(await evaluate(client, `globalThis.__tianhu.run.status`), 'blind-select',
+    '旧玩家开始新局应直接进入选关');
   // 标题页不应为背景 Run 自动造存档；点「开始新局」后应立即订阅并落档。
   await setViewport(client, VIEWPORTS[0]);
   await client.send('Page.navigate', { url: baseUrl });
   await waitForPage(client);
+  // 上一个真实 Run 会在导航离开时按生命周期要求落档；进入 seed 测试页后再清理，
+  // 才能单独验证当前标题背景不会自行造档。
+  await evaluate(client, `localStorage.clear()`);
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 460));
   const titleMetrics = await evaluate(client, METRICS_EXPRESSION);
   assertMetrics(titleMetrics, VIEWPORTS[0], 'title-mobile-narrow', { expectTiles: false });
   await capture(client, artifactDir, 'title-mobile-narrow-portrait');
@@ -508,7 +570,8 @@ try {
       charmInstances: run.charmInstances,
     });
   })()`);
-  const restoreUrl = `http://127.0.0.1:${serverPort}/src/`;
+  // 这一段测的是存档恢复，不是教学；教学现在只看「有没有看过」，所以要显式关掉
+  const restoreUrl = `http://127.0.0.1:${serverPort}/src/?tutorial=0`;
   await client.send('Page.navigate', { url: restoreUrl });
   await waitForPage(client);
   const covered = await evaluate(client, `(() => ({
@@ -574,6 +637,48 @@ try {
   assert.equal(restoredPick.draftClosed, true, '点继续后数字键 1 应能完成选签');
   assert.equal(restoredPick.picked, firstRestoredCharm, '数字键 1 应选择恢复签局的第一张');
   assert.ok(['btnHu', 'btnReveal', 'btnSwap'].includes(restoredPick.focus), '恢复签局选完后焦点应回到主要操作');
+
+  // 教学关：说明卡在每个视口都必须完整在屏内，跳过按钮必须点得到。
+  // 卡片是按锚点算位置的，最容易在窄屏上被顶出可视区。
+  const tutorialUrl = `http://127.0.0.1:${serverPort}/src/?tutorial=1`;
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url: tutorialUrl });
+    await waitForPage(client);
+    await waitUntil(client, "Boolean(document.querySelector('#coach .coachCard'))", {
+      label: `${viewport.id}: 教学层`,
+    });
+    // 走到第一个需要动手的步骤，那一步的说明卡贴着底部按钮，最容易溢出
+    await evaluate(client, `(() => {
+      for (let i = 0; i < 3; i += 1) {
+        const next = document.querySelector('#coach .coachActions .btn.green');
+        if (next && !next.hidden) next.click();
+      }
+      return true;
+    })()`);
+    const coach = await evaluate(client, `(() => {
+      const card = document.querySelector('#coach .coachCard');
+      const skip = document.querySelector('#coach .coachActions .btn.grey');
+      const rect = card.getBoundingClientRect();
+      const skipRect = skip.getBoundingClientRect();
+      return {
+        step: document.querySelector('#coach .coachStep')?.textContent ?? '',
+        inView: rect.left >= -1 && rect.top >= -1
+          && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1,
+        skipWidth: skipRect.width,
+        skipHeight: skipRect.height,
+        ringed: Boolean(document.querySelector('#coach .coachRing')),
+        tiles: document.querySelectorAll('#handZone .tile').length,
+        selected: document.querySelectorAll('#handZone .tile.sel').length,
+      };
+    })()`);
+    assert.equal(coach.tiles, 14, `${viewport.id}: 教学固定牌谱应发 14 张`);
+    assert.equal(coach.selected, 3, `${viewport.id}: 亮组那一步应替玩家选好三张一萬`);
+    assert.ok(coach.inView, `${viewport.id}: 教学说明卡必须完整在屏内（${coach.step}）`);
+    assert.ok(coach.skipWidth >= 44 && coach.skipHeight >= 44,
+      `${viewport.id}: 跳过按钮太小 ${coach.skipWidth}×${coach.skipHeight}`);
+    results.push({ id: `tutorial-${viewport.id}`, viewport: { width: viewport.width, height: viewport.height }, ...coach });
+  }
 
   // 百牌谱：五系页签在 required 六视口都可见、可点，卡牌列表只在面板内滚动。
   for (const viewport of VIEWPORTS) {

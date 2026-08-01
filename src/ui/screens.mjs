@@ -65,7 +65,9 @@ function titleBackdrop() {
   return stage;
 }
 
-export function showTitle({ deckId, hasSave, onStart, onContinue, onDeck, onSettings, onHelp, onLibrary }) {
+export function showTitle({
+  deckId, hasSave, onStart, onContinue, onDeck, onSettings, onHelp, onLibrary, onTutorial,
+}) {
   const box = makeScreen('titleScreen');
   const deck = getItem('deck', deckId);
   box.parentElement.prepend(titleBackdrop());
@@ -88,6 +90,7 @@ export function showTitle({ deckId, hasSave, onStart, onContinue, onDeck, onSett
   row.append(
     button('btn grey', `牌组：${deck?.name ?? '素面'}`, onDeck),
     button('btn grey libraryOpen', '百牌谱', onLibrary),
+    button('btn grey tutorialOpen', '教学', onTutorial),
     button('btn grey', '设置', onSettings),
     button('btn grey', '玩法', onHelp),
   );
