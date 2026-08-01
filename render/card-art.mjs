@@ -66,7 +66,8 @@ function objectArt(family, item, extraClass) {
   mark.textContent = family === 'codex'
     ? (item?.pattern?.slice(0, 2) ?? '谱')
     : family === 'bone' ? '玉'
-      : family === 'seal' ? '印' : '帖';
+      : family === 'seal' ? '印'
+        : family === 'satchel' ? (item?.glyph ?? '囊') : '帖';
   object.append(accent, mark);
   art.append(object);
   art.dataset.artId = item?.id ?? 'empty';
@@ -79,11 +80,13 @@ function objectArt(family, item, extraClass) {
  * @param {{className?:string}} [options]
  */
 export function createCardArtwork(family, item, { className = '' } = {}) {
+  if (family === 'charm' && item?.resolution === 'reserve') return objectArt('satchel', item, className);
   if (family === 'charm' || family === 'general') return atlasArt(family, item, className);
   return objectArt(family, item, className);
 }
 
 export const CARD_ART_COUNTS = Object.freeze({
   charm: CHARM_ART_ORDER.length,
+  satchel: 3,
   general: GENERAL_ART_ORDER.length,
 });

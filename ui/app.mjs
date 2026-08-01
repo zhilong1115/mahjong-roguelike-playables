@@ -48,6 +48,7 @@ const ROLE_LABEL = {
   momentum: '助势',
   fate: '改命',
   omen: '奇缘',
+  active: '锦囊',
 };
 const TIER_LABEL = { silver: '银签', gold: '金签', rainbow: '彩签' };
 const TIER_MARKS = { silver: '◆', gold: '◆◆', rainbow: '◆◆◆' };
@@ -224,7 +225,9 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     setPixelText($('#totalBox'), preview ? (preview.total ?? preview.score ?? 0) : 0, 14, '#f0c04a', '#3a2c06', scale);
 
     setPixelText($('#swapV'), state.swapsRemaining, 11, '#59c4ff', '#000', scale);
-    $('#swapLabel').textContent = `换牌 ·剩余×${state.goldPerUnusedSwap}金`;
+    $('#swapLabel').textContent = state.bonusSwapsRemaining
+      ? `换牌 · 额外 ${state.bonusSwapsRemaining} 次不换金`
+      : `换牌 ·剩余×${state.goldPerUnusedSwap}金`;
     setPixelText(
       $('#distV'),
       state.canHu ? '可胡' : (Number.isFinite(state.distance) ? state.distance : '—'),
@@ -235,7 +238,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     );
     setPixelText($('#goldV'), state.gold, 11, '#f0c04a', '#000', scale);
     setPixelText($('#slotV'), `${state.projectedGold}金`, 11, '#f0c04a', '#000', scale);
-    $('#slotLabel').textContent = `空位 ${state.emptySlots} SLOTS`;
+    $('#slotLabel').textContent = `签缘 ${state.emptySlots}/${state.slotCount}`;
 
     const omenSlot = $('#omenSlot');
     const omen = state.pendingOmen;
@@ -248,6 +251,14 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       omenCharm
         ? `待缘位，${omenCharm.name}，下次求签时应验一次。${omenCharm.text}`
         : '待缘位为空，延时奇缘会留在这里',
+    );
+
+    const passiveCount = state.charmInstances?.length ?? 0;
+    $('#passiveCount').textContent = passiveCount ? `${passiveCount} 张 · 点开看叠加` : '0 · 选中即生效';
+    $('#passiveSummary').classList.toggle('filled', passiveCount > 0);
+    $('#passiveSummary').setAttribute(
+      'aria-label',
+      passiveCount ? `本副签效 ${passiveCount} 张，点开查看完整效果` : '本副签效为空，被动签选中后立即生效',
     );
 
     renderBuildBar();
@@ -442,53 +453,72 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     openSheet('牌帖', '牌帖改的是这一局的牌组构成', list);
   }
 
-  /**
-   * 开运位只放灵签。亮出的碰 / 顺 / 杠已经在牌桌中央摆着了，
-   * 顶部再摆一份纯属重复，还把灵签挤成一行小字（0021 的反馈）。
-   */
+  function showPassiveSheet() {
+    const list = el('div', 'sheetList passiveList');
+    if (!state.charmInstances?.length) {
+      list.append(el('div', 'sheetEmpty', '本副还没有被动签效。亮出合法组合后选择“立即生效”的签，它会收进这里。'));
+    }
+    for (const [index, instance] of (state.charmInstances ?? []).entries()) {
+      const charm = getItem('charm', instance.charmId);
+      if (!charm) continue;
+      const row = el('div', 'sheetRow passiveRow');
+      row.dataset.charmIndex = String(index);
+      row.append(createCardArtwork('charm', charm, { className: 'passiveArtwork' }));
+      const body = el('div', 'n');
+      body.append(el('div', 'kindTitle', `${charm.name} · ${TIER_LABEL[instance.tier ?? charm.tier] ?? '灵签'}`));
+      body.append(el('div', 'kindText', charm.text));
+      row.append(body);
+      list.append(row);
+    }
+    openSheet('本副签效', '这些签已经生效，不占锦囊位；胡牌结算时会按取得顺序触发', list);
+  }
+
+  /** 六次签缘只显示经济计数；顶部三格只放现在可以点击使用的锦囊。 */
   function renderSlots() {
     const bar = $('#slotBar');
     bar.replaceChildren();
-    let charmSeen = 0;
+    const meter = el('div', 'fortuneMeter');
+    meter.id = 'fortuneMeter';
+    meter.dataset.used = String(state.slotsUsed);
+    meter.append(
+      el('span', 'fortuneEyebrow', '求签机会'),
+      el('span', 'fortuneValue', `签缘 ${state.emptySlots}/${state.slotCount}`),
+      el('span', 'fortuneRule', `每剩 1 缘 · +${state.goldPerEmptySlot} 金`),
+    );
+    const pips = el('span', 'fortunePips');
     for (let index = 0; index < state.slotCount; index += 1) {
-      const group = state.revealedGroups[index];
-      const slot = el('div', 'slot');
-      slot.dataset.slot = String(index);
-      const charm = group?.charmId ? getItem('charm', group.charmId) : null;
-      if (charm) {
-        const instance = state.charmInstances?.find(
-          (item) => item.instanceId === group.charmInstanceId,
-        );
-        const tier = group.charmTier ?? instance?.tier ?? charm.tier ?? 'silver';
-        slot.classList.add('filled', `tier-${tier}`);
-        slot.dataset.card = `charm:${charm.id}`;
-        // 结算按取得顺序播灵签，同名签也能分清是哪一格
-        slot.dataset.charmIndex = String(charmSeen);
-        charmSeen += 1;
-        slot.append(createCardArtwork('charm', charm, { className: 'slotArtwork' }));
-        const body = el('div', 'slotBody');
-        body.append(el('div', 'charmName', charm.name));
-        body.append(el('div', 'charmTier', `${TIER_LABEL[tier] ?? '灵签'} · ${GROUP_NAMES[group.kind]}`));
-        slot.append(body);
-        bindTip(
-          slot,
-          `${charm.name} · ${TIER_LABEL[tier] ?? '灵签'} · ${GROUP_NAMES[group.kind]}`,
-          `${charm.text}（本副）`,
-        );
-        // 拿到手的签在顶部轻轻浮着，提醒玩家它还在生效
-        attachCardMotion(slot, { float: 1.8, hoverLift: 6, tilt: 6, depth: 520 });
-      } else if (group) {
-        // 亮了组但没拿到签（签池不足时的兜底），仍然要占位说明这个开运位已经花掉
-        slot.classList.add('filled', 'noCharm');
-        slot.append(el('div', 'charmName', GROUP_NAMES[group.kind]));
-        slot.append(el('div', 'charmTier', '已花掉 · 无签'));
-        bindTip(slot, '已花掉的开运位', `亮了${GROUP_NAMES[group.kind]}，但这次没有可选的灵签。`);
-      } else {
-        slot.append(el('div', 'slotGold', `+${state.goldPerEmptySlot}金`));
-        slot.append(el('div', 'slotIdx', `开运位 ${index + 1}`));
-        bindTip(slot, '空开运位',
-          `留空：胡牌时 +${state.emptySlotChips} 牌值和 +${state.goldPerEmptySlot} 金；花掉：换一次三签选一。`);
+      pips.append(el('i', index < state.slotsUsed ? 'spent' : ''));
+    }
+    meter.append(pips);
+    bindTip(meter, '签缘不是锦囊位', `亮组花 1 缘并求签；使用锦囊不会返还。胡牌时每个未用签缘 +${state.emptySlotChips} 牌值与 +${state.goldPerEmptySlot} 金。`);
+    bar.append(meter);
+
+    for (let index = 0; index < 3; index += 1) {
+      const instance = state.satchel?.[index] ?? null;
+      const charm = instance ? getItem('charm', instance.charmId) : null;
+      const slot = el(charm ? 'button' : 'div', `satchelSlot${charm ? ' filled' : ''}`);
+      slot.dataset.satchelIndex = String(index);
+      if (!charm) {
+        slot.append(el('span', 'satchelEmptyGlyph', '囊'), el('span', 'satchelEmptyText', `锦囊 ${index + 1} · 待收入`));
+        bar.append(slot);
+        continue;
       }
+      slot.type = 'button';
+      slot.dataset.card = `charm:${charm.id}`;
+      slot.dataset.instanceId = instance.instanceId;
+      slot.classList.add(`tier-${instance.tier ?? charm.tier ?? 'silver'}`);
+      slot.append(createCardArtwork('charm', charm, { className: 'satchelArtwork' }));
+      const body = el('span', 'satchelBody');
+      body.append(el('span', 'satchelName', charm.name), el('span', 'satchelAction', '点击使用 · 一次'));
+      slot.append(body);
+      slot.setAttribute('aria-label', `${charm.name}，主动锦囊，点击查看并使用。${charm.text}`);
+      slot.addEventListener('click', () => {
+        const result = run.beginSatchelUse(instance.instanceId);
+        if (!result.ok) toast(result.reason);
+        else sfx.select();
+      });
+      bindTip(slot, `${charm.name} · ${TIER_LABEL[instance.tier ?? charm.tier]}`, charm.text);
+      attachCardMotion(slot, { float: 1.8, hoverLift: 7, tilt: 6, depth: 520 });
       bar.append(slot);
     }
   }
@@ -762,7 +792,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     const reroll = $('#btnReroll');
     const actions = $('#draftActions');
     const notice = $('#draftNotice');
-    if (!state.draft) {
+    if (!state.draft && !state.activeChoice) {
       const wasOpen = !layer.hidden;
       const previousFocus = draftReturnFocus;
       layer.hidden = true;
@@ -780,7 +810,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       draftReturnFocus = null;
       if (wasOpen) {
         requestAnimationFrame(() => {
-          if (state?.draft) return;
+          if (state?.draft || state?.activeChoice) return;
           const fallback = [$('#btnHu'), $('#btnReveal'), $('#btnSwap')]
             .find((node) => node && !node.disabled && !node.hidden);
           const target = previousFocus?.isConnected && !previousFocus.matches?.(':disabled')
@@ -807,6 +837,17 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     cards.replaceChildren();
     actions.replaceChildren(reroll);
     layer.removeAttribute('data-mode');
+
+    if (state.activeChoice) {
+      renderSatchelChoice({ layer, cards, actions, notice, choice: state.activeChoice });
+      return;
+    }
+
+    const satchelReplacement = state.draft.pendingSatchelReplacement ?? null;
+    if (satchelReplacement) {
+      renderSatchelReplacement({ layer, cards, actions, notice, replacement: satchelReplacement });
+      return;
+    }
 
     const replacement = state.draft.pendingOmenReplacement
       ?? state.draft.replacement
@@ -842,10 +883,15 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       if (!charm) return;
       const tier = offer.tier ?? charm.tier ?? 'silver';
       const role = offer.functionRole ?? offer.role ?? charm.functionRole ?? charm.role;
+      const resolutionLabel = charm.resolution === 'reserve'
+        ? '收入锦囊'
+        : charm.omen
+        ? '留下签兆'
+        : '立即生效';
       const durationMeta = charm.omen ? `${charm.duration ?? '本局'} · 一次` : (charm.duration ?? '本副');
       const node = cardNode('charm', charm, {
         className: `charmPick tier-${tier}`,
-        meta: `${index + 1} · ${durationMeta}`,
+        meta: `${index + 1} · ${resolutionLabel} · ${durationMeta}`,
         interactive: true,
       });
       node.dataset.offerId = offer.offerId;
@@ -860,7 +906,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         el('span', 'tierName', TIER_LABEL[tier] ?? '灵签'),
         el('span', 'tierMarks', TIER_MARKS[tier] ?? '◆'),
       );
-      node.prepend(el('div', 'cRole', ROLE_LABEL[role] ?? '奇缘'), tierRow);
+      node.prepend(el('div', 'cResolve', resolutionLabel), el('div', 'cRole', ROLE_LABEL[role] ?? '奇缘'), tierRow);
       const choose = () => {
         if (locked) return;
         sfx.charm();
@@ -874,11 +920,16 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         if (result.ok && result.needsFateChoice) {
           return;
         }
+        if (result.ok && result.needsSatchelReplace) {
+          return;
+        }
         if (result.ok && result.goldNow) {
           sfx.coin();
           toast(`${charm.name} · +${result.goldNow} 待结算金`);
         } else if (result.ok && result.pendingOmen) {
           toast(`${charm.name} · 已放入待缘位，下次求签应验一次`);
+        } else if (result.ok && result.reserved) {
+          toast(`${charm.name} · 已收入顶部锦囊位`);
         } else if (result.ok) {
           toast(`${charm.name} · 已生效`);
         } else if (!result.ok && !result.needsOmenReplace && result.reason) {
@@ -1010,6 +1061,181 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     }
   }
 
+  function renderSatchelChoice({ layer, cards, actions, notice, choice }) {
+    layer.dataset.mode = 'satchel';
+    layer.removeAttribute('data-offer-count');
+    $('#btnReroll').hidden = true;
+    const charm = getItem('charm', choice.charmId);
+    notice.hidden = false;
+    notice.textContent = '主动锦囊 · 确认后才消费；返回不会损失';
+
+    if (choice.mode === 'confirm') {
+      $('#draftTitle').textContent = `${charm?.name ?? '锦囊'} · 是否使用`;
+      const preview = el('div', 'satchelConfirm');
+      if (charm) preview.append(createCardArtwork('charm', charm, { className: 'satchelConfirmArt' }));
+      const body = el('div', 'satchelConfirmBody');
+      body.append(el('div', 'satchelConfirmName', charm?.name ?? '主动锦囊'));
+      body.append(el('div', 'satchelConfirmText', charm?.text ?? ''));
+      if (charm?.active?.kind === 'addSwaps') {
+        body.append(el('div', 'satchelPreviewLine', `换牌 ${state.swapsRemaining} → ${state.swapsRemaining + charm.active.value} · 新增次数不换金币`));
+      } else if (charm?.active?.kind === 'shuffleWall') {
+        body.append(el('div', 'satchelPreviewLine', `重洗牌墙 ${state.wallCount} 张 · 牌的总集合不变`));
+      }
+      preview.append(body);
+      cards.append(preview);
+
+      const cancel = el('button', 'btn grey', '收回锦囊');
+      cancel.type = 'button';
+      cancel.addEventListener('click', () => run.cancelSatchelUse());
+      const confirm = el('button', 'btn gold big', '确认使用');
+      confirm.type = 'button';
+      confirm.addEventListener('click', () => {
+        const result = run.confirmSatchelUse();
+        if (!result.ok) toast(result.reason);
+        else {
+          sfx.charm();
+          haptic();
+          toast(`${result.charm.name} · ${result.detail}`);
+        }
+      });
+      actions.append(cancel, confirm);
+      requestAnimationFrame(() => confirm.focus());
+      return;
+    }
+
+    const selected = choice.selectedTileId
+      ? state.looseTiles.find((tile) => tile.id === choice.selectedTileId)
+      : null;
+    const validTileIds = new Set(choice.choices.map((entry) => entry.tileId));
+    const chooser = el('div', 'fateChooser satchelChooser');
+
+    if (choice.mode === 'source') {
+      $('#draftTitle').textContent = `${charm?.name ?? '点石锦囊'} · 选择要改变的牌`;
+      chooser.append(el('div', 'fateHint', '只可选择未亮牌；下一步可以指定任意不造第五张的牌种。'));
+      const handGrid = el('div', 'fateHand');
+      for (const tile of state.looseTiles) {
+        const valid = validTileIds.has(tile.id);
+        const node = el('button', `fateOption fateSource${valid ? '' : ' invalid'}`);
+        node.type = 'button';
+        node.disabled = !valid;
+        node.dataset.tileId = tile.id;
+        node.setAttribute('aria-label', `选择${tileName(tile)}作为点石原牌`);
+        node.append(tileCanvas(tile, 2), el('span', 'fateOptionMeta', valid ? '可点石' : '不可改'));
+        if (valid) node.addEventListener('click', () => run.selectSatchelTile(tile.id));
+        handGrid.append(node);
+      }
+      chooser.append(handGrid);
+    } else if (choice.mode === 'target') {
+      $('#draftTitle').textContent = `${selected ? tileName(selected) : '原牌'} · 指定目标牌`;
+      chooser.append(el('div', 'fateHint', '任意合法牌种都可选；“改善”表示更接近成胡，但不会替你自动选择。'));
+      const before = el('div', 'fateBefore');
+      if (selected) before.append(tileCanvas(selected, 2), el('span', 'fateArrow', '→'));
+      chooser.append(before);
+      const targetGrid = el('div', 'fateTargetGrid pointStoneTargets');
+      const options = choice.choices
+        .filter((entry) => entry.tileId === choice.selectedTileId)
+        .sort((left, right) => (
+          Number(right.improves) - Number(left.improves)
+          || left.distanceAfter - right.distanceAfter
+          || TILE_KINDS.indexOf(left.targetKind) - TILE_KINDS.indexOf(right.targetKind)
+        ));
+      for (const option of options) {
+        const [suit, rank] = option.targetKind.split(':');
+        const node = el('button', `fateOption fateTarget${option.improves ? ' improves' : ''}`);
+        node.type = 'button';
+        node.dataset.targetKind = option.targetKind;
+        node.setAttribute('aria-label', `指定为${kindName(option.targetKind)}，还差${option.distanceAfter}张`);
+        node.append(tileCanvas({ id: `stone-${option.targetKind}`, suit, rank: Number(rank) }, 2));
+        node.append(el('span', 'fateOptionName', kindName(option.targetKind)));
+        node.append(el('span', 'fateOptionMeta', option.distanceAfter === 0 ? '可胡' : option.improves ? `改善 · 差 ${option.distanceAfter}` : `差 ${option.distanceAfter}`));
+        node.addEventListener('click', () => run.selectSatchelTarget(option.targetKind));
+        targetGrid.append(node);
+      }
+      chooser.append(targetGrid);
+    } else {
+      const preview = choice.preview;
+      $('#draftTitle').textContent = `${charm?.name ?? '点石锦囊'} · 确认改牌`;
+      chooser.append(el('div', 'fateHint', '确认后才会消耗锦囊；本副只能使用一次改命类锦囊。'));
+      const before = el('div', 'stonePreview');
+      const original = selected;
+      const [suit, rank] = (choice.selectedTargetKind ?? 'man:1').split(':');
+      if (original) before.append(tileCanvas(original, 2));
+      before.append(el('span', 'fateArrow', '→'));
+      before.append(tileCanvas({ id: `stone-preview-${choice.selectedTargetKind}`, suit, rank: Number(rank) }, 2));
+      chooser.append(before);
+      chooser.append(el('div', 'satchelPreviewLine', preview?.canHuAfter
+        ? `还差 ${preview.distanceBefore} → 0 · 立即可胡${preview.patternsAfter?.length ? ` · ${preview.patternsAfter.join(' · ')}` : ''}`
+        : `还差 ${preview?.distanceBefore ?? '—'} → ${preview?.distanceAfter ?? '—'}`));
+    }
+    cards.append(chooser);
+
+    if (choice.mode === 'target' || choice.mode === 'preview') {
+      const back = el('button', 'btn grey', choice.mode === 'preview' ? '重选目标' : '重选原牌');
+      back.type = 'button';
+      back.addEventListener('click', () => run.backSatchelChoice());
+      actions.append(back);
+    }
+    const cancel = el('button', 'btn grey', '收回锦囊');
+    cancel.type = 'button';
+    cancel.addEventListener('click', () => run.cancelSatchelUse());
+    actions.append(cancel);
+    if (choice.mode === 'preview') {
+      const confirm = el('button', 'btn gold big', '确认点石');
+      confirm.type = 'button';
+      confirm.addEventListener('click', () => {
+        const result = run.confirmSatchelUse();
+        if (!result.ok) toast(result.reason);
+        else {
+          sfx.charm();
+          haptic();
+          toast(`${result.charm.name} · ${result.detail}`);
+        }
+      });
+      actions.append(confirm);
+    }
+
+    const focusToken = `satchel:${choice.instanceId}:${choice.mode}:${choice.selectedTileId ?? ''}:${choice.selectedTargetKind ?? ''}`;
+    if (draftFocusToken !== focusToken) {
+      requestAnimationFrame(() => {
+        const target = cards.querySelector('.fateOption:not(:disabled)') ?? actions.querySelector('.btn:last-child');
+        if (layer.hidden || !state?.activeChoice || !target?.isConnected) return;
+        draftFocusToken = focusToken;
+        target.focus();
+      });
+    }
+  }
+
+  function renderSatchelReplacement({ layer, cards, actions, notice, replacement }) {
+    layer.dataset.mode = 'satchel-replace';
+    layer.removeAttribute('data-offer-count');
+    $('#btnReroll').hidden = true;
+    const incoming = getItem('charm', replacement.charmId);
+    notice.hidden = false;
+    notice.textContent = '锦囊位已满 · 选择一张旧锦囊替换；求签机会不会返还';
+    $('#draftTitle').textContent = `${incoming?.name ?? '新锦囊'} · 替换哪一张`;
+    const grid = el('div', 'satchelReplaceGrid');
+    for (const [index, instance] of (state.satchel ?? []).entries()) {
+      const current = getItem('charm', instance.charmId);
+      const node = el('button', 'satchelReplaceCard');
+      node.type = 'button';
+      if (current) node.append(createCardArtwork('charm', current, { className: 'satchelReplaceArt' }));
+      node.append(el('span', 'satchelReplaceName', current?.name ?? '旧锦囊'));
+      node.append(el('span', 'satchelReplaceMeta', `替换锦囊 ${index + 1}`));
+      node.addEventListener('click', () => {
+        const result = run.confirmSatchelReplacement(index);
+        if (!result.ok) toast(result.reason);
+        else toast(`${incoming?.name ?? '新锦囊'}已收入，替换${current?.name ?? '旧锦囊'}`);
+      });
+      grid.append(node);
+    }
+    cards.append(grid);
+    const back = el('button', 'btn grey', '返回三签');
+    back.type = 'button';
+    back.addEventListener('click', () => run.cancelSatchelReplacement());
+    actions.append(back);
+    requestAnimationFrame(() => grid.querySelector('button')?.focus());
+  }
+
   function renderOmenReplacement({ layer, cards, actions, notice, replacement }) {
     layer.dataset.offerCount = '2';
     notice.hidden = false;
@@ -1064,7 +1290,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
   /** 外层屏幕出现时，求签只作为待恢复状态存在，不能留在可访问树或抢走焦点。 */
   function coverDraftForScreen() {
     const layer = $('#draftLayer');
-    if (!state?.draft || !layer) return;
+    if ((!state?.draft && !state?.activeChoice) || !layer) return;
     if (layer.contains(document.activeElement)) document.activeElement.blur();
     layer.hidden = true;
     layer.inert = true;
@@ -1105,14 +1331,15 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       }
       add($(`#buildPanel [data-family="${target.family}"]`));
     } else if (target.type === 'card' && target.family === 'charm') {
-      add($(`#slotBar .slot[data-charm-index="${target.index}"]`));
-      add($(`#slotBar [data-card="charm:${target.id}"]`));
+      add($('#passiveSummary'));
+      add($(`#sheet .passiveRow[data-charm-index="${target.index}"]`));
     } else if (target.type === 'card') {
       add($(`#buildPanel [data-card="${target.family}:${target.id}"]`));
       add($(`#buildPanel [data-family="${target.family}"]`));
     } else if (target.type === 'pattern') {
       add($('#patternBanner'));
     } else if (target.id === 'slots') {
+      add($('#fortuneMeter'));
       add($('#slotV'));
     } else if (target.id === 'swaps') {
       add($('#swapV'));
@@ -1299,7 +1526,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
 
     const gold = el('div', 'lineItem');
     gold.style.marginTop = '8px';
-    gold.append(el('div', 'n', `空开运位 ${result.emptySlots} · 余下换牌 ${result.swapsRemaining}`));
+    gold.append(el('div', 'n', `余下签缘 ${result.emptySlots} · 可兑换换牌 ${result.rewardableSwapsRemaining ?? result.swapsRemaining}${result.unusedSatchel?.length ? ` · 未用锦囊 ${result.unusedSatchel.length}` : ''}`));
     gold.append(el('div', 'v', `+${result.gold} 待结算金`));
     box.append(gold);
 
@@ -1658,7 +1885,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
     }
     sfx.reveal();
     haptic();
-    pulse($(`#slotBar .slot[data-slot="${state.slotsUsed - 1}"]`), 'slamDown', 320);
+    pulse($('#fortuneMeter'), 'slamDown', 320);
     if (result.sealHit) toast(`${getItem('seal', result.sealHit).name}触发 · 可以重抽三签`);
   }
 
@@ -1686,6 +1913,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         ? `${charm.name} · ${charm.text}`
         : '待缘位为空 · 选择延时奇缘后会留在这里', charm ? 4200 : 2100);
     });
+    $('#passiveSummary').addEventListener('click', showPassiveSheet);
     $('#btnReroll').addEventListener('click', () => {
       const result = run.rerollDraft();
       if (result.ok) sfx.charm();
@@ -1714,7 +1942,7 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
       const screen = $('#screen');
       if (screen) {
         // 标题 / 帮助等外层屏幕覆盖求签时，禁止数字键和隐藏签卡的默认 Enter 激活。
-        if (state?.draft
+        if ((state?.draft || state?.activeChoice)
           && !screen.contains(event.target)
           && ['1', '2', '3', '4', 'Escape', 'Enter', ' '].includes(event.key)) {
           event.preventDefault();
@@ -1725,16 +1953,34 @@ export function createApp({ createRun, adapter, storage, onRunAttached }) {
         timeline.skip();
         return;
       }
+      if (state?.activeChoice) {
+        if (event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          if (state.activeChoice.mode === 'target' || state.activeChoice.mode === 'preview') run.backSatchelChoice();
+          else run.cancelSatchelUse();
+          return;
+        }
+        if (['1', '2', '3', '4'].includes(event.key)) {
+          event.preventDefault();
+          const index = Number(event.key) - 1;
+          [...document.querySelectorAll('#draftCards .fateOption:not(:disabled), #draftActions .btn')][index]?.click();
+        }
+        return;
+      }
       if (state?.draft) {
         if (event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
         const replacement = state.draft.pendingOmenReplacement
           ?? state.draft.replacement
           ?? state.draft.pendingReplacement
           ?? null;
+        const satchelReplacement = state.draft.pendingSatchelReplacement ?? null;
         const fate = state.draft.pendingFateChoice ?? null;
         if (event.key === 'Escape') {
           event.preventDefault();
-          if (replacement) {
+          if (satchelReplacement) {
+            run.cancelSatchelReplacement();
+          } else if (replacement) {
             run.cancelPendingOmenReplacement?.() ?? run.cancelOmenReplacement?.();
           } else if (fate?.selectedTileId) {
             run.backFateTile();

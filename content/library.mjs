@@ -51,7 +51,9 @@ function content(spec) {
     weight: 100,
     pools: spec.family === 'charm' ? ['charm-draft'] : ['shop'],
     duration: FAMILIES[spec.family]?.duration,
-    ...(spec.family === 'charm' ? { match: null, omen: null, effects: [] } : {}),
+    ...(spec.family === 'charm'
+      ? { match: null, omen: null, active: null, resolution: 'immediate', effects: [] }
+      : {}),
     ...spec,
   };
   return freezeObject(normalized);
@@ -174,6 +176,27 @@ export const CONTENT_LIBRARY = Object.freeze([
     role: 'pattern', draftRole: 'pattern', functionRole: 'momentum', match: null, tier: 'rainbow', archetype: 'pairs',
     text: '七巧彩签 · 胡成七对时，当前番势 ×3。',
     effects: [{ kind: 'multFactorIfPattern', pattern: '七对', value: 3 }],
+  }),
+  content({
+    family: 'charm', id: 'extraRounds', name: '续巡锦囊', glyph: '巡',
+    role: 'pattern', draftRole: 'pattern', functionRole: 'active', resolution: 'reserve',
+    match: null, tier: 'silver',
+    text: '收入锦囊 · 使用后，本副额外获得 2 次换牌；额外次数不能兑换金币。',
+    active: { kind: 'addSwaps', value: 2 }, effects: [],
+  }),
+  content({
+    family: 'charm', id: 'washWall', name: '洗壁锦囊', glyph: '洗',
+    role: 'pattern', draftRole: 'pattern', functionRole: 'active', resolution: 'reserve',
+    match: null, tier: 'silver',
+    text: '收入锦囊 · 按本局 seed 重洗剩余牌墙，并刷新可见预览。',
+    active: { kind: 'shuffleWall', minimumWall: 4 }, effects: [],
+  }),
+  content({
+    family: 'charm', id: 'turnStone', name: '点石锦囊', glyph: '石',
+    role: 'pattern', draftRole: 'pattern', functionRole: 'active', resolution: 'reserve',
+    match: null, tier: 'rainbow',
+    text: '收入锦囊 · 指定一张未亮牌变为任意合法牌种；不能造第五张同牌，本副限一次。',
+    active: { kind: 'changeTile', fate: true }, effects: [],
   }),
 
   // ---------- 番谱 ----------
@@ -348,9 +371,13 @@ export function validateContentLibrary(items = CONTENT_LIBRARY) {
     }
     if (item?.family === 'charm') {
       if (!['silver', 'gold', 'rainbow'].includes(item.tier)) errors.push(`${at} 签阶不合法`);
-      if (!['momentum', 'fate', 'omen'].includes(item.functionRole)) errors.push(`${at} 职责不合法`);
+      if (!['momentum', 'fate', 'omen', 'active'].includes(item.functionRole)) errors.push(`${at} 职责不合法`);
       if (!['group', 'pattern', 'wild'].includes(item.draftRole)) errors.push(`${at} 求签货位不合法`);
       if (item.archetype && !['dragon', 'thunder', 'pairs'].includes(item.archetype)) errors.push(`${at} 流派不合法`);
+      if (!['immediate', 'reserve'].includes(item.resolution)) errors.push(`${at} 结算方式不合法`);
+      if (item.resolution === 'reserve' && !['addSwaps', 'shuffleWall', 'changeTile'].includes(item.active?.kind)) {
+        errors.push(`${at} 主动锦囊效果不合法`);
+      }
     } else if (!Number.isFinite(item?.price) || item.price < 0) {
       errors.push(`${at} 价格不合法`);
     }

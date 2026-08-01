@@ -1224,3 +1224,129 @@ body::after{background:radial-gradient(ellipse at center,transparent 54%,rgba(32
   #handZone{flex-wrap:nowrap;gap:0;padding:1px 2px 0;overflow:visible;}
   #handZone .tile + .tile{margin-left:-7px;}
 }
+
+/* 0029 · 被动签效收进摘要，顶部只保留三格可主动使用的锦囊。 */
+#passiveSummary{
+  width:100%;min-height:48px;margin-top:5px;padding:4px 7px;display:flex;align-items:center;gap:7px;
+  color:#b8b09d;background:#24241f;border:2px dashed #514b3e;border-radius:4px;
+  font:inherit;text-align:left;cursor:pointer;
+}
+#passiveSummary .passiveGlyph{
+  flex:0 0 28px;width:28px;height:28px;display:grid;place-items:center;
+  color:#eee1c0;background:#3d3a31;border:1px solid #716652;font:900 17px/1 "Kaiti SC","STKaiti","KaiTi",serif;
+}
+#passiveSummary .passiveBody{display:flex;flex-direction:column;min-width:0;line-height:1.15;}
+#passiveName{font-size:9px;color:#eee5d0;}
+#passiveCount{font-size:8px;color:#9e9788;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#passiveSummary.filled{border-style:solid;border-color:#9b7935;background:linear-gradient(150deg,#4c4537,#302e27);}
+#passiveSummary.filled .passiveGlyph{color:#40231d;background:#d7bd7c;border-color:#8b6330;}
+#passiveSummary:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
+
+#slotBar{
+  display:grid;grid-template-columns:minmax(112px,.72fr) repeat(3,minmax(0,1fr));
+  align-items:stretch;min-height:126px;
+}
+.fortuneMeter{
+  min-width:0;padding:10px 8px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;
+  color:#2b2921;background:linear-gradient(150deg,#eee1c2,#cbb78d);border:2px solid #4d4230;
+  box-shadow:inset 0 0 0 2px rgba(255,250,228,.36);text-align:center;
+}
+.fortuneEyebrow{font-size:8px;letter-spacing:2px;color:#665e4c;}
+.fortuneValue{font:900 20px/1 "Kaiti SC","STKaiti","KaiTi",serif;color:#8e352b;white-space:nowrap;}
+.fortuneRule{font-size:8px;color:#534c3d;white-space:nowrap;}
+.fortunePips{display:flex;gap:4px;justify-content:center;}
+.fortunePips i{width:10px;height:4px;background:#566f60;border:1px solid #2f4137;}
+.fortunePips i.spent{background:#938b78;border-color:#6e6657;opacity:.5;}
+
+.satchelSlot{
+  min-width:0;min-height:106px;padding:7px;display:flex;align-items:center;justify-content:center;gap:9px;
+  color:#5f5848;background:linear-gradient(145deg,#d9cfb7,#b4aa92);border:2px dashed #6c624f;
+  font:inherit;text-align:left;position:relative;overflow:hidden;
+}
+button.satchelSlot{cursor:pointer;border-style:solid;border-color:#30281b;border-top:5px solid #a9aca4;color:#27251e;background:linear-gradient(150deg,#f0e3c5,#cdb88e);box-shadow:0 3px 0 rgba(21,18,12,.42),inset 0 0 0 1px rgba(255,251,232,.55);}
+button.satchelSlot.tier-gold{border-top-color:#b28b39;background:linear-gradient(150deg,#f0e2bb,#c8ae72);}
+button.satchelSlot.tier-rainbow{border-top-color:#81584d;background:linear-gradient(150deg,#e8dcc1,#b9aa91);}
+.satchelSlot:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
+.satchelEmptyGlyph{font:900 24px/1 "Kaiti SC","STKaiti","KaiTi",serif;color:#756c5a;}
+.satchelEmptyText{font-size:9px;color:#6b6353;}
+.satchelArtwork{width:min(72px,42%);max-height:94px;border:1px solid #3b3020;box-shadow:0 3px 0 rgba(35,28,18,.35);filter:sepia(.12) saturate(.86) contrast(1.04);}
+.art-satchel{background:radial-gradient(circle at 42% 34%,#e7d39c,#806a43 58%,#3c3021);}
+.art-satchel .artObject{
+  width:72%;height:66%;top:8%;background:linear-gradient(145deg,#6b4730,#36261e);
+  border:3px solid #24170f;border-radius:48% 48% 34% 34% / 38% 38% 62% 62%;
+  box-shadow:inset 0 0 0 3px #9d7546,0 5px 0 rgba(35,24,15,.35);
+}
+.art-satchel .artObject::before{left:12%;right:12%;top:-18%;height:24%;border:3px solid #372319;border-bottom-color:#c59a59;border-radius:50%;}
+.art-satchel .artObject::after{left:18%;right:18%;top:18%;height:2px;background:#d3ad69;box-shadow:0 5px 0 #6e382a;}
+.art-satchel .artMark{color:#f0d59b;font-size:22px;text-shadow:2px 2px #4b201b;}
+.satchelBody{display:flex;flex-direction:column;min-width:0;line-height:1.18;}
+.satchelName{font:900 15px/1.12 "Kaiti SC","STKaiti","KaiTi","Songti SC",serif;color:#29271f;}
+.satchelAction{font-size:9px;color:#6a332b;margin-top:4px;}
+
+.charmPick .cResolve{
+  position:absolute;right:9px;top:9px;padding:3px 8px;border:1px solid rgba(255,239,190,.72);
+  background:#7d332b;color:#fff0d4;font-size:10px;letter-spacing:1px;z-index:3;
+}
+.satchelConfirm{width:min(780px,100%);margin:auto;display:grid;grid-template-columns:minmax(120px,220px) 1fr;gap:22px;align-items:center;padding:18px;background:linear-gradient(150deg,#e6d8b7,#bca77a);border:3px solid #332a1c;color:#2c2921;}
+.satchelConfirmArt{width:100%;max-height:260px;border:2px solid #3b3020;}
+.satchelConfirmBody{display:flex;flex-direction:column;gap:10px;}
+.satchelConfirmName{font:900 30px/1.15 "Kaiti SC","STKaiti","KaiTi",serif;}
+.satchelConfirmText{font-size:15px;line-height:1.6;}
+.satchelPreviewLine{padding:8px 12px;background:#2c2a23;border:1px solid #17150f;color:#f2dfad;font-size:13px;text-align:center;}
+.stonePreview{display:flex;align-items:center;justify-content:center;gap:16px;}
+.stonePreview canvas{height:92px;width:auto;}
+.pointStoneTargets{grid-template-columns:repeat(9,minmax(58px,1fr));max-height:min(380px,48dvh);overflow:auto;padding:3px;}
+#draftLayer[data-mode="satchel"] #draftCards,
+#draftLayer[data-mode="satchel-replace"] #draftCards{display:block;overflow:auto;}
+.fateOption.improves{border-color:#a78335;box-shadow:inset 0 0 0 1px rgba(238,205,116,.42);}
+.satchelReplaceGrid{width:min(900px,100%);margin:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+.satchelReplaceCard{min-height:230px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:linear-gradient(155deg,#e6d9b9,#bca779);border:3px solid #3d3221;color:#2b2921;font:inherit;cursor:pointer;}
+.satchelReplaceCard:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+.satchelReplaceArt{width:min(120px,70%);max-height:150px;border:2px solid #3b3020;}
+.satchelReplaceName{font:900 18px/1.15 "Kaiti SC","STKaiti","KaiTi",serif;}
+.satchelReplaceMeta{font-size:10px;color:#7e2f29;}
+.passiveRow{align-items:center;}
+.passiveArtwork{flex:0 0 54px;width:54px;max-height:68px;border:1px solid #8a7148;}
+
+@media (max-height:470px){
+  #passiveSummary{min-height:44px;margin-top:2px;padding:2px 3px;gap:3px;}
+  #passiveSummary .passiveGlyph{flex-basis:20px;width:20px;height:20px;font-size:12px;}
+  #passiveName{font-size:7px;}
+  #passiveCount{font-size:6px;}
+  #slotBar{grid-template-columns:minmax(92px,.7fr) repeat(3,minmax(0,1fr));min-height:82px;}
+  .fortuneMeter{padding:4px 3px;gap:2px;}
+  .fortuneEyebrow,.fortuneRule{font-size:6px;letter-spacing:0;}
+  .fortuneValue{font-size:14px;}
+  .fortunePips{gap:2px;}.fortunePips i{width:7px;height:3px;}
+  .satchelSlot{min-height:72px;padding:4px;gap:4px;}
+  .satchelArtwork{width:min(48px,40%);max-height:62px;}
+  .satchelName{font-size:10px;}.satchelAction{font-size:7px;}
+  .satchelEmptyGlyph{font-size:18px;}.satchelEmptyText{font-size:7px;}
+  .satchelConfirm{grid-template-columns:90px 1fr;gap:10px;padding:8px;}
+  .satchelConfirmArt{max-height:122px;}
+  .satchelConfirmName{font-size:20px;}.satchelConfirmText{font-size:11px;line-height:1.4;}
+  /* 矮横屏要给标题、原牌和确认按钮留出空间；目标牌种在自己的网格内滚动。 */
+  .pointStoneTargets{grid-template-columns:repeat(9,minmax(48px,1fr));max-height:140px;}
+  .satchelReplaceCard{min-height:150px;padding:6px;}
+  .satchelReplaceArt{width:min(64px,58%);max-height:82px;}
+}
+
+@media (max-aspect-ratio:0.95){
+  #slotBar{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .fortuneMeter{grid-column:1 / -1;min-height:44px;display:grid;grid-template-columns:auto auto 1fr;column-gap:8px;padding:4px 8px;text-align:left;}
+  .fortunePips{grid-column:1 / -1;justify-content:flex-start;}
+  .satchelSlot{min-height:64px;padding:4px;gap:4px;}
+  .satchelArtwork{width:min(44px,38%);max-height:56px;}
+  .satchelName{font-size:10px;}.satchelAction{font-size:7px;}
+  .satchelConfirm{grid-template-columns:90px 1fr;gap:10px;padding:10px;}
+  .satchelConfirmName{font-size:20px;}.satchelConfirmText{font-size:11px;}
+  .pointStoneTargets{grid-template-columns:repeat(5,minmax(58px,1fr));}
+}
+
+@media (max-width:720px) and (max-height:470px) and (min-aspect-ratio:0.951){
+  #slotBar{grid-template-columns:minmax(74px,.62fr) repeat(3,minmax(0,1fr));min-height:68px;}
+  .fortuneValue{font-size:12px;}.fortuneRule{white-space:normal;text-align:center;line-height:1.1;}
+  .satchelSlot{min-height:58px;padding:3px;gap:3px;border-top-width:3px;}
+  .satchelArtwork{width:min(38px,38%);max-height:50px;}
+  .satchelName{font-size:9px;}.satchelAction{font-size:6px;}
+}
