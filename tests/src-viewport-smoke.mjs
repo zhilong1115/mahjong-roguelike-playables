@@ -537,6 +537,12 @@ try {
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 460));
   const titleMetrics = await evaluate(client, METRICS_EXPRESSION);
   assertMetrics(titleMetrics, VIEWPORTS[0], 'title-mobile-narrow', { expectTiles: false });
+  const titleShell = await evaluate(client, `(() => ({
+    hero: Boolean(document.querySelector('#screen .titleHero')),
+    menuHead: Boolean(document.querySelector('#screen .titleMenuHead')),
+  }))()`);
+  assert.equal(titleShell.hero, true, '标题页应使用品牌场景 + 菜单册页结构');
+  assert.equal(titleShell.menuHead, true, '标题菜单应有独立的牌局入口标题');
   await capture(client, artifactDir, 'title-mobile-narrow-portrait');
   assert.equal(await evaluate(client, `localStorage.getItem('tianhu.run.v5')`), null,
     '标题背景不应自动生成存档');
@@ -709,6 +715,16 @@ try {
     const select = await evaluate(client, METRICS_EXPRESSION);
     assert.equal(select.screenTitle, '东圈', `${viewport.id}: 应当显示选关屏`);
     assertMetrics(select, viewport, `blind-select-${viewport.id}`, { expectTiles: false });
+    const routeShell = await evaluate(client, `(() => ({
+      cards: document.querySelectorAll('#screen .blindGrid .blindCard').length,
+      states: document.querySelectorAll('#screen .blindGrid .blindState').length,
+      current: document.querySelector('#screen .blindCard.current .blindState')?.textContent ?? '',
+      note: document.querySelector('#screen .blindRouteNote')?.textContent ?? '',
+    }))()`);
+    assert.equal(routeShell.cards, 3, `${viewport.id}: 现有三关都应进入路线图`);
+    assert.equal(routeShell.states, 3, `${viewport.id}: 每关都要有进度状态`);
+    assert.equal(routeShell.current, '当前关', `${viewport.id}: 当前关必须有文字标识`);
+    assert.match(routeShell.note, /闲局.*庄局.*圈主/, `${viewport.id}: 路线说明应明确三关顺序`);
     await startCurrentBlind(client, viewport.id);
     const metrics = await evaluate(client, METRICS_EXPRESSION);
     assertMetrics(metrics, viewport, viewport.id);
