@@ -220,14 +220,18 @@ const METRICS_EXPRESSION = `(() => {
     ? [...document.querySelectorAll('#draftLayer, #draftPanel, #draftTitle, #draftNotice:not([hidden]), #draftCards, .charmPick, .omenCompare, .fateChooser, .fateHand, .fateTargetGrid, #draftActions, #draftActions .btn')]
     : screen
     ? [...document.querySelectorAll('#screen .screenBox, #screen .rowBtns, #screen .shopCard, #screen .blindCard, #screen .libraryTabs, #screen .libraryGrid')]
-    : [...document.querySelectorAll('#app, #side, #buildPanel, #slotBar, #table, #handZone, #actionRow, #omenSlot')];
+    : [...document.querySelectorAll('#app, #side, #buildPanel, #slotBar, #fortuneMeter, .satchelSlot, #table, #handZone, #actionRow, #omenSlot, #passiveSummary')];
   const clipped = critical.filter(visible).filter((element) => visibleRatio(element) < .98).map(describe);
   const primary = draftOpen
     ? [...document.querySelectorAll('#draftLayer .charmPick, #draftLayer .fateOption, #draftActions .btn')]
     : screen
     ? [...document.querySelectorAll('#screen .rowBtns .btn, #screen .shopCard, #screen .kindBtn, #screen .blindActions .btn, #screen .libraryTab')]
-    : [...document.querySelectorAll('#handZone .tile, #btnSwap, #btnReveal, #btnHu, #omenSlot')];
-  const actionable = primary.filter((element) => !element.disabled && !element.classList.contains('cant') && !element.classList.contains('sold'));
+    : [...document.querySelectorAll('#handZone .tile, #btnSwap, #btnReveal, #btnHu, #omenSlot, #passiveSummary, button.satchelSlot')];
+  // 滚动容器里暂时在视口外的选项不算当前可操作目标；否则会把正常的面板内
+  // 滚动误报为「按钮被遮挡」。一旦滚入可见范围，它仍会参与触控与命中检测。
+  const actionable = primary
+    .filter((element) => !element.disabled && !element.classList.contains('cant') && !element.classList.contains('sold'))
+    .filter((element) => visibleRatio(element) >= .98);
   const touchTargets = actionable.filter(visible).map(describe);
   const blockedTargets = actionable.filter(visible).filter((element) => !centerIsReachable(element)).map(describeBlocked);
   const tileRects = [...document.querySelectorAll('#handZone .tile canvas')].filter(visible).map(describe);
@@ -260,10 +264,12 @@ const METRICS_EXPRESSION = `(() => {
     sideWidth: Math.round((side?.getBoundingClientRect().width ?? 0) * 10) / 10,
     hudStatCount: document.querySelectorAll('#statPanel .stat').length,
     buildPanelParent: document.querySelector('#buildPanel')?.parentElement?.id ?? null,
-    slotCount: document.querySelectorAll('#slotBar .slot').length,
+    slotCount: document.querySelectorAll('#slotBar .satchelSlot').length,
     slotBarHeight: Math.round((document.querySelector('#slotBar')?.getBoundingClientRect().height ?? 0) * 10) / 10,
-    smallestSlotHeight: Math.min(...[...document.querySelectorAll('#slotBar .slot')]
+    smallestSlotHeight: Math.min(...[...document.querySelectorAll('#slotBar .satchelSlot')]
       .filter(visible).map((slot) => slot.getBoundingClientRect().height)),
+    fortuneMeter: document.querySelector('#fortuneMeter')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    passiveCount: document.querySelector('#passiveCount')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
     buildCards: document.querySelectorAll('#buildBar .buildCard').length,
     selectedCount: document.querySelectorAll('#handZone .tile.sel').length,
     screenTitle: screen?.querySelector('.title')?.textContent ?? null,
@@ -274,8 +280,10 @@ const METRICS_EXPRESSION = `(() => {
     tierMarks: charmCards.map((card) => card.querySelector('.tierMarks')?.textContent?.length ?? 0),
     offerCount: Number(draftLayer?.dataset.offerCount ?? 0),
     fateMode: draftLayer?.dataset.mode === 'fate',
+    satchelMode: draftLayer?.dataset.mode === 'satchel',
     fateOptions: document.querySelectorAll('#draftCards .fateOption').length,
     fateTargets: document.querySelectorAll('#draftCards .fateTarget').length,
+    satchelFilled: document.querySelectorAll('#slotBar .satchelSlot.filled').length,
     omenText: document.querySelector('#omenSlot')?.textContent?.replace(/\\s+/g, ' ').trim() ?? '',
     omenInsideSlots: Boolean(document.querySelector('#slotBar #omenSlot')),
     kindButtons: document.querySelectorAll('#kindGrid .kindBtn').length,
@@ -301,7 +309,8 @@ function assertMetrics(metrics, viewport, label, { expectTiles = true, tileCount
   if (expectTiles) {
     assert.equal(metrics.tileCount, tileCount, `${label}: 手牌数量`);
     assert.ok(metrics.smallestTileWidth >= 33.5, `${label}: 牌面宽度 ${metrics.smallestTileWidth}`);
-    assert.equal(metrics.slotCount, 6, `${label}: 6 个开运位`);
+    assert.equal(metrics.slotCount, 3, `${label}: 3 个主动锦囊位`);
+    assert.match(metrics.fortuneMeter, /签缘 \d+\/\d+/, `${label}: 签缘计数`);
   }
 }
 
@@ -467,11 +476,11 @@ try {
   const titleMetrics = await evaluate(client, METRICS_EXPRESSION);
   assertMetrics(titleMetrics, VIEWPORTS[0], 'title-mobile-narrow', { expectTiles: false });
   await capture(client, artifactDir, 'title-mobile-narrow-portrait');
-  assert.equal(await evaluate(client, `localStorage.getItem('tianhu.run.v4')`), null,
+  assert.equal(await evaluate(client, `localStorage.getItem('tianhu.run.v5')`), null,
     '标题背景不应自动生成存档');
   await click(client, '#screen .titleMenu > .btn.big');
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 460));
-  const newRunSave = await evaluate(client, `JSON.parse(localStorage.getItem('tianhu.run.v4') ?? 'null')`);
+  const newRunSave = await evaluate(client, `JSON.parse(localStorage.getItem('tianhu.run.v5') ?? 'null')`);
   assert.equal(newRunSave?.status, 'blind-select', '开始新局应当自动保存');
   const firstSelect = await evaluate(client, METRICS_EXPRESSION);
   assert.equal(firstSelect.screenTitle, '东圈', '新局先进入东圈选关');
@@ -490,7 +499,7 @@ try {
       acquiredAtBlind: 'covered-draft', consumeOn: 'nextCharmDraft'
     };
     run.emit();
-    localStorage.setItem('tianhu.run.v4', JSON.stringify(serializeRun(run)));
+    localStorage.setItem('tianhu.run.v5', JSON.stringify(serializeRun(run)));
     return JSON.stringify({
       status: run.status,
       draft: run.draft,
@@ -575,7 +584,7 @@ try {
     const charmLibrary = await evaluate(client, METRICS_EXPRESSION);
     assert.equal(charmLibrary.screenTitle, '百牌谱', `${viewport.id}: 应打开功能牌图鉴`);
     assert.equal(charmLibrary.activeLibraryFamily, 'charm', `${viewport.id}: 默认显示灵签`);
-    assert.equal(charmLibrary.libraryCards, 19, `${viewport.id}: 应显示 19 张灵签`);
+    assert.equal(charmLibrary.libraryCards, 22, `${viewport.id}: 应显示 22 张灵签与锦囊`);
     assertMetrics(charmLibrary, viewport, `library-charm-${viewport.id}`, { expectTiles: false });
     await click(client, '#screen .libraryTab[data-family="general"]');
     const generalLibrary = await evaluate(client, METRICS_EXPRESSION);
@@ -661,12 +670,15 @@ try {
     }
     results.push({ id: `draft-${viewport.id}`, ...metrics });
 
-    // 视觉夹具：选签后，顶部开运位放完整签面；中央亮组只放一张代表牌与水墨字标。
+    // 视觉夹具：被动签进摘要；顶部仍只有三格主动锦囊；中央亮组只放一张代表牌与水墨字标。
     const meldFixture = await evaluate(client, `(() => {
       const run = globalThis.__tianhu.run;
       const group = run.revealedGroups[0];
       group.charmId = 'doubleJoy';
       group.charmTier = 'gold';
+      group.charmInstanceId = 'fixture-passive';
+      run.charmIds = ['doubleJoy'];
+      run.charmInstances = [{ instanceId:'fixture-passive', charmId:'doubleJoy', tier:'gold', role:'momentum', source:'fixture' }];
       run.draft = null;
       run.status = 'playing';
       run.emit();
@@ -678,10 +690,11 @@ try {
       melds: document.querySelectorAll('#revealZone .meld').length,
       heroTiles: document.querySelectorAll('#revealZone .meldHeroTile canvas').length,
       ink: document.querySelector('#revealZone .meldInkText')?.textContent?.trim() ?? '',
-      slotArtwork: document.querySelectorAll('#slotBar .slotArtwork').length,
+      satchelSlots: document.querySelectorAll('#slotBar .satchelSlot').length,
+      passiveCount: document.querySelector('#passiveCount')?.textContent?.trim() ?? '',
     }))()`);
-    assert.deepEqual(compactMeld, { melds: 1, heroTiles: 1, ink: '对', slotArtwork: 1 },
-      `${viewport.id}: 一组只能显示一张代表牌、水墨字标和一张完整签面`);
+    assert.deepEqual(compactMeld, { melds: 1, heroTiles: 1, ink: '对', satchelSlots: 3, passiveCount: '1 张 · 点开看叠加' },
+      `${viewport.id}: 被动签进摘要，中央一组只显示一张代表牌与水墨字标`);
     const meldMetrics = await evaluate(client, METRICS_EXPRESSION);
     assertMetrics(meldMetrics, viewport, `meld-${viewport.id}`, { tileCount: meldMetrics.tileCount });
     if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
@@ -746,6 +759,66 @@ try {
     assert.equal(finished.picked, 'thunderGather', `${viewport.id}: 应取得聚雷签`);
     assert.ok(finished.distance < 1, `${viewport.id}: 目标选择应真实改善成胡距离`);
     results.push({ id: `fate-${viewport.id}`, ...targetMetrics });
+  }
+
+  // 主动锦囊：点石必须在 required 六视口完成「选原牌 → 选任意合法牌种 → 预览确认」。
+  // 这里直接装入测试锦囊，不依赖随机求签，确保 34 牌种长列表和确认层都被覆盖。
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await startCurrentBlind(client, `satchel-${viewport.id}`);
+    const began = await evaluate(client, `(() => {
+      const run = globalThis.__tianhu.run;
+      run.satchel = [{
+        instanceId: 'fixture:turnStone', charmId: 'turnStone', tier: 'rainbow',
+        role: 'active', source: 'viewport-fixture'
+      }];
+      run.emit();
+      return run.beginSatchelUse('fixture:turnStone');
+    })()`);
+    assert.equal(began.needsTarget, true, `${viewport.id}: 点石锦囊应进入原牌选择`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));
+
+    const sourceMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(sourceMetrics.satchelMode, true, `${viewport.id}: 锦囊层应标记 satchel mode`);
+    assert.equal(sourceMetrics.fateOptions, 14, `${viewport.id}: 点石应重画完整 14 张未亮手牌`);
+    assert.equal(sourceMetrics.fateTargets, 0, `${viewport.id}: 第一步不应提前显示目标牌`);
+    assert.equal(sourceMetrics.satchelFilled, 1, `${viewport.id}: 顶部应显示一格已装锦囊`);
+    assertMetrics(sourceMetrics, viewport, `satchel-source-${viewport.id}`);
+
+    await click(client, '#draftCards .fateSource:not(:disabled)');
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+    const targetMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.ok(targetMetrics.fateTargets >= 30, `${viewport.id}: 点石应提供全部合法目标牌种`);
+    assertMetrics(targetMetrics, viewport, `satchel-target-${viewport.id}`);
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `satchel-target-${viewport.id}`);
+    }
+
+    await click(client, '#draftCards .fateTarget');
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+    const previewMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(previewMetrics.satchelMode, true, `${viewport.id}: 点石预览仍在锦囊层`);
+    assertMetrics(previewMetrics, viewport, `satchel-preview-${viewport.id}`);
+    const confirmed = await evaluate(client, `(() => {
+      const before = globalThis.__tianhu.run.looseTiles
+        .map((tile) => tile.id + ':' + tile.suit + ':' + tile.rank).join('|');
+      document.querySelector('#draftActions .btn.gold')?.click();
+      const run = globalThis.__tianhu.run;
+      return {
+        before,
+        after: run.looseTiles.map((tile) => tile.id + ':' + tile.suit + ':' + tile.rank).join('|'),
+        choiceClosed: run.activeChoice === null,
+        satchelCount: run.satchel.length,
+        used: run.fateSatchelUsed,
+      };
+    })()`);
+    assert.equal(confirmed.choiceClosed, true, `${viewport.id}: 确认后应关闭锦囊层`);
+    assert.equal(confirmed.satchelCount, 0, `${viewport.id}: 点石锦囊应消耗`);
+    assert.equal(confirmed.used, true, `${viewport.id}: 本副应记录已用点石`);
+    assert.notEqual(confirmed.after, confirmed.before, `${viewport.id}: 点石必须真实改牌`);
+    results.push({ id: `satchel-${viewport.id}`, ...targetMetrics });
   }
 
   // 广缘签兆：下一次求签变成四选一，第四张固定银签；数字键 4 能真正选中。

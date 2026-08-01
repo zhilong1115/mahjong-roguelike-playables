@@ -61,11 +61,17 @@ import {
   kindName,
   makeTile,
   parseKind,
+  shuffleInPlace,
   sortTiles,
   tileKey,
 } from './tiles.mjs';
 
 const cloneOmen = (omen) => (omen ? { ...omen } : null);
+const cloneActiveChoice = (choice) => (choice ? {
+  ...choice,
+  choices: (choice.choices ?? []).map((entry) => ({ ...entry })),
+  preview: choice.preview ? { ...choice.preview, patternsAfter: [...(choice.preview.patternsAfter ?? [])] } : null,
+} : null);
 
 /** MurmurHash3 风格的 32-bit finalizer，打散相邻 seed 的首个 RNG 输出。 */
 function avalanche32(value) {
@@ -114,6 +120,9 @@ function cloneDraft(draft) {
         current: cloneOmen(draft.pendingOmenReplacement.current),
         next: cloneOmen(draft.pendingOmenReplacement.next),
       }
+      : null,
+    pendingSatchelReplacement: draft.pendingSatchelReplacement
+      ? { ...draft.pendingSatchelReplacement }
       : null,
     ...(draft.pendingFateChoice
       ? { pendingFateChoice: {
@@ -365,6 +374,11 @@ export class Run {
     this.charmIds = [];
     this.charmInstances = [];
     this.charmGold = 0;
+    this.satchel = [];
+    this.activeChoice = null;
+    this.bonusSwapsRemaining = 0;
+    this.fateSatchelUsed = false;
+    this.wallShuffleCount = 0;
     this.draft = null;
     this.omenTriggeredThisHand = false;
     this.usedSealKinds = new Set();
@@ -400,6 +414,11 @@ export class Run {
     this.charmIds = [];
     this.charmInstances = [];
     this.charmGold = 0;
+    this.satchel = [];
+    this.activeChoice = null;
+    this.bonusSwapsRemaining = 0;
+    this.fateSatchelUsed = false;
+    this.wallShuffleCount = 0;
     this.draft = null;
     this.omenTriggeredThisHand = false;
     this.usedSealKinds = new Set();
@@ -449,6 +468,7 @@ export class Run {
       revealCount: this.slotsUsed(),
       emptySlots: this.emptySlots(),
       swapsRemaining: this.swapsRemaining,
+      rewardableSwapsRemaining: this.rewardableSwapsRemaining(),
       charmIds: this.charmIds,
       generalIds: this.generalIds,
       bones: this.bones,
@@ -495,8 +515,23 @@ export class Run {
   projectedGold() {
     const config = this.config;
     return this.emptySlots() * config.goldPerEmptySlot
-      + this.swapsRemaining * config.goldPerUnusedSwap
+      + this.rewardableSwapsRemaining() * config.goldPerUnusedSwap
       + this.charmGold;
+  }
+
+  rewardableSwapsRemaining() {
+    return Math.max(0, this.swapsRemaining - this.bonusSwapsRemaining);
+  }
+
+  hasRecoverySatchel() {
+    return this.satchel.some((entry) => {
+      const charm = getItem('charm', entry.charmId);
+      if (charm?.active?.kind === 'addSwaps') return true;
+      if (charm?.active?.kind === 'changeTile') {
+        return !this.fateSatchelUsed && this.looseTiles.length > 0;
+      }
+      return false;
+    });
   }
 
   refreshStatus() {
@@ -505,7 +540,7 @@ export class Run {
       this.status = 'hu-ready';
       return;
     }
-    if (this.swapsRemaining <= 0) {
+    if (this.swapsRemaining <= 0 && !this.hasRecoverySatchel()) {
       this.status = 'hand-failed';
       this.lastEvent = { type: 'hand-failed', text: '换牌用完，本副流局' };
       return;
@@ -624,6 +659,7 @@ export class Run {
       if (tile) drawn.push(tile);
     }
     this.swapsRemaining -= 1;
+    if (this.bonusSwapsRemaining > 0) this.bonusSwapsRemaining -= 1;
 
     // 牌印 · 换出触发（一次换多张也只按一个牌种触发一次）
     const sealHit = this.fireSeal('swapOut', selected);
@@ -730,6 +766,13 @@ export class Run {
     return avalanche32(combined);
   }
 
+  unavailableReserveCharmIds() {
+    const excluded = [];
+    if (this.wall.length < 4) excluded.push('washWall');
+    if (this.fateSatchelUsed || !this.looseTiles.length) excluded.push('turnStone');
+    return excluded;
+  }
+
   /**
    * 构建完整且可存档的签局。签阶 RNG 与内容 RNG 使用不同 salt；
    * pendingOmen 只有在增强签局完整生成后才会清空。
@@ -747,6 +790,7 @@ export class Run {
       const excludeCharmIds = !omen && this.pendingOmen?.sourceCharmId
         ? [this.pendingOmen.sourceCharmId]
         : [];
+      excludeCharmIds.push(...this.unavailableReserveCharmIds());
       if (this.distance() <= 0) {
         excludeCharmIds.push(...CHARM_LIST
           .filter((item) => item.effects?.some((effect) => effect.kind === 'fateChooseOne'))
@@ -794,6 +838,7 @@ export class Run {
         rerollSource: sealHit?.seal.id ?? null,
         rolls: 0,
         pendingOmenReplacement: null,
+        pendingSatchelReplacement: null,
       };
     };
 
@@ -815,6 +860,7 @@ export class Run {
         : [],
       preferredArchetype: this.dominantArchetype(),
     };
+    options.excludeCharmIds.push(...this.unavailableReserveCharmIds());
     if (this.distance() <= 0) {
       options.excludeCharmIds.push(...CHARM_LIST
         .filter((item) => item.effects?.some((effect) => effect.kind === 'fateChooseOne'))
@@ -914,6 +960,7 @@ export class Run {
     if (this.status !== 'charm-draft' || !this.draft) return { ok: false, reason: '现在不需要重抽' };
     if (this.draft.rerollsLeft <= 0) return { ok: false, reason: '没有可用的重抽' };
     if (this.draft.pendingOmenReplacement) return { ok: false, reason: '请先决定是否替换待缘' };
+    if (this.draft.pendingSatchelReplacement) return { ok: false, reason: '请先决定替换哪张锦囊' };
     if (this.draft.pendingFateChoice) return { ok: false, reason: '请先完成或取消改命选择' };
     const group = this.revealedGroups.find((item) => item.id === this.draft.groupId);
     const nextRoll = this.draft.rolls + 1;
@@ -942,11 +989,36 @@ export class Run {
   chooseDraftOffer(offerId) {
     if (this.status !== 'charm-draft' || !this.draft) return { ok: false, reason: '现在不需要选签' };
     if (this.draft.pendingOmenReplacement) return { ok: false, reason: '请先决定是否替换待缘' };
+    if (this.draft.pendingSatchelReplacement) return { ok: false, reason: '请先决定替换哪张锦囊' };
     if (this.draft.pendingFateChoice) return { ok: false, reason: '请先完成或取消改命选择' };
     const offer = this.draft.offers?.find((item) => item.offerId === offerId);
     if (!offer) return { ok: false, reason: '这张灵签不在本次选择里' };
     const charm = getItem('charm', offer.charmId);
     if (!charm) return { ok: false, reason: '灵签内容不存在' };
+
+    if (charm.resolution === 'reserve') {
+      if (charm.active?.kind === 'shuffleWall' && this.wall.length < (charm.active.minimumWall ?? 4)) {
+        return { ok: false, reason: '剩余牌墙太短，洗壁锦囊已经无法使用' };
+      }
+      if (charm.active?.kind === 'changeTile'
+        && (this.fateSatchelUsed || !this.looseTiles.length)) {
+        return { ok: false, reason: '本副已经没有合法的点石目标' };
+      }
+      if (this.satchel.length >= 3) {
+        this.draft = {
+          ...this.draft,
+          pendingSatchelReplacement: {
+            offerId: offer.offerId,
+            charmId: charm.id,
+            tier: offer.tier,
+          },
+        };
+        this.lastEvent = { type: 'satchel-replace', text: '锦囊位已满，选择一张替换' };
+        this.emit();
+        return { ok: true, needsSatchelReplace: true, satchel: this.satchel.map((entry) => ({ ...entry })) };
+      }
+      return this.finishReserveChoice(offer, charm);
+    }
 
     const fateEffect = charm.effects?.find((effect) => effect.kind === 'fateChooseOne');
     if (fateEffect) {
@@ -995,6 +1067,62 @@ export class Run {
       };
     }
     return this.finishCharmChoice(offer, charm, nextOmen);
+  }
+
+  finishReserveChoice(offer, charm, replaceIndex = null) {
+    if (!this.draft) return { ok: false, reason: '签局已经结束' };
+    const instance = {
+      instanceId: offer.offerId,
+      charmId: charm.id,
+      tier: offer.tier,
+      role: 'active',
+      source: 'draft',
+    };
+    const nextSatchel = this.satchel.map((entry) => ({ ...entry }));
+    let replaced = null;
+    if (Number.isInteger(replaceIndex)) {
+      if (!nextSatchel[replaceIndex]) return { ok: false, reason: '要替换的锦囊位不存在' };
+      replaced = nextSatchel[replaceIndex];
+      nextSatchel[replaceIndex] = instance;
+    } else {
+      if (nextSatchel.length >= 3) return { ok: false, reason: '锦囊位已满' };
+      nextSatchel.push(instance);
+    }
+    const group = this.revealedGroups.find((item) => item.id === this.draft.groupId);
+    if (group) group.reserveCharmId = charm.id;
+    this.satchel = nextSatchel;
+    this.draft = null;
+    this.status = 'playing';
+    this.lastEvent = {
+      type: 'satchel-reserve',
+      text: replaced ? `${charm.name}收入锦囊，替换${getItem('charm', replaced.charmId)?.name ?? '旧锦囊'}` : `${charm.name}收入锦囊`,
+      charmId: charm.id,
+      replaced,
+    };
+    this.refreshStatus();
+    this.emit();
+    return { ok: true, reserved: true, charm, instance, replaced };
+  }
+
+  confirmSatchelReplacement(index) {
+    const pending = this.draft?.pendingSatchelReplacement;
+    if (this.status !== 'charm-draft' || !pending) {
+      return { ok: false, reason: '现在不需要替换锦囊' };
+    }
+    const offer = this.draft.offers?.find((entry) => entry.offerId === pending.offerId);
+    const charm = getItem('charm', pending.charmId);
+    if (!offer || !charm) return { ok: false, reason: '新锦囊已经不存在' };
+    return this.finishReserveChoice(offer, charm, index);
+  }
+
+  cancelSatchelReplacement() {
+    if (this.status !== 'charm-draft' || !this.draft?.pendingSatchelReplacement) {
+      return { ok: false, reason: '现在不需要替换锦囊' };
+    }
+    this.draft = { ...this.draft, pendingSatchelReplacement: null };
+    this.lastEvent = { type: 'satchel-replace-cancel', text: '返回三签选择' };
+    this.emit();
+    return { ok: true };
   }
 
   finishCharmChoice(offer, charm, nextOmen = null, fateChange = null) {
@@ -1191,6 +1319,199 @@ export class Run {
     return { ok: true };
   }
 
+  pointStoneChoices() {
+    if (this.fateSatchelUsed || !this.looseTiles.length) return [];
+    const kindCounts = new Map();
+    for (const tile of [
+      ...this.looseTiles,
+      ...this.revealedGroups.flatMap((group) => group.tiles),
+    ]) {
+      const kind = tileKey(tile);
+      kindCounts.set(kind, (kindCounts.get(kind) ?? 0) + 1);
+    }
+    const distanceBefore = this.distance();
+    const choices = [];
+    for (let index = 0; index < this.looseTiles.length; index += 1) {
+      const before = this.looseTiles[index];
+      for (const targetKind of TILE_KINDS) {
+        if (targetKind === tileKey(before) || (kindCounts.get(targetKind) ?? 0) >= 4) continue;
+        const spec = parseKind(targetKind);
+        const after = makeTile(before.id, spec.suit, spec.rank);
+        const candidate = sortTiles(this.looseTiles.map((tile) => tile.id === before.id ? after : tile));
+        const distanceAfter = tilesToChange(candidate, this.revealedGroups);
+        choices.push({
+          tileId: before.id,
+          beforeKind: tileKey(before),
+          targetKind,
+          distanceAfter,
+          improves: distanceAfter < distanceBefore,
+        });
+      }
+    }
+    return choices;
+  }
+
+  beginSatchelUse(instanceId) {
+    if (!this.isPlayable()) return { ok: false, reason: '现在不能使用锦囊' };
+    if (this.activeChoice) return { ok: false, reason: '请先完成当前锦囊' };
+    const instance = this.satchel.find((entry) => entry.instanceId === instanceId);
+    const charm = instance ? getItem('charm', instance.charmId) : null;
+    if (!instance || !charm?.active) return { ok: false, reason: '锦囊不存在' };
+    if (charm.active.kind === 'shuffleWall' && this.wall.length < (charm.active.minimumWall ?? 4)) {
+      return { ok: false, reason: '剩余牌墙不足 4 张，不能再洗壁' };
+    }
+    if (charm.active.kind === 'changeTile' && this.fateSatchelUsed) {
+      return { ok: false, reason: '本副已经用过一次改命锦囊' };
+    }
+    const choices = charm.active.kind === 'changeTile' ? this.pointStoneChoices() : [];
+    if (charm.active.kind === 'changeTile' && !choices.length) {
+      return { ok: false, reason: '当前没有合法的点石目标' };
+    }
+    this.activeChoice = {
+      instanceId,
+      charmId: charm.id,
+      mode: charm.active.kind === 'changeTile' ? 'source' : 'confirm',
+      selectedTileId: null,
+      selectedTargetKind: null,
+      distanceBefore: this.distance(),
+      choices,
+      preview: null,
+    };
+    this.lastEvent = { type: 'satchel-open', text: `${charm.name} · 确认使用` };
+    this.emit();
+    return { ok: true, needsTarget: charm.active.kind === 'changeTile' };
+  }
+
+  cancelSatchelUse() {
+    if (!this.activeChoice) return { ok: false, reason: '现在没有打开锦囊' };
+    this.activeChoice = null;
+    this.lastEvent = { type: 'satchel-cancel', text: '锦囊已收回' };
+    this.emit();
+    return { ok: true };
+  }
+
+  selectSatchelTile(tileId) {
+    const choice = this.activeChoice;
+    if (!choice || choice.mode !== 'source') return { ok: false, reason: '现在不需要选择原牌' };
+    if (!choice.choices.some((entry) => entry.tileId === tileId)) {
+      return { ok: false, reason: '这张牌没有合法目标' };
+    }
+    this.activeChoice = {
+      ...choice,
+      mode: 'target',
+      selectedTileId: tileId,
+      selectedTargetKind: null,
+      preview: null,
+    };
+    this.lastEvent = { type: 'satchel-source', text: '选择要变成的牌' };
+    this.emit();
+    return { ok: true };
+  }
+
+  selectSatchelTarget(targetKind) {
+    const choice = this.activeChoice;
+    if (!choice || choice.mode !== 'target' || !choice.selectedTileId) {
+      return { ok: false, reason: '请先选择要改变的牌' };
+    }
+    const saved = choice.choices.find((entry) => (
+      entry.tileId === choice.selectedTileId && entry.targetKind === targetKind
+    ));
+    const before = this.looseTiles.find((tile) => tile.id === choice.selectedTileId);
+    if (!saved || !before || tileKey(before) !== saved.beforeKind) {
+      return { ok: false, reason: '这个点石目标已经失效' };
+    }
+    const spec = parseKind(targetKind);
+    const after = makeTile(before.id, spec.suit, spec.rank);
+    const candidate = sortTiles(this.looseTiles.map((tile) => tile.id === before.id ? after : tile));
+    const best = this.bestHu(candidate, this.revealedGroups);
+    this.activeChoice = {
+      ...choice,
+      mode: 'preview',
+      selectedTargetKind: targetKind,
+      preview: {
+        beforeKind: saved.beforeKind,
+        targetKind,
+        distanceBefore: choice.distanceBefore,
+        distanceAfter: saved.distanceAfter,
+        canHuAfter: Boolean(best),
+        patternsAfter: best?.patterns ?? [],
+      },
+    };
+    this.lastEvent = { type: 'satchel-preview', text: '确认后才会消费锦囊' };
+    this.emit();
+    return { ok: true, preview: this.activeChoice.preview };
+  }
+
+  backSatchelChoice() {
+    const choice = this.activeChoice;
+    if (!choice) return { ok: false, reason: '现在没有打开锦囊' };
+    if (choice.mode === 'preview') {
+      this.activeChoice = { ...choice, mode: 'target', selectedTargetKind: null, preview: null };
+    } else if (choice.mode === 'target') {
+      this.activeChoice = { ...choice, mode: 'source', selectedTileId: null, selectedTargetKind: null, preview: null };
+    } else {
+      return this.cancelSatchelUse();
+    }
+    this.lastEvent = { type: 'satchel-back', text: '返回上一步' };
+    this.emit();
+    return { ok: true };
+  }
+
+  confirmSatchelUse() {
+    const choice = this.activeChoice;
+    const instance = choice ? this.satchel.find((entry) => entry.instanceId === choice.instanceId) : null;
+    const charm = instance ? getItem('charm', instance.charmId) : null;
+    if (!choice || !instance || !charm?.active) return { ok: false, reason: '锦囊状态已经失效' };
+
+    let detail = '';
+    if (charm.active.kind === 'addSwaps') {
+      this.swapsRemaining += charm.active.value;
+      this.bonusSwapsRemaining += charm.active.value;
+      detail = `额外 +${charm.active.value} 次换牌`;
+    } else if (charm.active.kind === 'shuffleWall') {
+      if (this.wall.length < (charm.active.minimumWall ?? 4)) return { ok: false, reason: '剩余牌墙不足 4 张' };
+      const beforeIds = this.wall.map((tile) => tile.id).join('|');
+      const rng = createSeededRng(avalanche32(
+        this.handSeed() ^ Math.imul(this.wallShuffleCount + 1, 0x6d2b79f5),
+      ));
+      const shuffled = shuffleInPlace([...this.wall], rng);
+      if (shuffled.length > 1 && shuffled.map((tile) => tile.id).join('|') === beforeIds) {
+        shuffled.push(shuffled.shift());
+      }
+      this.wall = shuffled;
+      this.wallShuffleCount += 1;
+      detail = '剩余牌墙已重洗';
+    } else if (charm.active.kind === 'changeTile') {
+      if (choice.mode !== 'preview' || !choice.selectedTileId || !choice.selectedTargetKind) {
+        return { ok: false, reason: '请先选好原牌和目标牌' };
+      }
+      const saved = choice.choices.find((entry) => (
+        entry.tileId === choice.selectedTileId && entry.targetKind === choice.selectedTargetKind
+      ));
+      const before = this.looseTiles.find((tile) => tile.id === choice.selectedTileId);
+      if (!saved || !before || tileKey(before) !== saved.beforeKind) return { ok: false, reason: '点石目标已经失效' };
+      const physicalTiles = [...this.looseTiles, ...this.revealedGroups.flatMap((group) => group.tiles)];
+      if (physicalTiles.filter((tile) => tileKey(tile) === saved.targetKind).length >= 4) {
+        return { ok: false, reason: '牌局中已经有四张这种牌' };
+      }
+      const spec = parseKind(saved.targetKind);
+      const after = makeTile(before.id, spec.suit, spec.rank);
+      this.looseTiles = sortTiles(this.looseTiles.map((tile) => tile.id === before.id ? after : tile));
+      this.selectedIds.clear();
+      this.fateSatchelUsed = true;
+      detail = `${kindName(saved.beforeKind)}化为${kindName(saved.targetKind)}`;
+    } else {
+      return { ok: false, reason: '未知锦囊效果' };
+    }
+
+    this.satchel = this.satchel.filter((entry) => entry.instanceId !== instance.instanceId);
+    this.activeChoice = null;
+    this.lastEvent = { type: 'satchel-used', text: `${charm.name} · ${detail}`, charmId: charm.id };
+    this.refreshStatus();
+    this.emit();
+    return { ok: true, charm, detail };
+  }
+
   /* ---------------- 结算 ---------------- */
 
   declareHu() {
@@ -1220,6 +1541,8 @@ export class Run {
       charmIds: [...this.charmIds],
       charmInstances: this.charmInstances.map((instance) => ({ ...instance })),
       swapsRemaining: this.swapsRemaining,
+      rewardableSwapsRemaining: this.rewardableSwapsRemaining(),
+      unusedSatchel: this.satchel.map((entry) => ({ ...entry })),
     };
 
     this.blindScore += best.total;
@@ -1563,6 +1886,8 @@ export class Run {
       slotCount: config.fortuneSlots,
       emptySlots: this.emptySlots(),
       swapsRemaining: this.swapsRemaining,
+      bonusSwapsRemaining: this.bonusSwapsRemaining,
+      rewardableSwapsRemaining: this.rewardableSwapsRemaining(),
       swapsPerHand: config.swapsPerHand,
       maxSwapTiles: config.maxSwapTiles,
       goldPerEmptySlot: config.goldPerEmptySlot,
@@ -1575,6 +1900,10 @@ export class Run {
 
       charmIds: [...this.charmIds],
       charmInstances: this.charmInstances.map((instance) => ({ ...instance })),
+      satchel: this.satchel.map((entry) => ({ ...entry })),
+      activeChoice: cloneActiveChoice(this.activeChoice),
+      fateSatchelUsed: this.fateSatchelUsed,
+      wallShuffleCount: this.wallShuffleCount,
       draft: cloneDraft(this.draft),
       pendingOmen: cloneOmen(this.pendingOmen),
       blindEntryPendingOmen: cloneOmen(this.blindEntryPendingOmen),

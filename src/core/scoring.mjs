@@ -30,6 +30,7 @@ import { tileKey } from './tiles.mjs';
  * @param {number} input.revealCount
  * @param {number} input.emptySlots
  * @param {number} input.swapsRemaining
+ * @param {number} [input.rewardableSwapsRemaining]
  * @param {string[]} [input.charmIds]   本副灵签，按取得顺序
  * @param {string[]} [input.generalIds] 福将，按将位顺序
  * @param {Record<string,string>} [input.bones] 牌种 → 牌骨 id
@@ -43,6 +44,7 @@ export function scoreHand({
   revealCount = 0,
   emptySlots = 0,
   swapsRemaining = 0,
+  rewardableSwapsRemaining = swapsRemaining,
   charmIds = [],
   generalIds = [],
   bones = {},
@@ -122,13 +124,13 @@ export function scoreHand({
     });
   }
 
-  if (swapsRemaining > 0 && config.goldPerUnusedSwap > 0) {
+  if (rewardableSwapsRemaining > 0 && config.goldPerUnusedSwap > 0) {
     push({
       key: 'swaps',
       source: 'swaps',
-      label: `余下换牌 ${swapsRemaining}`,
-      detail: `${swapsRemaining} × ${config.goldPerUnusedSwap} 金`,
-      gold: swapsRemaining * config.goldPerUnusedSwap,
+      label: `余下换牌 ${rewardableSwapsRemaining}`,
+      detail: `${rewardableSwapsRemaining} × ${config.goldPerUnusedSwap} 金`,
+      gold: rewardableSwapsRemaining * config.goldPerUnusedSwap,
       target: { type: 'hud', id: 'swaps' },
     });
   }

@@ -75,6 +75,10 @@ interface PlatformAdapter {
 - 五系功能卡由 `src/content/library.mjs` 的单一 `CONTENT_LIBRARY` 管理；抽签、商店、计分和百牌谱共用同一数据对象。下架使用 `enabled: false`，无存档迁移不硬删 id。见 `decisions/0018-unified-content-library.md`。
 - 结算流水线输出有序 steps，动画照着播，不参与算分。
 - 存档存完整手内状态 + `schemaVersion`，不用 seed 重放。
+- 当前正式切片使用 schema v5：除 v4 状态外，保存三格`satchel`、主动目标选择`activeChoice`、
+  奖励型 / 额外换牌分账、洗壁次数与本副改命限制；v4 → v5 显式迁移为空锦囊且保留旧换牌收益。
+- 灵签数据以`resolution: immediate | reserve`区分选中即生效与收入锦囊，主动规则挂在 Library 的`active`描述；
+  `core/run.mjs`执行规则，`ui/app.mjs`只根据快照渲染确认与目标流程。
 
 ## 待定技术决定
 

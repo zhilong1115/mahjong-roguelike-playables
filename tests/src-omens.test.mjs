@@ -60,7 +60,7 @@ test('每张灵签有固定签阶和新职责，现有卡池同时覆盖银 / �
   const tiers = new Set();
   for (const charm of CHARM_LIST) {
     assert.ok(['silver', 'gold', 'rainbow'].includes(charm.tier), `${charm.id} 缺固定签阶`);
-    assert.ok(['momentum', 'fate', 'omen'].includes(charm.functionRole), `${charm.id} 缺功能职责`);
+    assert.ok(['momentum', 'fate', 'omen', 'active'].includes(charm.functionRole), `${charm.id} 缺功能职责`);
     assert.ok(['group', 'pattern', 'wild'].includes(charm.draftRole), `${charm.id} 缺兼容货位职责`);
     tiers.add(charm.tier);
   }
@@ -236,12 +236,12 @@ test('失败重试恢复进关前待缘快照，失败尝试不能新增或刷�
   assert.deepEqual(run.pendingOmen, beforeBlind, '失败尝试消耗的旧签兆必须恢复');
 });
 
-test('schema v4 原样保存增强签局；v3 迁移只补签阶，不重抽旧签', () => {
+test('schema v5 原样保存增强签局；v3 迁移只补签阶，不重抽旧签', () => {
   const run = new Run({ seed: 777 });
   run.pendingOmen = omen(OMEN_IDS.extraChoice, 'wideOmen');
   openDraft(run);
   const saved = serializeRun(run);
-  assert.equal(saved.schemaVersion, 4);
+  assert.equal(saved.schemaVersion, 5);
 
   const restored = new Run({ seed: 1 });
   assert.equal(restoreRun(restored, clone(saved)).ok, true);
@@ -289,7 +289,7 @@ test('schema v4 原样保存增强签局；v3 迁移只补签阶，不重抽旧�
   assert.deepEqual(migratedV2.hand.draft.charmIds, v3.hand.draft.charmIds);
 });
 
-test('本地存档优先读取 v4，并能回退读取旧 v3 key；清档同时清两份', async () => {
+test('本地存档优先读取 v5，并能依次回退 v4 / v3；清档同时清三代键', async () => {
   const backing = new Map();
   const storage = createLocalStorage({
     getItem: (key) => backing.get(key) ?? null,
@@ -300,10 +300,14 @@ test('本地存档优先读取 v4，并能回退读取旧 v3 key；清档同时�
   assert.equal((await storage.load()).seed, 3);
   backing.set('tianhu.run.v4', '{broken-json');
   assert.equal((await storage.load()).seed, 3, 'v4 损坏时仍应尝试尚未清理的 v3');
-  await storage.save({ schemaVersion: 4, seed: 4 });
-  assert.equal((await storage.load()).seed, 4);
-  assert.equal(backing.has('tianhu.run.v3'), false, 'v4 成功写入后才清理旧 v3 键');
+  backing.set('tianhu.run.v5', '{broken-json');
+  assert.equal((await storage.load()).seed, 3, 'v5 / v4 损坏时仍应回退到 v3');
+  await storage.save({ schemaVersion: 5, seed: 5 });
+  assert.equal((await storage.load()).seed, 5);
+  assert.equal(backing.has('tianhu.run.v3'), false, 'v5 成功写入后才清理旧 v3 键');
+  assert.equal(backing.has('tianhu.run.v4'), false, 'v5 成功写入后才清理旧 v4 键');
   await storage.clear();
   assert.equal(backing.has('tianhu.run.v3'), false);
   assert.equal(backing.has('tianhu.run.v4'), false);
+  assert.equal(backing.has('tianhu.run.v5'), false);
 });

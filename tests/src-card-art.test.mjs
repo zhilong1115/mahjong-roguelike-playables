@@ -7,12 +7,19 @@ import { CARD_ART_COUNTS, resolveCardArtwork } from '../src/render/card-art.mjs'
 
 test('现行灵签与福将都有稳定且不重复的图谱位置', () => {
   for (const family of ['charm', 'general']) {
-    const items = listContentItems(family);
+    const items = listContentItems(family).filter((item) => item.resolution !== 'reserve');
     const resolved = items.map((item) => resolveCardArtwork(family, item.id));
     assert.equal(items.length, CARD_ART_COUNTS[family]);
     assert.ok(resolved.every((art) => art.found));
     assert.equal(new Set(resolved.map((art) => art.index)).size, items.length);
   }
+});
+
+test('三张主动锦囊使用独立代码绘制物件，不占用旧灵签图谱格', () => {
+  const satchels = listContentItems('charm').filter((item) => item.resolution === 'reserve');
+  assert.equal(satchels.length, CARD_ART_COUNTS.satchel);
+  assert.deepEqual(satchels.map((item) => item.id), ['extraRounds', 'washWall', 'turnStone']);
+  assert.ok(satchels.every((item) => resolveCardArtwork('charm', item.id).found === false));
 });
 
 test('两张离线 WebP 图谱存在且总计低于 600 KB', async () => {

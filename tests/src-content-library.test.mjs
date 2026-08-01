@@ -11,15 +11,15 @@ import {
   validateContentLibrary,
 } from '../src/content/index.mjs';
 
-test('统一 Library 收录现行 38 张五系功能卡', () => {
+test('统一 Library 收录现行 41 张五系功能卡', () => {
   assert.deepEqual(CONTENT_COUNTS, {
-    charm: 19,
+    charm: 22,
     codex: 3,
     general: 11,
     bone: 2,
     seal: 3,
   });
-  assert.equal(CONTENT_LIBRARY.filter((item) => item.enabled).length, 38);
+  assert.equal(CONTENT_LIBRARY.filter((item) => item.enabled).length, 41);
   assert.deepEqual(validateContentLibrary(), []);
 });
 

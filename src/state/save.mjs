@@ -9,7 +9,7 @@
 import { makeTile } from '../core/tiles.mjs';
 import { CHARMS } from '../content/charms.mjs';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 const serializeTile = (tile) => `${tile.id}|${tile.suit}|${tile.rank}`;
 const deserializeTile = (text) => {
@@ -18,6 +18,11 @@ const deserializeTile = (text) => {
 };
 
 const cloneOmen = (omen) => (omen ? { ...omen } : null);
+const cloneActiveChoice = (choice) => (choice ? {
+  ...choice,
+  choices: (choice.choices ?? []).map((entry) => ({ ...entry })),
+  preview: choice.preview ? { ...choice.preview, patternsAfter: [...(choice.preview.patternsAfter ?? [])] } : null,
+} : null);
 
 function cloneDraft(draft) {
   if (!draft) return null;
@@ -33,6 +38,9 @@ function cloneDraft(draft) {
         current: cloneOmen(draft.pendingOmenReplacement.current),
         next: cloneOmen(draft.pendingOmenReplacement.next),
       }
+      : null,
+    pendingSatchelReplacement: draft.pendingSatchelReplacement
+      ? { ...draft.pendingSatchelReplacement }
       : null,
     ...(draft.pendingFateChoice
       ? { pendingFateChoice: {
@@ -86,11 +94,17 @@ export function serializeRun(run) {
         kind: group.kind,
         charmId: group.charmId ?? null,
         charmInstanceId: group.charmInstanceId ?? null,
+        reserveCharmId: group.reserveCharmId ?? null,
         tiles: group.tiles.map(serializeTile),
       })),
       swapsRemaining: run.swapsRemaining,
+      bonusSwapsRemaining: run.bonusSwapsRemaining,
       charmIds: [...run.charmIds],
       charmInstances: run.charmInstances.map((instance) => ({ ...instance })),
+      satchel: run.satchel.map((instance) => ({ ...instance })),
+      activeChoice: cloneActiveChoice(run.activeChoice),
+      fateSatchelUsed: run.fateSatchelUsed,
+      wallShuffleCount: run.wallShuffleCount,
       charmGold: run.charmGold,
       usedSealKinds: [...run.usedSealKinds],
       omenTriggeredThisHand: run.omenTriggeredThisHand,
@@ -165,12 +179,18 @@ export function restoreRun(run, data) {
     kind: group.kind,
     charmId: group.charmId ?? null,
     charmInstanceId: group.charmInstanceId ?? null,
+    reserveCharmId: group.reserveCharmId ?? null,
     revealed: true,
     tiles: group.tiles.map(deserializeTile),
   }));
   run.swapsRemaining = hand.swapsRemaining;
+  run.bonusSwapsRemaining = hand.bonusSwapsRemaining ?? 0;
   run.charmIds = [...(hand.charmIds ?? [])];
   run.charmInstances = (hand.charmInstances ?? []).map((instance) => ({ ...instance }));
+  run.satchel = (hand.satchel ?? []).slice(0, 3).map((instance) => ({ ...instance }));
+  run.activeChoice = cloneActiveChoice(hand.activeChoice);
+  run.fateSatchelUsed = Boolean(hand.fateSatchelUsed);
+  run.wallShuffleCount = Math.max(0, Number(hand.wallShuffleCount) || 0);
   run.charmGold = hand.charmGold ?? 0;
   run.usedSealKinds = new Set(hand.usedSealKinds ?? []);
   run.omenTriggeredThisHand = Boolean(hand.omenTriggeredThisHand);
@@ -201,6 +221,7 @@ export function restoreRun(run, data) {
  * v1 → v2：牌种改造从单张实体牌改成整个牌种，`tileMods` 拆成 `bones` / `seals`。
  * v2 → v3：加入圈关结构，`roundIndex` 变成 `anteIndex` + `blindKind`。
  * v3 → v4：灵签变为带固定签阶的实例；签局保存 offers / tierSlots；加入待缘状态。
+ * v4 → v5：加入三格主动锦囊、主动目标中间态，以及额外 / 可兑换换牌分账。
  */
 export function migrate(data) {
   if (!data || typeof data !== 'object') return null;
@@ -327,14 +348,31 @@ export function migrate(data) {
     };
   }
 
+  if (save.schemaVersion === 4) {
+    const hand = save.hand ?? {};
+    save = {
+      ...save,
+      schemaVersion: 5,
+      hand: {
+        ...hand,
+        bonusSwapsRemaining: 0,
+        satchel: [],
+        activeChoice: null,
+        fateSatchelUsed: false,
+        wallShuffleCount: 0,
+        draft: cloneDraft(hand.draft),
+      },
+    };
+  }
+
   if (save.schemaVersion !== SCHEMA_VERSION) return null;
   if (!save.hand || !Array.isArray(save.hand.looseTiles)) return null;
   if (typeof save.anteIndex !== 'number' || !save.blindKind) return null;
   return save;
 }
 
-const STORAGE_KEY = 'tianhu.run.v4';
-const LEGACY_STORAGE_KEYS = Object.freeze(['tianhu.run.v3']);
+const STORAGE_KEY = 'tianhu.run.v5';
+const LEGACY_STORAGE_KEYS = Object.freeze(['tianhu.run.v4', 'tianhu.run.v3']);
 
 /** 浏览器本地存档；平台存档由 adapter 覆盖。 */
 export function createLocalStorage(storage = globalThis.localStorage) {
@@ -353,7 +391,7 @@ export function createLocalStorage(storage = globalThis.localStorage) {
     async save(data) {
       try {
         storage?.setItem(STORAGE_KEY, JSON.stringify(data));
-        // 只有 v4 写入成功后才删除旧键，避免迁移过程中把唯一可用存档清掉。
+        // 只有 v5 写入成功后才删除旧键，避免迁移过程中把唯一可用存档清掉。
         for (const key of LEGACY_STORAGE_KEYS) storage?.removeItem(key);
         return true;
       } catch {
