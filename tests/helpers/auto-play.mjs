@@ -47,7 +47,7 @@ export function smartSwap(run) {
  * 省下来的换牌次数在胡牌时换金币。
  */
 export function batchSwap(run) {
-  const preview = run.wall.slice(0, 2);
+  const preview = run.wall.slice(0, run.previewCount ?? 2);
   if (!preview.length) return false;
   const candidates = run.looseTiles.filter(
     (tile) => !preview.some((next) => tileKey(next) === tileKey(tile)),
@@ -77,7 +77,12 @@ export function batchSwap(run) {
     consider([first]);
     if (preview.length < 2) continue;
     for (const second of candidates) {
-      if (second.id !== first.id) consider([first, second]);
+      if (second.id === first.id) continue;
+      consider([first, second]);
+      if (preview.length < 3) continue;
+      for (const third of candidates) {
+        if (third.id !== first.id && third.id !== second.id) consider([first, second, third]);
+      }
     }
   }
   if (!best) return false;

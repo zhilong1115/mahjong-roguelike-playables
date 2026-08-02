@@ -4,12 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>天胡 TIANHU</title>
+<link rel="preload" href="assets/art/ink-table-v1.webp" as="image" type="image/webp">
+<link rel="preload" href="assets/art/ink-title-v1.webp" as="image" type="image/webp">
+<link rel="preload" href="assets/art/charm-atlas-v1.webp" as="image" type="image/webp">
+<link rel="preload" href="assets/art/general-atlas-v1.webp" as="image" type="image/webp">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+<!-- 背景 shader 画在最底层；拿不到 WebGL 就留空，body 的 CSS 渐变兜底 -->
+<canvas id="backdrop" aria-hidden="true"></canvas>
 <div id="app">
-  <aside id="side">
-    <section class="panel" id="roundPanel">
+  <aside id="side" aria-label="牌局状态">
+    <section class="panel" id="roundPanel" aria-label="关卡进度">
       <div class="rowFlex">
         <div id="roundChip">壹</div>
         <div class="grow">
@@ -25,7 +31,7 @@
       </div>
     </section>
 
-    <section class="panel dark" id="scorePanel">
+    <section class="panel dark" id="scorePanel" aria-label="当前牌势">
       <div id="handName" class="sh">尚未成牌</div>
       <div id="calcRow">
         <div class="calcBox" id="chipsBox">0</div>
@@ -35,27 +41,39 @@
       <div id="totalBox" class="sh">0</div>
     </section>
 
-    <section class="panel deep" id="statPanel">
+    <section class="panel deep" id="statPanel" aria-label="本副资源">
       <div class="statRow">
         <div class="stat"><div class="v" id="swapV">4</div><div class="n" id="swapLabel">换牌 SWAPS</div></div>
         <div class="stat"><div class="v" id="distV">2</div><div class="n">还差 TO HU</div></div>
         <div class="stat money"><div class="v" id="goldV">4</div><div class="n">金币 GOLD</div></div>
         <div class="stat"><div class="v" id="slotV">12金</div><div class="n" id="slotLabel">空位 6 SLOTS</div></div>
       </div>
+      <button id="omenSlot" type="button" aria-label="待缘位为空">
+        <span class="omenLabel">待缘位</span>
+        <span id="omenName">空 · 延时奇缘会留在这里</span>
+        <span id="omenTiming">下一次求签 · 一次</span>
+      </button>
+      <button id="passiveSummary" type="button" aria-label="本副签效为空">
+        <span class="passiveGlyph" aria-hidden="true">签</span>
+        <span class="passiveBody"><span id="passiveName">本副签效</span><span id="passiveCount">0 · 选中即生效</span></span>
+      </button>
     </section>
 
-    <section class="panel deep grow" id="buildPanel">
+    <section class="panel deep grow" id="buildPanel" aria-label="本局构筑">
       <div class="lbl">常驻构筑 BUILD</div>
       <div id="buildBar"></div>
+      <!-- 摘要固定在面板底部，福将再多也不会把它挤出可视区 -->
+      <div id="buildChips"></div>
       <div id="sideBtns">
         <button class="btn grey sm" id="btnHelp" type="button">玩法</button>
+        <button class="btn grey sm" id="btnLibrary" type="button">百牌谱</button>
         <button class="btn grey sm" id="btnRestart" type="button">重开</button>
       </div>
     </section>
   </aside>
 
   <main id="main">
-    <div id="slotBar" aria-label="开运位"></div>
+    <div id="slotBar" aria-label="签缘与三格锦囊"></div>
 
     <div id="table">
       <div id="tableMark" aria-hidden="true"><div class="mk">胡</div><div class="mk2">TIANHU</div></div>
@@ -68,22 +86,31 @@
       </div>
       <div id="bossBanner" hidden></div>
       <div id="patternBanner" hidden></div>
-      <div id="draftLayer" hidden>
-        <div id="draftTitle" class="sh">三签选一 · 只在本副生效</div>
-        <div id="draftCards"></div>
-        <button class="btn grey sm" id="btnReroll" type="button" hidden>问签印 · 重抽</button>
-      </div>
+      <!-- 拖拽时告诉玩家松手会发生什么 -->
+      <div id="dropHint" hidden></div>
     </div>
 
-    <div id="handZone"></div>
-
+    <!-- 操作栏在手牌上方：拖着牌往上走，第一个碰到的就是按钮 -->
     <div id="actionRow">
       <button class="btn play" id="btnSwap" type="button">换牌</button>
       <button class="btn green" id="btnReveal" type="button">亮组</button>
-      <button class="btn gold" id="btnHu" type="button">胡牌 HU</button>
-      <div id="actionHint" class="hintLine">选中要换的牌可以一次换多张；选 2–4 张合法组合就能亮组</div>
+      <button class="btn gold" id="btnHu" type="button" hidden>胡牌 HU</button>
+      <div id="actionHint" class="hintLine">点或拖起手牌都能出：拖到上面的按钮上松手即可</div>
     </div>
+
+    <div id="handZone"></div>
   </main>
+
+  <section id="draftLayer" role="dialog" aria-modal="true" aria-labelledby="draftTitle" hidden>
+    <div id="draftPanel">
+      <div id="draftTitle" class="sh">三签选一 · 只在本副生效</div>
+      <div id="draftNotice" aria-live="polite" hidden></div>
+      <div id="draftCards"></div>
+      <div id="draftActions">
+        <button class="btn grey" id="btnReroll" type="button" hidden>问签印 · 重抽</button>
+      </div>
+    </div>
+  </section>
 </div>
 
 <div id="floatLayer" aria-hidden="true"></div>

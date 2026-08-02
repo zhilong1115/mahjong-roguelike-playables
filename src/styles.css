@@ -1,7 +1,7 @@
 /* =========================================================
    天胡 TIANHU · 正式版界面
-   视觉基线延续 V3 街机切片：深玉绿牌桌 + 蓝灰机台 + 扫描线 + 像素牌
-   零外部请求：不引用字体、图片或分析服务
+   视觉基线：宣纸水墨 + 松烟墨 + 朱砂 + 温玉麻将牌
+   零外部请求：只引用项目内图片，不引用外部字体、图片或分析服务
    ========================================================= */
 :root{
   --bg1:#1d3a33; --bg2:#0f2a22;
@@ -18,8 +18,9 @@
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html,body{height:100%;}
+/* 这层渐变只在拿不到 WebGL 时可见；正常情况下被 #backdrop 的 shader 盖住 */
 body{
-  background:radial-gradient(circle at 50% 38%, #2b5648 0%, var(--bg1) 45%, var(--bg2) 100%);
+  background:radial-gradient(circle at 50% 38%, #23483d 0%, var(--bg1) 45%, var(--bg2) 100%);
   font-family:"PingFang SC","Hiragino Sans GB","Heiti SC","Microsoft YaHei",sans-serif;
   font-weight:800;color:var(--txt);overflow:hidden;user-select:none;
   -webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent;
@@ -34,6 +35,17 @@ body::after{
   background:radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.55) 100%);
 }
 canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
+/* 背景 shader：铺满、置底、不吃事件。半分辨率画上来所以要拉伸 */
+#backdrop{
+  position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;
+  display:block;
+}
+/* 弹簧接管 transform 的元素，不能再被 CSS 过渡或关键帧碰 */
+.sprung{transition:none !important;will-change:transform;}
+/* 标题页开着时把牌桌压到几乎看不见，只留 shader 和 logo */
+/* 加一点模糊：不糊的话「0 / 400」这种数字还认得出来，读起来像脏东西而不是背景 */
+body.atTitle #app{opacity:.07;filter:blur(3px);}
+#app{transition:opacity .35s ease, filter .35s ease;}
 
 /* ---------- 骨架 ---------- */
 /* overflow:hidden 很重要：发牌等动画会把牌暂时位移到边界外，
@@ -68,6 +80,24 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 #targetFill{display:block;height:100%;width:0;background:linear-gradient(90deg,#3fae74,#f0c04a);transition:width .45s cubic-bezier(.22,1,.36,1);}
 #pendingLine{font-size:9px;color:var(--gold);margin-top:3px;}
 
+#omenSlot{
+  width:100%;min-height:48px;margin-top:5px;padding:4px 7px;border:2px dashed rgba(255,255,255,.2);
+  border-radius:6px;background:#171f28;color:var(--dim);font:inherit;cursor:pointer;text-align:left;
+  display:grid;grid-template-columns:auto 1fr;grid-template-areas:"label name" "label timing";
+  column-gap:7px;align-items:center;
+}
+#omenSlot .omenLabel{
+  grid-area:label;color:#dce6ee;font-size:9px;writing-mode:vertical-rl;letter-spacing:1px;
+}
+#omenName{grid-area:name;font-size:9px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#omenTiming{grid-area:timing;font-size:8px;color:#7f8d9b;}
+#omenSlot.filled{
+  border-style:solid;border-color:var(--goldD);color:#fff4c4;
+  background:linear-gradient(135deg,#463b20,#25303a);box-shadow:inset 0 0 0 1px rgba(240,192,74,.22);
+}
+#omenSlot.filled #omenTiming{color:var(--gold);}
+#omenSlot:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
+
 #handName{text-align:center;font-size:13px;min-height:17px;}
 #calcRow{display:flex;align-items:stretch;gap:4px;margin-top:4px;}
 .calcBox{
@@ -86,57 +116,199 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .stat.money{background:#2b2416;border-color:#171208;}
 
 #buildPanel{display:flex;flex-direction:column;gap:5px;overflow:hidden;}
-#buildBar{flex:1;display:flex;flex-wrap:wrap;gap:4px;align-content:flex-start;min-height:0;overflow:hidden auto;}
+#buildBar{flex:1;display:flex;flex-direction:column;gap:6px;min-height:0;overflow:hidden auto;}
+#buildChips{flex:0 0 auto;}
+/* 福将：一位一卡，空位也画出来，玩家才知道还能带几个。
+   两列排：四个将位在侧栏里一屏放得下，不用滚。 */
+.generalRow{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;}
+.generalRow .buildCard{width:100%;min-width:0;padding:3px 4px;gap:4px;}
+.generalRow .buildCard .cName{
+  font-size:10px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.generalRow .buildCard .cMeta{display:none;}
+.generalRow .buildSlot{min-height:38px;}
+/* 番谱 / 牌骨 / 牌印 / 牌帖：收成一排可点摘要 */
+.chipRow{display:flex;flex-wrap:wrap;gap:4px;}
+.buildChip{
+  flex:1 1 46%;min-width:0;min-height:38px;display:flex;align-items:center;gap:5px;padding:3px 5px;
+  font:inherit;font-weight:800;color:var(--txt);cursor:pointer;text-align:left;
+  border:2px solid var(--edge);border-radius:6px;background:linear-gradient(180deg,#3d4a5c,#2c3644);
+  box-shadow:0 2px 0 rgba(0,0,0,.4);transition:transform .1s,filter .12s;
+}
+.buildChip:hover{filter:brightness(1.15);transform:translateY(-2px);}
+.buildChip:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
+.buildChip .chipGlyph{
+  flex:0 0 20px;width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+  font-size:12px;color:#10161d;background:#cbd6e2;
+}
+.buildChip .chipBody{display:flex;flex-direction:column;min-width:0;line-height:1.15;}
+.buildChip .chipName{font-size:10px;}
+.buildChip .chipCount{font-size:8px;color:#ffe9a8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.buildChip.family-codex{background:linear-gradient(180deg,#5b4790,#382a5c);}
+.buildChip.family-codex .chipGlyph{background:var(--codex);}
+.buildChip.family-bone{background:linear-gradient(180deg,#2f7d5c,#1d5340);}
+.buildChip.family-bone .chipGlyph{background:var(--bone);}
+.buildChip.family-seal{background:linear-gradient(180deg,#9c3b33,#6d2620);}
+.buildChip.family-seal .chipGlyph{background:var(--seal);}
+.buildChip.family-paper{background:linear-gradient(180deg,#5a6775,#3c4652);}
 #sideBtns{display:flex;gap:4px;}
 #sideBtns .btn{flex:1;}
 
-/* ---------- 五系卡面：颜色 + 轮廓 + 单字，三重区分 ---------- */
+/* ---------- 五系卡面：真实卡图 + 不同实体物件 ---------- */
 .card{
-  position:relative;border:3px solid var(--edge);background:linear-gradient(180deg,#4a5a6b,#38455a);
-  box-shadow:0 3px 0 rgba(0,0,0,.4);display:flex;flex-direction:column;align-items:center;gap:2px;
-  padding:4px 3px;transition:transform .12s;
+  position:relative;border:3px solid #17120c;
+  background:linear-gradient(145deg,#4a3d2b 0%,#2d271f 58%,#1b1c1b 100%);
+  box-shadow:0 4px 0 rgba(0,0,0,.48),inset 0 0 0 1px rgba(255,231,170,.15);
+  display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 5px;
+  transition:border-color .12s,filter .12s;overflow:hidden;transform-style:preserve-3d;
 }
+/* 金粉、旧纸纤维与顶部釉光；卡图在上，纹理不能盖住文字。 */
+.card::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:
+    linear-gradient(180deg,rgba(255,246,211,.20) 0 2px,transparent 2px),
+    repeating-linear-gradient(96deg,rgba(255,241,190,.035) 0 1px,transparent 1px 7px),
+    radial-gradient(circle at 18% 22%,rgba(238,190,80,.12) 0 1px,transparent 1.5px);
+  background-size:auto,auto,13px 17px;
+}
+.card > *{position:relative;z-index:1;}
 .card .cName{font-size:10px;line-height:1.1;text-align:center;}
-.card .cText{font-size:9px;color:#eee6d4;text-align:center;line-height:1.3;}
+.card .cText{font-size:9px;color:#f0e6cf;text-align:left;line-height:1.38;}
 .card .cMeta{font-size:8px;color:#ffe9a8;}
-.card.family-charm{border-radius:3px 3px 8px 8px;background:linear-gradient(180deg,#2f6f86,#1d4a5e);border-top:5px solid var(--charm);}
-.card.family-codex{border-radius:3px 8px 8px 3px;background:linear-gradient(180deg,#5b4790,#382a5c);border-left:6px double var(--codex);}
-.card.family-general{border-radius:9px 9px 4px 4px;background:linear-gradient(180deg,#8a5a3e,#5e3a28);border-color:#2a1a12;box-shadow:0 3px 0 rgba(0,0,0,.45), inset 0 0 0 2px rgba(224,164,74,.35);}
-.card.family-bone{border-radius:6px;background:linear-gradient(180deg,#2f7d5c,#1d5340);clip-path:polygon(0 8%,8% 0,92% 0,100% 8%,100% 92%,92% 100%,8% 100%,0 92%);}
-.card.family-seal{border-radius:2px;background:linear-gradient(180deg,#9c3b33,#6d2620);border-width:4px;}
+.card.family-charm{border-radius:4px 4px 11px 11px;background:linear-gradient(165deg,#584a30,#233a34 68%,#142821);border-top:6px solid #d6b45e;}
+.card.family-codex{border-radius:4px 10px 10px 4px;background:linear-gradient(150deg,#342b4e,#201b31);border-left:7px double #b49add;}
+.card.family-general{border-radius:11px 11px 5px 5px;background:linear-gradient(160deg,#704127,#30251d);border-color:#24150d;box-shadow:0 4px 0 rgba(0,0,0,.5),inset 0 0 0 2px rgba(224,164,74,.35);}
+.card.family-bone{border-radius:7px;background:linear-gradient(155deg,#2c7155,#173c31);clip-path:polygon(0 8%,8% 0,92% 0,100% 8%,100% 92%,92% 100%,8% 100%,0 92%);}
+.card.family-seal{border-radius:3px;background:linear-gradient(150deg,#8d3129,#431b18);border-width:4px;}
+
+.cardArtwork{
+  width:70px;aspect-ratio:1;flex:0 0 auto;overflow:hidden;position:relative;
+  border:2px solid rgba(18,14,9,.86);box-shadow:0 3px 0 rgba(0,0,0,.4),inset 0 0 0 1px rgba(255,245,205,.18);
+  background-color:#d9c69b;background-repeat:no-repeat;
+}
+.atlasArtwork{image-rendering:auto;background-repeat:no-repeat;}
+.art-charm{
+  background-image:url("assets/art/charm-atlas-v1.webp");background-size:500% 400%;
+  background-position:var(--art-x) var(--art-y);border-radius:2px 2px 7px 7px;
+}
+.art-general{
+  aspect-ratio:3/4;background-image:url("assets/art/general-atlas-v1.webp");background-size:400% 300%;
+  background-position:var(--art-x) var(--art-y);border-radius:7px 7px 3px 3px;
+}
+.objectArtwork{display:grid;place-items:center;background:#1b2327;}
+.artObject{display:block;position:relative;width:68%;height:72%;}
+.artObject::before,.artObject::after,.artAccent,.artMark{position:absolute;content:'';display:block;}
+.artMark{inset:0;display:grid;place-items:center;font-family:"Kaiti SC","STKaiti","KaiTi",serif;font-size:22px;line-height:1;}
+.art-codex{background:linear-gradient(145deg,#57477f,#251d3a);}
+.art-codex .artObject{background:#d8c18c;border:3px solid #24180e;border-radius:2px 6px 6px 2px;box-shadow:inset 5px 0 0 #9d7850;}
+.art-codex .artObject::before{left:8px;right:5px;top:8px;height:2px;background:#8a2e27;box-shadow:0 7px 0 #6c5134,0 14px 0 #6c5134,0 21px 0 #6c5134;}
+.art-codex .artMark{color:#6e211c;font-size:13px;writing-mode:vertical-rl;}
+.art-bone{background:radial-gradient(circle at 35% 30%,#aef0cd,#2e8b67 44%,#143e32 72%);}
+.art-bone .artObject{transform:rotate(-7deg);background:linear-gradient(135deg,#f5f0d6,#9ed0ae);border:3px solid #254f3e;clip-path:polygon(20% 0,80% 0,100% 20%,85% 45%,100% 75%,78% 100%,22% 100%,0 76%,15% 46%,0 20%);}
+.art-bone .artObject::before{inset:12% 18%;border-left:2px solid rgba(35,91,65,.7);border-right:1px solid rgba(35,91,65,.5);transform:skew(-14deg);}
+.art-bone .artMark{color:#1d694b;text-shadow:1px 1px #e9ffef;}
+.art-seal{background:radial-gradient(circle,#c85543 0 30%,#591d19 72%);}
+.art-seal .artObject{background:#a62f28;border:4px solid #e5b77a;box-shadow:inset 0 0 0 3px #6c1d19;transform:rotate(-4deg);}
+.art-seal .artObject::before{left:18%;right:18%;bottom:-20%;height:24%;background:#d5a16d;border:2px solid #4b1714;}
+.art-seal .artMark{color:#f4d7a1;text-shadow:2px 2px #5d1613;}
+.art-paper{background:linear-gradient(145deg,#bca67c,#6a5737);}
+.art-paper .artObject{background:#e4d6ad;border:3px solid #654526;transform:rotate(3deg);}
+.art-paper .artObject::before{inset:8px;border-top:2px solid #9b332a;border-bottom:2px solid #9b332a;}
+.art-paper .artMark{color:#6c2822;}
 
 .buildCard{width:100%;flex-direction:row;align-items:center;gap:5px;padding:4px;}
+.buildCard .cardArtwork{width:28px;border-width:1px;box-shadow:0 2px 0 rgba(0,0,0,.35);}
 .buildCard .cName{text-align:left;}
 .buildCard .cMeta{margin-left:auto;}
-.buildSlot{width:100%;min-height:30px;border:2px dashed rgba(255,255,255,.14);border-radius:6px;}
+.buildSlot{
+  width:100%;min-height:30px;border:2px dashed rgba(255,255,255,.14);border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+}
+.buildSlot .slotIdx{font-size:8px;color:var(--dim);}
 .kindTag{font-size:8px;color:#cfe6ff;background:rgba(0,0,0,.3);border-radius:3px;padding:0 3px;}
 
 /* ---------- 开运位 ---------- */
-#slotBar{flex:0 0 auto;display:flex;gap:5px;padding:5px;background:rgba(0,0,0,.24);border:3px solid var(--edge);border-radius:8px;}
+#slotBar{
+  flex:0 0 auto;display:flex;gap:7px;padding:7px;background:rgba(4,14,11,.5);
+  border:3px solid #17140e;border-radius:10px;perspective:900px;
+  box-shadow:inset 0 0 0 1px rgba(226,190,92,.13),0 4px 0 rgba(0,0,0,.35);
+}
+/* 开运位就是灵签栏。亮出的碰 / 顺 / 杠在牌桌中央，这里只放签。 */
 .slot{
-  flex:1 1 0;min-width:0;border-radius:7px;border:3px dashed rgba(255,255,255,.14);
-  background:rgba(255,255,255,.03);min-height:54px;padding:3px;
+  flex:1 1 0;min-width:0;border-radius:8px;border:2px dashed rgba(221,198,139,.28);
+  background:linear-gradient(155deg,rgba(221,198,139,.08),rgba(0,0,0,.12));min-height:82px;padding:5px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;
 }
-.slot .slotGold{font-size:11px;color:var(--gold);}
-.slot .slotIdx{font-size:8px;color:var(--dim);}
-.slot.filled{border-style:solid;border-color:var(--edge);background:linear-gradient(180deg,#4a5a6b,#38455a);box-shadow:0 3px 0 rgba(0,0,0,.4);}
-.slot .groupTiles{display:flex;gap:1px;justify-content:center;}
-.slot .charmName{font-size:9px;color:#ffe9a8;text-align:center;line-height:1.05;}
+.slot::before{content:'';position:absolute;inset:4px;border:1px solid rgba(221,198,139,.1);border-radius:5px;pointer-events:none;}
+.slot .slotGold{font-size:13px;color:#f4cf70;text-shadow:2px 2px #261b0b;}
+.slot .slotIdx{font-size:9px;color:#c5b894;}
+.slot.filled{
+  display:grid;grid-template-columns:minmax(42px,52px) minmax(0,1fr);align-items:center;justify-content:start;
+  gap:7px;padding:6px;border-style:solid;border-color:#20160d;
+  background:linear-gradient(150deg,#655339,#203b34 72%);box-shadow:0 4px 0 rgba(0,0,0,.42),inset 0 0 0 1px rgba(255,223,145,.17);
+  border-top:4px solid #c6d1d7;
+}
+.slot .slotArtwork{width:100%;max-width:52px;border-width:1px;box-shadow:0 2px 0 rgba(0,0,0,.42);}
+.slot .slotBody{display:flex;flex-direction:column;min-width:0;line-height:1.15;text-align:left;}
+.slot .charmName{
+  font-size:12px;color:#fff0bd;text-align:left;line-height:1.18;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;
+}
+.slot .charmTier{font-size:9px;color:#cdd8d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.slot.tier-gold{border-top-color:var(--gold);background:linear-gradient(180deg,#77602d,#3c5360);}
+.slot.tier-rainbow{
+  border-top-color:transparent;
+  background:linear-gradient(150deg,#374f69,#594273 50%,#5f4f2e);
+  box-shadow:0 3px 0 rgba(0,0,0,.4),inset 0 3px 0 rgba(255,222,126,.5);
+}
+.slot.noCharm{flex-direction:column;justify-content:center;border-top-color:#5a6775;background:linear-gradient(180deg,#44505f,#2f3a47);}
+.slot.noCharm .charmName{text-align:center;}
 
 /* ---------- 牌桌 ---------- */
+/* 牌桌：中央聚光的绒面 + 一圈木框，让牌浮在桌面上而不是贴在背景上 */
 #table{
   flex:1;min-height:0;position:relative;border-radius:12px;
-  background:radial-gradient(ellipse at 50% 45%, rgba(90,175,140,.18) 0%, rgba(0,0,0,0) 62%);
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(122,206,168,.20) 0%, rgba(0,0,0,0) 60%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,.022) 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(-45deg, rgba(0,0,0,.05) 0 1px, transparent 1px 6px),
+    linear-gradient(180deg,rgba(20,52,42,.62) 0%,rgba(11,33,28,.78) 100%);
+  border:3px solid #0b1e19;
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.05), inset 0 12px 26px rgba(0,0,0,.4), 0 4px 0 rgba(0,0,0,.35);
   display:flex;align-items:center;justify-content:center;overflow:hidden;
 }
-#table::before{content:'';position:absolute;inset:5px;border:3px dashed rgba(255,255,255,.06);border-radius:12px;pointer-events:none;}
+#table::before{content:'';position:absolute;inset:5px;border:2px dashed rgba(255,255,255,.09);border-radius:9px;pointer-events:none;}
 #tableMark{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;opacity:.09;pointer-events:none;gap:4px;}
 #tableMark .mk{font-size:104px;line-height:1;color:#eafff4;}
 #tableMark .mk2{font-size:13px;letter-spacing:7px;color:#eafff4;}
-#revealZone{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;padding:6px 92px 6px 8px;position:relative;z-index:2;}
-.meld{display:flex;gap:1px;padding:3px;border-radius:6px;background:rgba(0,0,0,.22);border:2px solid rgba(0,0,0,.35);position:relative;}
+#revealZone{display:flex;gap:14px;flex-wrap:wrap;align-items:center;justify-content:center;padding:12px 98px 10px 12px;position:relative;z-index:2;}
+.meld{
+  width:clamp(96px,11vw,132px);min-height:clamp(132px,18vh,186px);display:grid;place-items:end center;
+  padding:38px 9px 10px;border-radius:12px;position:relative;
+  background:
+    radial-gradient(circle at 50% 68%,rgba(236,205,126,.16),transparent 52%),
+    linear-gradient(160deg,rgba(13,37,30,.68),rgba(4,18,15,.9));
+  border:2px solid rgba(221,188,105,.33);
+  box-shadow:inset 0 0 0 1px rgba(255,245,202,.06),0 5px 0 rgba(0,0,0,.32);
+}
 .meld.concealed{border-style:dashed;border-color:rgba(255,255,255,.22);}
+.meld::before{content:'';position:absolute;inset:6px;border:1px solid rgba(234,207,145,.1);border-radius:8px;pointer-events:none;}
+.meldInk{position:absolute;left:4px;right:4px;top:-7px;height:58px;display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.meldInk::before{
+  content:'';position:absolute;width:76px;height:46px;border-radius:48% 52% 45% 55%;
+  background:radial-gradient(ellipse,rgba(239,226,190,.96) 0 35%,rgba(219,203,163,.65) 52%,transparent 73%);
+  filter:blur(.4px);transform:rotate(-4deg);opacity:.9;
+}
+.meldInk::after{content:'';position:absolute;width:92px;height:20px;background:radial-gradient(ellipse,rgba(6,14,12,.55),transparent 70%);filter:blur(5px);top:30px;}
+.meldInkText{
+  position:relative;z-index:2;font-family:"Kaiti SC","STKaiti","KaiTi","Noto Serif CJK SC","Songti SC",serif;
+  font-size:43px;font-weight:900;line-height:1;color:#15130f;transform:rotate(-4deg) skew(-4deg);
+  text-shadow:1px 0 rgba(0,0,0,.72),-1px 1px rgba(0,0,0,.32),3px 4px 4px rgba(10,12,9,.28);
+  filter:contrast(1.25);
+}
+.meldInkSub{position:absolute;right:7px;bottom:-1px;z-index:3;font-family:"Kaiti SC","STKaiti","KaiTi",serif;font-size:9px;color:#e5c879;background:#67241e;border:1px solid #d28e6f;padding:1px 3px;transform:rotate(3deg);}
+.meldHeroTile{display:flex;align-items:flex-end;justify-content:center;position:relative;z-index:2;filter:drop-shadow(0 6px 2px rgba(0,0,0,.5));}
+.meldHeroTile canvas{width:clamp(68px,7.6vw,98px);height:auto;}
 #nextBox{position:absolute;right:8px;top:50%;transform:translateY(-50%);text-align:center;z-index:3;background:rgba(0,0,0,.3);border:2px solid rgba(0,0,0,.4);border-radius:7px;padding:4px 6px;}
 #nextTile{margin:2px 0;display:flex;gap:3px;align-items:flex-end;justify-content:center;}
 #nextTile .nextSecond{opacity:.55;}
@@ -147,25 +319,128 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 }
 #patternBanner[hidden]{display:none;}
 
-/* ---------- 三签选一 ---------- */
-#draftLayer{position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:rgba(6,16,13,.86);padding:8px;}
+/* ---------- 灵签决策层 ---------- */
+#draftLayer{
+  position:fixed;inset:0;z-index:700;display:flex;align-items:center;justify-content:center;
+  background:rgba(6,16,13,.92);padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+  overflow:auto;overscroll-behavior:contain;
+}
 #draftLayer[hidden]{display:none;}
-#draftTitle{font-size:14px;color:var(--gold);}
-#draftCards{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
-.charmPick{width:116px;padding:6px 5px;cursor:pointer;gap:3px;}
-.charmPick:hover,.charmPick:focus-visible{transform:translateY(-6px);outline:none;border-color:var(--gold);}
-.charmPick .cRole{font-size:8px;color:#ffe9a8;}
+/* 求签是一次性弹窗，选完就没了：像云顶选强化符文那样占满屏幕，别缩在中间一小块 */
+#draftPanel{
+  width:min(1240px,100%);max-height:100%;overflow:auto;padding:18px 20px;
+  border:3px solid #18221f;border-radius:14px;
+  background:linear-gradient(180deg,rgba(31,57,50,.98),rgba(18,35,30,.98));
+  box-shadow:0 7px 0 rgba(0,0,0,.48),inset 0 1px 0 rgba(255,255,255,.08);
+  display:flex;flex-direction:column;gap:10px;
+}
+#draftTitle{font-size:24px;color:var(--gold);text-align:center;margin-bottom:0;letter-spacing:2px;}
+#draftNotice{
+  margin:0 auto 7px;width:max-content;max-width:100%;padding:3px 8px;border:2px solid #765f25;
+  border-radius:5px;background:#302913;color:#ffe89c;font-size:10px;text-align:center;
+}
+#draftNotice[hidden]{display:none;}
+#draftCards{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;justify-content:center;
+  flex:1;min-height:0;perspective:1100px;
+}
+#draftLayer[data-offer-count="4"] #draftCards{grid-template-columns:repeat(4,minmax(0,1fr));}
+#draftActions{display:flex;gap:8px;align-items:center;justify-content:center;margin-top:0;flex-wrap:wrap;}
+#draftLayer{padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));}
+.charmPick{
+  /* 卡面按竖版比例约束宽度，否则三签一排会被拉成横条 */
+  width:100%;min-width:0;max-width:320px;justify-self:center;
+  min-height:min(430px, 58dvh);
+  padding:14px 12px 12px;cursor:pointer;gap:7px;
+  color:var(--txt);font-family:inherit;font-weight:800;justify-content:flex-start;
+}
+.charmPick .cardArtwork,.shopCard .cardArtwork{width:132px;max-height:178px;margin:6px 0 4px;box-shadow:0 5px 0 rgba(0,0,0,.45),0 0 0 2px rgba(245,211,126,.16);}
+.charmPick .cName{font-size:22px;line-height:1.15;letter-spacing:1px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
+.charmPick .cText{
+  font-size:14px;line-height:1.6;flex:1;display:flex;align-items:center;padding:0 4px;
+}
+.charmPick .cMeta{
+  width:100%;font-size:11px;padding:5px 0 0;border-top:1px solid rgba(255,255,255,.16);
+}
+.charmPick:focus-visible{outline:none;border-color:var(--gold);}
+@media (hover:hover){.charmPick:hover{border-color:var(--gold);}}
+/* 顶部两条带：左上职责、整行签阶，卡面一眼能读出「这是什么签」 */
+.charmPick .cRole{
+  align-self:flex-start;font-size:12px;color:#12181f;background:rgba(255,233,168,.92);
+  border-radius:4px;padding:2px 9px;letter-spacing:2px;
+}
+.charmPick .cTierRow{
+  display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;width:100%;
+  padding:4px 0;background:rgba(0,0,0,.28);border-radius:5px;
+}
+.charmPick .tierMarks{letter-spacing:3px;font-size:13px;}
+.charmPick.tier-silver{border-top:5px solid #c5d0d8;background:linear-gradient(180deg,#456b79,#294c59);}
+.charmPick.tier-gold{
+  border-color:#d8ac3f;border-top-width:6px;background:linear-gradient(180deg,#77602d,#3c5360);
+  box-shadow:0 3px 0 rgba(0,0,0,.45),inset 0 0 0 2px rgba(255,222,126,.24);
+}
+.charmPick.tier-rainbow{
+  border-width:4px;border-top-width:8px;border-image:linear-gradient(90deg,#67d7ff,#f7d657,#ff7aa2,#a68aff) 1;
+  background:linear-gradient(150deg,#374f69,#594273 50%,#5f4f2e);
+  clip-path:polygon(3% 0,97% 0,100% 6%,100% 94%,94% 100%,6% 100%,0 94%,0 6%);
+}
+.charmPick.tier-rainbow .cTierRow{color:#fff0a8;}
+.omenCompare{grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;}
+.omenCompareCard{min-height:116px;padding:9px;border:3px solid var(--edge);border-radius:8px;background:#27333e;display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center;}
+.omenCompareCard.new{border-color:var(--goldD);background:#3b3421;}
+.omenCompareCard .compareLabel{font-size:9px;color:var(--dim);}
+.omenCompareCard .compareName{font-size:14px;color:#fff2be;}
+.omenCompareCard .compareText{font-size:10px;line-height:1.4;color:#e7dfcf;}
+
+/* ---------- 金签 · 定向改命 ---------- */
+#draftLayer[data-mode="fate"] #draftCards{display:block;overflow:auto;}
+.fateChooser{width:100%;display:flex;flex-direction:column;gap:12px;align-items:center;}
+.fateHint{font-size:13px;line-height:1.5;text-align:center;color:#ffe9a8;}
+.fateHand,.fateTargetGrid{
+  width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(52px,1fr));gap:8px;
+}
+.fateTargetGrid{grid-template-columns:repeat(auto-fit,minmax(76px,1fr));}
+.fateOption{
+  min-width:52px;min-height:82px;padding:5px 3px;border:3px solid #997b2d;border-radius:8px;
+  background:linear-gradient(180deg,#69552b,#273b3d);color:var(--txt);font-family:inherit;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;
+  box-shadow:0 3px 0 rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.1);
+}
+.fateOption canvas{width:auto;max-width:100%;height:58px;image-rendering:pixelated;pointer-events:none;}
+.fateOptionName{font-size:11px;color:#fff1bd;}
+.fateOptionMeta{font-size:9px;color:#d7d0bb;white-space:nowrap;}
+.fateOption:focus-visible{outline:3px solid var(--gold);outline-offset:2px;transform:translateY(-4px);}
+@media (hover:hover){.fateOption:not(:disabled):hover{transform:translateY(-4px);border-color:#f1cd62;}}
+.fateOption.invalid{opacity:.28;filter:grayscale(1);cursor:not-allowed;border-color:#4d5554;}
+.fateBefore{display:flex;align-items:center;justify-content:center;gap:14px;min-height:76px;}
+.fateBefore canvas{height:72px;width:auto;image-rendering:pixelated;}
+.fateArrow{font-size:30px;color:var(--gold);}
 
 /* ---------- 手牌 ---------- */
-#handZone{flex:0 0 auto;display:flex;justify-content:center;align-items:flex-end;gap:3px;flex-wrap:wrap;padding:8px 2px 2px;min-height:0;}
+/* 操作栏在手牌上方，但 DOM 里在它前面：手牌要压在按钮上层，
+   拖起来的牌才能盖过按钮往上走 */
+#handZone{
+  flex:0 0 auto;display:flex;justify-content:center;align-items:flex-end;gap:3px;flex-wrap:wrap;
+  padding:4px 2px 2px;min-height:0;perspective:900px;position:relative;z-index:5;
+}
 .tile{
   position:relative;flex:0 0 auto;cursor:pointer;background:none;border:0;padding:0;
   display:flex;align-items:flex-end;justify-content:center;min-width:44px;min-height:48px;
-  transition:transform .13s cubic-bezier(.34,1.56,.64,1);
+  transition:filter .13s ease;
   filter:drop-shadow(0 3px 0 rgba(0,0,0,.45));
+  transform-style:preserve-3d;
+  /* 拖拽要吃掉浏览器的滚动 / 长按手势 */
+  touch-action:none;
 }
-.tile:hover{transform:translateY(-8px);}
-.tile.sel{transform:translateY(-20px);}
+/* 正在被拖的那张：抬到最上层，并且让指针「穿过」它，
+   否则 elementFromPoint 只会命中这张牌，永远找不到底下的按钮 */
+.dragTile{
+  z-index:60;pointer-events:none;cursor:grabbing;
+  filter:drop-shadow(0 14px 10px rgba(0,0,0,.55));
+}
+body.dragging{cursor:grabbing;}
+/* 抬起 / 选中的位移由 spring.mjs 驱动，这里只留视觉标记 */
+.tile.sel{filter:drop-shadow(0 8px 0 rgba(0,0,0,.5));}
 .tile.sel::after{content:'';position:absolute;inset:-3px;border:3px solid var(--gold);border-radius:5px;pointer-events:none;}
 .tile:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
 /* 被牌骨 / 牌印改造过的牌，牌面下方挂一条彩带 */
@@ -193,8 +468,30 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .btn.big{font-size:16px;padding:10px 20px;}
 .btn.ready{animation:ready 1s ease-in-out infinite;}
 @keyframes ready{0%,100%{filter:brightness(1);}50%{filter:brightness(1.35);}}
-#actionRow{flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;padding-bottom:2px;}
-#actionHint{max-width:300px;}
+#actionRow{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
+  padding:2px 0 4px;position:relative;z-index:4;
+}
+/* 按钮宽度必须固定：文案从「换牌」变成「换掉 3 张」如果会撑宽，
+   拖拽过程中落点就会从指针底下跑掉。 */
+#actionRow .btn{min-width:118px;}
+/* 提示单独占一行：它的长度绝不能影响按钮的位置，理由同上 */
+#actionHint{flex:0 0 100%;max-width:none;text-align:center;min-height:14px;}
+/* 拖拽时把可用按钮标成落点 */
+body.dragging #actionRow .btn:not(:disabled){outline:3px dashed rgba(240,192,74,.75);outline-offset:3px;}
+#actionRow .btn.dropHot{
+  outline:4px solid var(--gold);outline-offset:3px;filter:brightness(1.4);
+  transform:translateY(-3px) scale(1.06);
+}
+/* 落在牌桌上会做什么，直接写在牌桌中央 */
+#dropHint{
+  position:absolute;left:50%;bottom:10px;transform:translateX(-50%);z-index:6;pointer-events:none;
+  background:rgba(12,24,20,.86);border:3px solid var(--goldD);border-radius:9px;
+  padding:6px 14px;font-size:14px;color:#ffe9a8;text-shadow:2px 2px 0 rgba(0,0,0,.6);
+  box-shadow:0 4px 0 rgba(0,0,0,.45);white-space:nowrap;
+}
+#dropHint.idle{border-color:rgba(255,255,255,.28);color:var(--dim);}
+#dropHint[hidden]{display:none;}
 
 /* ---------- 覆盖屏 ---------- */
 .screen{position:fixed;inset:0;z-index:800;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(6,14,12,.86);gap:12px;padding:16px;overflow:auto;}
@@ -211,12 +508,43 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .famLine{display:flex;align-items:center;gap:6px;margin:3px 0;}
 .famDot{width:10px;height:10px;border-radius:2px;flex:0 0 10px;}
 
-#shopGrid{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;}
-.shopCard{width:136px;padding:8px 6px;cursor:pointer;gap:4px;}
-.shopCard:hover{transform:translateY(-6px);}
+/* 百牌谱：五系内容库的游戏内视图 */
+.libraryScreen .screenBox{width:min(900px,94vw);display:flex;flex-direction:column;overflow:hidden;}
+.libraryTabs{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin-bottom:10px;}
+.libraryTab{min-height:48px;min-width:112px;cursor:pointer;}
+.libraryTab.active{background:#d0a42f;color:#251b08;box-shadow:0 3px 0 #6b4815,inset 0 0 0 2px #ffe08a;}
+.libraryTab:focus-visible{outline:3px solid #fff;outline-offset:2px;}
+.libraryGrid{
+  flex:1;min-height:0;overflow:auto;display:grid;grid-template-columns:repeat(auto-fit,minmax(184px,1fr));
+  gap:10px;padding:4px 5px 8px;align-content:start;
+}
+.libraryCard{min-height:210px;padding:10px 8px 8px;gap:5px;justify-content:flex-start;}
+.libraryCard .cardArtwork{width:86px;max-height:114px;margin:2px 0;box-shadow:0 3px 0 rgba(0,0,0,.42);}
+.libraryCard .cName{font-size:15px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
+.libraryCard .cText{font-size:11px;line-height:1.5;flex:1;display:flex;align-items:center;}
+.libraryCard .cMeta{width:100%;font-size:9px;text-align:center;padding-top:3px;border-top:1px solid rgba(255,255,255,.16);}
+.libraryStatus{
+  position:absolute;top:5px;right:5px;border:1px solid rgba(255,255,255,.32);border-radius:3px;
+  background:rgba(0,0,0,.28);color:#f7e9ba;font-size:8px;padding:1px 4px;
+}
+
+/* 百宝阁同理：一次性弹窗，卡面尽量大 */
+.shopScreen .screenBox{width:min(1240px,96vw);max-height:94dvh;display:flex;flex-direction:column;padding:18px 20px;}
+.shopScreen .title{font-size:34px;}
+.shopScreen .subtitle{font-size:14px;margin-bottom:14px;}
+#shopGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;flex:1;min-height:0;perspective:1100px;}
+.shopCard{
+  width:100%;max-width:320px;justify-self:center;min-height:min(420px,56dvh);
+  padding:14px 12px 12px;cursor:pointer;gap:7px;justify-content:flex-start;
+}
+.shopCard .cName{font-size:22px;letter-spacing:1px;text-shadow:2px 2px 0 rgba(0,0,0,.45);}
+.shopCard .cText{font-size:14px;line-height:1.6;flex:1;display:flex;align-items:center;padding:0 4px;}
+.shopCard .cMeta{width:100%;font-size:11px;padding-top:5px;border-top:1px solid rgba(255,255,255,.16);}
+.shopCard .famTag{font-size:11px;padding:1px 7px;}
+.shopCard:hover{border-color:var(--gold);}
 .shopCard.cant{filter:grayscale(.6) brightness(.7);cursor:default;}
 .shopCard.sold{filter:grayscale(.9) brightness(.45);cursor:default;}
-.shopCard .price{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--gold);color:#3a2c06;font-size:11px;padding:0 6px;border-radius:4px;border:2px solid #0f1319;}
+.shopCard .price{position:absolute;top:6px;right:6px;background:var(--gold);color:#3a2c06;font-size:15px;padding:2px 10px;border-radius:5px;border:2px solid #0f1319;z-index:2;box-shadow:0 2px 0 rgba(0,0,0,.4);}
 .shopCard .famTag{font-size:8px;color:#0e1116;background:rgba(255,255,255,.75);border-radius:3px;padding:0 4px;}
 
 #kindGrid{display:grid;grid-template-columns:repeat(9,minmax(44px,1fr));gap:4px;max-width:560px;}
@@ -224,10 +552,34 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .kindBtn:hover,.kindBtn:focus-visible{border-color:var(--gold);outline:none;}
 .kindBtn.taken{border-color:var(--seal);}
 
+/* 明细弹层：番谱 / 牌骨 / 牌印点开后看的东西，比覆盖屏轻，但仍然是模态 */
+.sheet{
+  position:fixed;inset:0;z-index:820;display:flex;align-items:center;justify-content:center;
+  background:rgba(6,14,12,.88);padding:16px;overflow:auto;
+}
+.sheetBox{
+  width:min(620px,94vw);max-height:88dvh;overflow:auto;display:flex;flex-direction:column;
+  background:var(--panel);border:4px solid var(--edge);border-radius:12px;padding:14px 16px;
+  box-shadow:0 8px 0 rgba(0,0,0,.5);
+}
+.sheetList{display:flex;flex-direction:column;gap:5px;min-height:0;}
+.sheetRow{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:12px;
+  background:#1b232c;border:2px solid #10161d;border-radius:6px;padding:6px 9px;
+}
+.sheetRow .v{color:var(--gold);font-size:11px;text-align:right;}
+.sheetRow.hot{border-color:var(--goldD);background:#2b2a16;box-shadow:inset 0 0 0 1px rgba(240,192,74,.3);}
+.sheetRow.kindRow{justify-content:flex-start;}
+.sheetRow .kindTile{flex:0 0 auto;display:flex;}
+.sheetRow .kindTitle{font-size:13px;color:#fff3c8;}
+.sheetRow .kindText{font-size:11px;color:#e7dfcf;line-height:1.45;font-weight:700;}
+.sheetRow .kindExtra{font-size:10px;color:var(--chipL);margin-top:2px;}
+.sheetEmpty{font-size:12px;line-height:1.6;color:var(--dim);padding:10px 4px;text-align:center;}
+
 #tip{position:fixed;z-index:950;pointer-events:none;max-width:230px;background:#12181f;color:var(--txt);border:3px solid #000;border-radius:8px;padding:6px 8px;font-size:11px;line-height:1.4;box-shadow:0 5px 0 rgba(0,0,0,.5);display:none;}
 #tip .tn{font-size:12px;margin-bottom:2px;color:var(--gold);}
 #toast{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:960;display:flex;flex-direction:column;gap:4px;align-items:center;pointer-events:none;}
-.toastItem{background:#12181f;border:3px solid #000;border-radius:8px;padding:5px 10px;font-size:11px;box-shadow:0 4px 0 rgba(0,0,0,.5);animation:tin .25s ease, tout .3s ease 1.7s forwards;}
+.toastItem{max-width:min(92vw,520px);background:#12181f;border:3px solid #000;border-radius:8px;padding:5px 10px;font-size:11px;line-height:1.4;text-align:center;box-shadow:0 4px 0 rgba(0,0,0,.5);animation:tin .25s ease, tout .3s ease var(--toast-out-delay,1.7s) forwards;}
 @keyframes tin{from{opacity:0;transform:translateY(-12px);}to{opacity:1;transform:none;}}
 @keyframes tout{to{opacity:0;transform:translateY(-12px);}}
 
@@ -246,9 +598,6 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   70%{opacity:1;transform:translate(-50%,-26px) scale(1);}
   100%{opacity:0;transform:translate(-50%,-44px) scale(.9);}
 }
-
-.popScore{animation:popScore .34s cubic-bezier(.34,1.56,.64,1);}
-@keyframes popScore{0%{transform:translateY(0) scale(1);}45%{transform:translateY(-16px) scale(1.1);}100%{transform:translateY(0) scale(1);}}
 
 .jiggle{animation:jiggle .34s ease;}
 @keyframes jiggle{0%{transform:rotate(0) scale(1);}30%{transform:rotate(-5deg) scale(1.12);}60%{transform:rotate(4deg) scale(1.08);}100%{transform:rotate(0) scale(1);}}
@@ -274,6 +623,12 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   80%{transform:translate(calc(var(--shake) * 0.6), 0);}
 }
 
+/* 结算时被点名的那张卡：弹簧冲量把它顶起来（见 spring.mjs），这里只负责那圈金光 */
+.spotlight{
+  position:relative;z-index:20;
+  box-shadow:0 0 0 3px var(--gold),0 0 16px 4px rgba(240,192,74,.55) !important;
+  filter:brightness(1.18);
+}
 .glowBone{animation:glowBone .4s ease;}
 @keyframes glowBone{0%,100%{filter:none;}50%{filter:drop-shadow(0 0 8px var(--bone)) brightness(1.3);}}
 .glowSeal{animation:glowSeal .4s ease;}
@@ -285,8 +640,42 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 
 
 /* ---------- 外层：标题 / 牌组 / 设置 / 选关 ---------- */
-.titleScreen .screenBox{text-align:center;min-width:min(460px,90vw);}
-.titleLogo{display:flex;justify-content:center;margin-bottom:2px;}
+/* 标题页有自己的一整块背景，不复用局内的半透明遮罩 */
+.titleScreen{
+  background:linear-gradient(180deg,rgba(7,26,21,.28) 0%,rgba(4,16,13,.55) 100%);
+  padding:0;overflow:hidden;
+}
+.titleBg{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0;}
+/* 回纹地纹：两条斜向重复渐变交叉出中式菱格 */
+.titleGrain{
+  position:absolute;inset:-10%;opacity:.32;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.045) 0 2px, transparent 2px 22px),
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.045) 0 2px, transparent 2px 22px),
+    repeating-linear-gradient(0deg, rgba(0,0,0,.16) 0 1px, transparent 1px 5px);
+}
+.titleMark{
+  position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);
+  font-size:min(58vh,420px);line-height:1;color:#d9fbe9;opacity:.055;
+}
+.titleWall{
+  position:absolute;left:0;right:0;bottom:-34px;display:flex;justify-content:center;
+  gap:2px;opacity:.3;
+  -webkit-mask-image:linear-gradient(180deg,rgba(0,0,0,.85) 0%,rgba(0,0,0,0) 78%);
+  mask-image:linear-gradient(180deg,rgba(0,0,0,.85) 0%,rgba(0,0,0,0) 78%);
+}
+.titleWall canvas{flex:0 0 auto;}
+.titleWall canvas:nth-child(2n){transform:translateY(3px);}
+.titleWall canvas:nth-child(3n){transform:translateY(-2px);}
+.titleScreen .screenBox{
+  position:relative;z-index:1;text-align:center;min-width:min(460px,90vw);
+  background:linear-gradient(180deg,rgba(38,60,52,.82),rgba(15,32,26,.88));
+  border-color:#0b1b16;box-shadow:0 10px 0 rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.08);
+  backdrop-filter:blur(2px);
+}
+.titleLogo{display:flex;justify-content:center;margin-bottom:4px;}
+.titleLogo canvas{width:min(352px,74vw);height:auto;filter:drop-shadow(0 6px 0 rgba(0,0,0,.45));}
+.titleTagline{color:#bfe6d3;font-size:11px;letter-spacing:1px;margin-bottom:4px;}
 .titleFan{display:flex;justify-content:center;gap:4px;margin:10px 0 14px;}
 .titleFan canvas{transform-origin:bottom center;}
 .titleFan canvas:nth-child(1){transform:rotate(-10deg) translateY(4px);}
@@ -312,7 +701,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .settingRow{display:flex;align-items:center;justify-content:space-between;gap:12px;background:#1b232c;border:2px solid #10161d;border-radius:6px;padding:6px 8px;font-size:12px;}
 .segmented{display:flex;gap:4px;}
 
-.blindScreen .screenBox{min-width:min(760px,94vw);}
+.blindScreen .screenBox{position:relative;min-width:min(760px,94vw);}
 .blindGrid{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
 .blindCard{
   width:190px;padding:10px 8px;border:3px solid var(--edge);border-radius:10px;position:relative;
@@ -332,7 +721,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
 .blindTarget{font-size:16px;color:var(--red);}
 .blindCard .cMeta{font-size:10px;color:var(--gold);}
 .blindActions{display:flex;flex-direction:column;gap:5px;width:100%;align-items:stretch;margin-top:4px;}
-.blindScreen .rowBtns{position:sticky;bottom:0;z-index:2;background:var(--panel);padding-top:4px;}
+.blindScreen .rowBtns{position:absolute;top:7px;right:7px;z-index:2;margin:0;background:transparent;padding:0;}
 .blindScreen .rowBtns .btn{min-height:48px;}
 .blindStamp{position:absolute;top:8px;right:8px;font-size:10px;color:#0e1116;background:rgba(255,255,255,.75);border-radius:3px;padding:0 4px;}
 .tagRow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px;justify-content:center;}
@@ -361,6 +750,7 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #targetVal{min-height:16px;}
   #targetBar{height:5px;margin-top:3px;}
   #pendingLine{font-size:8px;margin-top:2px;}
+  #omenSlot{min-height:48px;margin-top:3px;padding:2px 5px;}
   #handName{font-size:10px;min-height:13px;}
   #calcRow{margin-top:3px;}
   .calcBox{min-height:24px;padding:2px;}
@@ -370,31 +760,86 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .stat .v{min-height:14px;}
   .stat .n{font-size:7px;}
   #buildPanel{flex:0 0 auto;}
-  #buildBar{max-height:44px;flex-wrap:nowrap;overflow-x:auto;}
+  #buildBar{max-height:86px;gap:4px;overflow:hidden auto;}
+  .generalRow{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:3px;}
   .buildCard{padding:2px 3px;width:auto;min-width:70px;flex:0 0 auto;}
-  .buildSlot{width:34px;flex:0 0 34px;min-height:30px;}
+  .buildSlot{width:44px;flex:0 0 44px;min-height:28px;}
+  .buildSlot .slotIdx{font-size:7px;}
   .buildCard .cText{display:none;}
+  .buildChip{min-height:30px;padding:2px 4px;gap:4px;}
+  .buildChip .chipGlyph{flex:0 0 16px;width:16px;height:16px;font-size:10px;}
+  .buildChip .chipName{font-size:9px;}
+  .buildChip .chipCount{font-size:7px;}
   #sideBtns .btn{font-size:8px;padding:3px 4px;min-height:26px;min-width:30px;}
-  .slot{min-height:38px;border-width:2px;}
+  #slotBar{gap:4px;padding:4px;}
+  .slot{min-height:56px;border-width:2px;padding:3px;}
   .slot .slotGold{font-size:10px;}
   .slot .slotIdx{font-size:7px;}
+  .slot.filled{grid-template-columns:minmax(28px,34px) minmax(0,1fr);gap:3px;padding:3px;border-top-width:3px;}
+  .slot .slotArtwork{max-width:34px;}
+  .slot .charmName{font-size:9px;}
+  .slot .charmTier{font-size:7px;}
   #tableMark .mk{font-size:60px;}
   #tableMark .mk2{display:none;}
-  #revealZone{padding:4px 76px 4px 6px;gap:6px;}
+  #revealZone{padding:6px 76px 4px 6px;gap:6px;}
+  .meld{width:76px;min-height:104px;padding:31px 5px 6px;border-radius:8px;}
+  .meldInk{height:44px;top:-6px;}
+  .meldInk::before{width:58px;height:36px;}
+  .meldInkText{font-size:32px;}
+  .meldInkSub{font-size:7px;right:1px;bottom:0;}
+  .meldHeroTile canvas{width:58px;}
   #patternBanner{font-size:24px;}
   .btn{padding:6px 10px;font-size:12px;min-height:44px;}
+  #draftActions .btn{min-height:48px;}
   .tile{min-height:44px;min-width:44px;}
   #actionHint{display:none;}
-  #handZone{padding:4px 2px 0;gap:2px;}
+  #handZone{padding:2px 2px 0;gap:2px;}
+  #dropHint{font-size:11px;padding:4px 10px;bottom:6px;}
   .blindCard{width:150px;padding:6px;}
   .blindChip{width:38px;height:38px;font-size:18px;}
   .blindCard .cText{min-height:22px;font-size:9px;}
   .deckCard{width:126px;}
+  .libraryScreen .screenBox{padding:8px 10px;}
+  .libraryScreen .title{font-size:18px;}
+  .libraryScreen .subtitle{margin-bottom:5px;}
+  .libraryTabs{gap:4px;margin-bottom:5px;flex-wrap:nowrap;}
+  .libraryTab{min-width:0;min-height:44px;flex:1;padding:5px 3px;font-size:9px;}
+  .libraryGrid{grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px;}
+  .libraryCard{min-height:176px;padding:6px 5px;}
+  .libraryCard .cName{font-size:12px;}
+  .libraryCard .cText{font-size:9px;line-height:1.35;}
+  .libraryScreen .rowBtns{margin-top:5px;}
   #bossBanner{max-width:44%;padding:3px 6px;}
   #deckPile{display:none;}
-  .charmPick{width:104px;padding:4px;}
-  .charmPick .cText{font-size:8px;}
-  #draftTitle{font-size:12px;}
+  #draftPanel{width:min(980px,100%);padding:8px 10px;gap:6px;}
+  #draftCards{gap:8px;}
+  .charmPick .cardArtwork,.shopCard .cardArtwork{width:58px;max-height:78px;margin:2px 0;}
+  .charmPick{min-height:196px;max-width:210px;padding:6px 6px 5px;gap:3px;}
+  .charmPick .cName{font-size:15px;}
+  .charmPick .cText{font-size:11px;line-height:1.4;}
+  .charmPick .cRole{font-size:9px;padding:1px 6px;}
+  .charmPick .cTierRow,.charmPick .tierMarks{font-size:10px;padding:2px 0;}
+  .charmPick .cMeta{font-size:9px;padding-top:3px;}
+  .fateChooser{gap:6px;}
+  .fateHint{font-size:10px;}
+  .fateHand,.fateTargetGrid{gap:4px;grid-template-columns:repeat(auto-fit,minmax(48px,1fr));}
+  .fateTargetGrid{grid-template-columns:repeat(auto-fit,minmax(64px,1fr));}
+  .fateOption{min-width:48px;min-height:68px;padding:2px 1px;border-width:2px;}
+  .fateOption canvas{height:44px;}
+  .fateBefore{min-height:54px;}
+  .fateBefore canvas{height:52px;}
+  .shopScreen .screenBox{padding:8px 12px;}
+  .shopScreen .title{font-size:20px;}
+  .shopScreen .subtitle{font-size:11px;margin-bottom:6px;}
+  #shopGrid{gap:8px;}
+  .shopCard{min-height:196px;max-width:220px;padding:6px 6px 5px;gap:3px;}
+  .shopCard .cName{font-size:15px;}
+  .shopCard .cText{font-size:11px;line-height:1.4;}
+  .shopCard .cMeta,.shopCard .famTag{font-size:9px;}
+  .shopCard .price{font-size:12px;padding:1px 7px;}
+  #draftTitle{font-size:17px;}
+  .sheetBox{padding:8px 12px;}
+  .sheetRow{padding:4px 7px;font-size:11px;}
 }
 
 /* ---------- 竖屏 ---------- */
@@ -407,21 +852,42 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .stat{flex:1 1 20%;}
   #buildPanel{flex:1 1 100%;flex-direction:row;align-items:center;}
   #buildPanel > .lbl{writing-mode:vertical-rl;}
-  #buildBar{flex:1;flex-wrap:nowrap;overflow-x:auto;max-height:56px;}
+  #buildChips{flex:0 0 auto;}
+  #buildBar{flex:1;flex-direction:row;align-items:center;overflow-x:auto;max-height:60px;gap:4px;}
+  .generalRow{flex-direction:row;flex-wrap:nowrap;gap:3px;}
+  .chipRow{flex-wrap:nowrap;gap:3px;}
+  .buildChip{flex:0 0 auto;min-width:74px;min-height:44px;}
   .buildCard{width:auto;min-width:88px;flex:0 0 auto;}
-  .buildSlot{width:40px;flex:0 0 40px;min-height:40px;}
+  .buildSlot{width:44px;flex:0 0 44px;min-height:40px;}
   #sideBtns{flex-direction:column;}
   #main{flex:1;}
-  #slotBar{flex-wrap:wrap;}
-  .slot{flex:1 1 28%;min-height:42px;}
-  #revealZone{padding:6px 8px 56px;}
+  #slotBar{flex-wrap:wrap;gap:5px;}
+  .slot{flex:1 1 28%;min-height:54px;}
+  .slot.filled{grid-template-columns:minmax(30px,36px) minmax(0,1fr);}
+  .slot .slotArtwork{max-width:36px;}
+  #revealZone{padding:8px 8px 56px;gap:7px;}
+  .meld{width:82px;min-height:116px;padding:34px 6px 7px;}
+  .meldInkText{font-size:35px;}
+  .meldHeroTile canvas{width:64px;}
   #nextBox{right:6px;bottom:4px;top:auto;transform:none;}
   #tableMark .mk{font-size:76px;}
   #handZone{gap:2px;}
   #kindGrid{grid-template-columns:repeat(7,minmax(44px,1fr));}
+  #draftPanel{width:100%;}
+  #draftCards,#draftLayer[data-offer-count="4"] #draftCards{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #draftLayer[data-offer-count="3"] .charmPick:last-child{grid-column:1 / -1;width:calc(50% - 5px);justify-self:center;}
+  .charmPick{min-height:min(300px,33dvh);max-width:none;}
+  #shopGrid{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .shopCard{min-height:min(300px,32dvh);max-width:none;}
+  #shopGrid .shopCard:last-child:nth-child(3){grid-column:1 / -1;width:calc(50% - 8px);justify-self:center;}
+  .libraryTabs{justify-content:center;flex-wrap:wrap;overflow:visible;padding:2px;}
+  .libraryTab{min-width:96px;flex:1 1 28%;}
+  .libraryGrid{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
 
 @media (max-width:420px){
+  /* 胡牌出现时是三个按钮，118px 会挤到第二行 */
+  #actionRow .btn{min-width:100px;}
   .screen{padding:8px;}
   .screenBox{max-height:calc(100dvh - 16px);padding:12px 10px;}
   .blindScreen .screenBox{width:100%;min-width:0;}
@@ -432,8 +898,25 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   .blindCard .cText{font-size:9px;min-height:38px;}
   .blindTarget{font-size:12px;}
   .blindActions .btn{width:100%;min-width:0;padding:6px 2px;font-size:10px;}
-  .charmPick{width:98px;}
-  .shopCard{width:110px;}
+  #actionHint{display:none;}
+  #draftPanel{padding:10px 8px;}
+  #draftCards{gap:8px;}
+  .charmPick .cardArtwork,.shopCard .cardArtwork{width:74px;max-height:98px;}
+  .charmPick{padding:8px 6px 6px;gap:4px;}
+  .charmPick .cName{font-size:16px;}
+  .charmPick .cText{font-size:11px;line-height:1.45;}
+  .charmPick .cRole{font-size:10px;}
+  .charmPick .cTierRow,.charmPick .tierMarks{font-size:11px;}
+  #draftTitle{font-size:19px;}
+  .shopScreen .screenBox{padding:12px 10px;}
+  .shopScreen .title{font-size:24px;}
+  .shopScreen .subtitle{font-size:12px;margin-bottom:8px;}
+  .shopCard{padding:8px 6px 6px;gap:4px;}
+  .shopCard .cName{font-size:16px;}
+  .shopCard .cText{font-size:11px;line-height:1.45;}
+  .libraryCard{min-height:194px;padding:8px 6px;}
+  .libraryCard .cName{font-size:13px;}
+  .libraryCard .cText{font-size:10px;}
   /* 窄竖屏要让回合面板和计分面板挤在同一行，否则牌桌会被压没 */
   #roundPanel{flex:1 1 140px;}
   #scorePanel{flex:1 1 118px;}
@@ -441,4 +924,477 @@ canvas.pxc{image-rendering:pixelated;image-rendering:crisp-edges;display:block;}
   #roundName{font-size:12px;}
   #totalBox{font-size:16px;}
   .buildCard{min-width:76px;}
+}
+
+/* 窄竖屏有亮组时，必须给牌桌留出一整张「大牌＋墨字」的高度。
+   上方常驻信息改成紧凑机台条；触控按钮仍保持 48px。 */
+@media (max-width:420px) and (max-aspect-ratio:0.95){
+  #side{gap:4px;}
+  #roundPanel,#scorePanel,#statPanel{padding:5px;}
+  #roundMeta{font-size:7px;}
+  #targetBox{margin-top:3px;padding:3px 5px;}
+  #targetVal{min-height:17px;}
+  #targetBar{height:5px;margin-top:2px;}
+  #pendingLine{font-size:8px;margin-top:2px;}
+  #omenSlot{min-height:44px;margin-top:3px;padding:2px 5px;}
+  #buildPanel{flex:0 0 70px;height:70px;padding:4px;gap:3px;}
+  #buildBar{max-height:52px;gap:3px;}
+  #buildPanel > .lbl{font-size:8px;}
+  .buildChip{min-height:44px;}
+  #sideBtns .btn{min-height:44px;}
+  #slotBar{gap:4px;padding:4px;}
+  .slot{min-height:48px;padding:2px;}
+  .slot.filled{grid-template-columns:30px minmax(0,1fr);gap:3px;padding:2px;}
+  .slot .slotArtwork{max-width:30px;}
+  .slot .charmName{font-size:8px;}
+  .slot .charmTier{font-size:6px;}
+  #revealZone{padding:5px 5px 48px;gap:5px;}
+  .meld{width:74px;min-height:102px;padding:31px 5px 6px;}
+  .meldInkText{font-size:32px;}
+  .meldHeroTile canvas{width:58px;}
+}
+
+/* =========================================================
+   0025 · 古典水墨视觉统一
+   宣纸作底、松烟墨定结构、温玉承牌、朱砂只标行动与奖励。
+   这组覆盖刻意放在所有旧版规则之后，方便审美试玩后整组校色。
+   ========================================================= */
+:root{
+  --bg1:#d8ccb0;--bg2:#b7aa8e;
+  --panel:#403c32;--panel2:#353229;--panel3:#292821;
+  --edge:#17150f;
+  --chip:#557d69;--chipL:#a9c4b2;
+  --mult:#a54336;--multL:#e0a08c;
+  --gold:#d1aa54;--goldD:#9b7935;
+  --txt:#f2e8d2;--dim:#c1b59e;
+  --red:#a54336;--green:#557d69;
+  --charm:#76958b;--codex:#8a715f;--general:#b48b4e;--bone:#6f9678;--seal:#a54336;
+}
+body{
+  background-color:#d8ccb0;
+  background-image:linear-gradient(rgba(229,218,190,.18),rgba(114,105,84,.12)),url("assets/art/ink-table-v1.webp");
+  background-size:cover;background-position:center;
+  font-family:"PingFang SC","Hiragino Sans GB","Songti SC","Microsoft YaHei",sans-serif;
+  font-weight:750;
+}
+body::before{
+  background:
+    repeating-linear-gradient(92deg,rgba(61,51,36,.025) 0 1px,transparent 1px 11px),
+    repeating-linear-gradient(3deg,rgba(255,250,232,.035) 0 1px,transparent 1px 8px);
+  mix-blend-mode:multiply;opacity:.55;
+}
+body::after{background:radial-gradient(ellipse at center,transparent 54%,rgba(32,29,22,.38) 100%);}
+#backdrop{opacity:.24;mix-blend-mode:multiply;filter:sepia(.72) saturate(.58) contrast(.92);}
+
+.panel,.screenBox,.sheetBox,#draftPanel{
+  border-color:#17150f;
+  box-shadow:0 4px 0 rgba(22,19,13,.58),inset 0 1px 0 rgba(244,230,196,.12);
+}
+.panel{
+  background:
+    repeating-linear-gradient(95deg,rgba(246,228,187,.025) 0 1px,transparent 1px 9px),
+    linear-gradient(160deg,#484338,#343128);
+}
+.panel.dark{background:linear-gradient(160deg,#3b382f,#2d2b24);}
+.panel.deep{background:linear-gradient(160deg,#302e27,#24231e);}
+#roundChip{background:#536f62;border-color:#1b1a14;color:#f4ead4;border-radius:4px;}
+#targetBox,#omenSlot,.stat,.lineItem{background:#24241f;border-color:#15140f;}
+#targetFill{background:linear-gradient(90deg,#637e6f,#b88d42,#a54336);}
+#chipsBox{background:#557d69;}
+#multBox{background:#a54336;}
+.stat.money{background:#352c1c;border-color:#1d180f;}
+.buildChip{background:linear-gradient(180deg,#544e40,#363229);border-color:#1a1812;}
+.buildChip.family-codex{background:linear-gradient(180deg,#725f50,#463c33);}
+.buildChip.family-bone{background:linear-gradient(180deg,#577662,#344c3e);}
+.buildChip.family-seal{background:linear-gradient(180deg,#874138,#562a25);}
+.buildChip.family-paper{background:linear-gradient(180deg,#696354,#454139);}
+
+/* 六格开运签主动占据一块完整的构筑牌架。 */
+#slotBar{
+  min-height:126px;gap:9px;padding:9px;
+  background:
+    linear-gradient(rgba(20,19,15,.84),rgba(34,31,24,.88)),
+    repeating-linear-gradient(90deg,rgba(228,207,163,.05) 0 1px,transparent 1px 13px);
+  border:4px double #1a1710;border-radius:5px;
+  box-shadow:0 5px 0 rgba(25,21,14,.55),inset 0 0 0 1px rgba(208,178,112,.18);
+}
+.slot{
+  min-height:106px;border-radius:3px;border:2px dashed rgba(74,64,46,.42);padding:8px;
+  color:#25251f;background:
+    linear-gradient(145deg,rgba(251,242,218,.96),rgba(210,192,154,.94)),
+    repeating-linear-gradient(4deg,rgba(69,54,34,.04) 0 1px,transparent 1px 7px);
+}
+.slot::before{border-color:rgba(84,68,42,.16);border-radius:1px;}
+.slot .slotGold{font:900 18px/1 "Kaiti SC","STKaiti","KaiTi",serif;color:#9c3b30;text-shadow:none;}
+.slot .slotIdx{font-size:10px;color:#605845;}
+.slot.filled{
+  grid-template-columns:minmax(62px,78px) minmax(0,1fr);gap:9px;padding:7px;
+  border-color:#30281b;border-top:5px solid #a9aca4;
+  color:#27251e;background:linear-gradient(150deg,#f0e3c5,#cdb88e);
+  box-shadow:0 3px 0 rgba(21,18,12,.42),inset 0 0 0 1px rgba(255,251,232,.55);
+}
+.slot .slotArtwork{max-width:78px;border-color:#3b3020;box-shadow:0 3px 0 rgba(35,28,18,.35);filter:sepia(.12) saturate(.86) contrast(1.04);}
+.slot .charmName{font:900 15px/1.12 "Kaiti SC","STKaiti","KaiTi","Songti SC",serif;color:#29271f;text-shadow:none;}
+.slot .charmTier{font-size:10px;color:#615844;}
+.slot.tier-gold{border-top-color:#b28b39;background:linear-gradient(150deg,#f0e2bb,#c8ae72);}
+.slot.tier-rainbow{border-top-color:#81584d;background:linear-gradient(150deg,#e8dcc1,#b9aa91);}
+.slot.noCharm{background:linear-gradient(150deg,#d9d0ba,#aaa28f);}
+
+/* 牌桌本身是一张低对比水墨长卷，中央留白给亮组。 */
+#table{
+  border:5px solid #2b2419;border-radius:5px;
+  background-image:
+    linear-gradient(rgba(237,225,196,.22),rgba(178,162,126,.18)),
+    url("assets/art/ink-table-v1.webp");
+  background-size:cover;background-position:center;
+  box-shadow:inset 0 0 0 2px rgba(245,229,194,.3),inset 0 14px 28px rgba(45,39,28,.18),0 5px 0 rgba(30,25,17,.5);
+}
+#table::before{inset:7px;border:1px solid rgba(45,39,28,.28);border-radius:1px;}
+#tableMark{opacity:.12;}
+#tableMark .mk{font-family:"Kaiti SC","STKaiti","KaiTi",serif;color:#242a24;}
+#tableMark .mk2{color:#4b4b3e;}
+.meld{
+  background:linear-gradient(160deg,rgba(239,226,194,.92),rgba(182,164,126,.91));
+  border-color:rgba(54,46,32,.72);border-radius:4px;
+  box-shadow:inset 0 0 0 1px rgba(255,250,230,.45),0 5px 0 rgba(38,31,21,.35);
+}
+.meld::before{border-color:rgba(58,48,32,.16);border-radius:1px;}
+.meldInkSub{color:#f1dfbe;background:#8e352b;border-color:#6a241e;}
+.meldHeroTile{filter:drop-shadow(0 6px 2px rgba(49,39,24,.36));}
+#nextBox{color:#f2e8d2;background:rgba(35,33,27,.87);border-color:#17150f;border-radius:3px;}
+
+/* 功能卡像旧册页与签纸，降低上一版电子霓虹感。 */
+.card{border-color:#201b12;background:linear-gradient(150deg,#5a4d38,#322e25 65%,#24231e);}
+.card.family-charm{background:linear-gradient(165deg,#6f6044,#34473d 72%,#252e29);border-top-color:#b99c5c;}
+.card.family-codex{background:linear-gradient(150deg,#665448,#372e2a);border-left-color:#a58b6b;}
+.card.family-general{background:linear-gradient(160deg,#715039,#392e24);}
+.atlasArtwork{filter:sepia(.12) saturate(.84) contrast(1.05);}
+
+.btn{border-color:#17150f;border-radius:4px;text-shadow:1px 2px 0 rgba(0,0,0,.38);}
+.btn.play{background:#4f7564;}
+.btn.green{background:#557d69;}
+.btn.red{background:#9f4136;}
+.btn.grey{background:#655f52;}
+.btn.gold{background:#9b7935;}
+.tile{filter:drop-shadow(0 4px 0 rgba(47,38,24,.42));}
+.tile.sel{filter:drop-shadow(0 8px 0 rgba(47,38,24,.48));}
+
+.screen,.sheet,#draftLayer{background:rgba(31,29,23,.88);}
+.screenBox,.sheetBox,#draftPanel{background:linear-gradient(160deg,#4a453a,#302e27);}
+.blindCard,.deckCard,.settingRow,.omenCompareCard,.sheetRow{background:linear-gradient(160deg,#554f42,#343129);border-color:#1a1812;}
+.blindCard.kind-boss{background:linear-gradient(160deg,#7a382f,#49231f);}
+.lineItem,.helpText .kbd{background:#292821;border-color:#17150f;}
+#tip,.toastItem{background:#282720;border-color:#12110d;border-radius:3px;}
+
+/* 标题页是完整山水扉页；菜单像压在画上的一张半透明册页。 */
+.titleScreen{
+  background:rgba(224,210,180,.24);padding:0;overflow:hidden;color:#24231d;
+}
+.titleBg{
+  background-image:linear-gradient(rgba(231,219,190,.04),rgba(58,52,39,.12)),url("assets/art/ink-title-v1.webp");
+  background-size:cover;background-position:center;
+}
+.titleGrain{
+  inset:0;opacity:.32;mix-blend-mode:multiply;
+  background:repeating-linear-gradient(91deg,rgba(50,42,30,.035) 0 1px,transparent 1px 12px);
+}
+.titleScreen .screenBox{
+  min-width:min(500px,92vw);padding:14px 24px 18px;
+  color:#25241e;background:linear-gradient(160deg,rgba(242,232,207,.91),rgba(210,194,159,.86));
+  border:2px solid rgba(39,33,23,.75);border-radius:2px;
+  box-shadow:0 12px 28px rgba(29,24,16,.28),inset 0 0 0 4px rgba(255,250,231,.22);
+  backdrop-filter:blur(3px) sepia(.2);
+}
+.titleLogo{margin:-6px 0 -2px;}
+.titleLogo canvas{width:min(390px,78vw);filter:drop-shadow(0 5px 4px rgba(52,42,27,.24));}
+.titleTagline{color:#514c3d;font:800 12px/1.4 "Songti SC","STSong",serif;letter-spacing:2px;}
+.titleFan{margin:6px 0 12px;}
+.titleMenu .btn.big{min-width:240px;}
+.titleScreen .btn.grey{background:rgba(226,212,181,.88);color:#2c2a22;text-shadow:none;border-color:#4e4636;}
+.titleScreen .btn.green,.titleScreen .btn.play{background:#4f7564;color:#fff8e7;}
+.titleScreen .rowBtns{margin-top:7px;gap:7px;}
+
+@media (max-height:470px){
+  #slotBar{min-height:82px;gap:5px;padding:5px;border-width:3px;}
+  .slot{min-height:72px;padding:4px;}
+  .slot.filled{grid-template-columns:minmax(42px,54px) minmax(0,1fr);gap:4px;padding:4px;border-top-width:4px;}
+  .slot .slotArtwork{max-width:54px;}
+  .slot .charmName{font-size:10px;}
+  .slot .charmTier{font-size:7px;}
+  .titleScreen .screenBox{padding:4px 16px 8px;min-width:min(470px,88vw);}
+  .titleLogo{margin:-15px 0 -18px;}
+  .titleLogo canvas{width:min(300px,60vw);}
+  .titleTagline{font-size:9px;margin-bottom:0;}
+  .titleFan{margin:0 0 5px;}
+  .titleFan canvas{width:44px;height:auto;}
+  .titleMenu{gap:4px;}
+  .titleScreen .rowBtns{margin-top:2px;gap:4px;}
+}
+
+@media (max-aspect-ratio:0.95){
+  #slotBar{min-height:0;gap:6px;padding:6px;}
+  .slot{min-height:64px;padding:4px;}
+  .slot.filled{grid-template-columns:minmax(36px,44px) minmax(0,1fr);gap:4px;padding:4px;}
+  .slot .slotArtwork{max-width:44px;}
+  .slot .charmName{font-size:10px;}
+  .slot .charmTier{font-size:7px;}
+}
+
+@media (max-width:420px) and (max-aspect-ratio:0.95){
+  #slotBar{gap:4px;padding:4px;}
+  .slot{min-height:56px;padding:3px;}
+  .slot.filled{grid-template-columns:34px minmax(0,1fr);gap:3px;padding:3px;}
+  .slot .slotArtwork{max-width:34px;}
+  #revealZone{padding:4px 4px 43px;}
+  .meld{width:68px;min-height:90px;padding:28px 4px 5px;}
+  .meldInkText{font-size:29px;}
+  .meldHeroTile canvas{width:52px;}
+  .titleScreen .screenBox{min-width:0;width:calc(100vw - 20px);padding:10px 9px 13px;}
+  .titleLogo{margin:-6px 0 -4px;}
+  .titleLogo canvas{width:min(320px,84vw);}
+  .titleScreen .rowBtns{gap:5px;}
+}
+
+/* 0028 · 矮横屏仍保留左栏层级，但四组必须完整落在一屏。 */
+@media (max-height:470px) and (min-aspect-ratio:0.951){
+  #side{gap:3px;}
+  #side .panel{padding:3px 4px;}
+  #roundChip{width:25px;height:25px;flex-basis:25px;font-size:13px;}
+  #roundName{font-size:9px;}
+  #roundMeta{display:none;}
+  #targetBox{
+    display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;
+    gap:1px 3px;margin-top:2px;padding:2px 3px;
+  }
+  #targetBox > .lbl{display:none;}
+  #targetVal{grid-column:1;min-height:13px;}
+  #targetVal canvas{max-height:13px;width:auto;}
+  #pendingLine{
+    grid-column:2;margin:0;text-align:right;font-size:6px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  #targetBar{grid-column:1 / -1;width:100%;height:4px;margin:1px 0 0;}
+  #scorePanel{
+    display:grid;grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:"hand hand" "calc total";align-items:center;column-gap:4px;
+  }
+  #handName{grid-area:hand;font-size:8px;min-height:10px;}
+  #calcRow{grid-area:calc;margin:1px 0 0;}
+  .calcBox{min-height:20px;}
+  .calcBox canvas,#totalBox canvas{max-height:14px;width:auto;}
+  #totalBox{grid-area:total;margin:1px 0 0;min-width:30px;min-height:20px;}
+  #totalBox::before{content:'=';margin-right:2px;color:#b9ab90;font-size:9px;}
+  #statPanel{padding:3px 4px;}
+  .statRow{gap:2px;flex-wrap:nowrap;}
+  .stat{min-width:0;flex:1 1 0;padding:1px;}
+  .stat .v{min-height:13px;}
+  .stat .v canvas{max-height:13px;width:auto;max-width:100%;}
+  .stat .n{font-size:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #omenSlot{min-height:44px;margin-top:2px;padding:2px 3px;column-gap:3px;}
+  #omenSlot .omenLabel{font-size:7px;}
+  #omenName{font-size:7px;}
+  #omenTiming{font-size:6px;}
+  #buildPanel{flex:1 1 0;min-height:0;padding:3px 4px;gap:3px;}
+  #buildBar{flex:0 0 auto;max-height:none;overflow:hidden;}
+  .generalRow{grid-template-columns:repeat(4,minmax(0,1fr));gap:2px;}
+  .generalRow .buildCard{min-width:0;min-height:32px;padding:2px;gap:1px;}
+  .generalRow .buildCard .cardArtwork{width:22px;}
+  .generalRow .buildCard .cName{font-size:7px;}
+  .generalRow .buildSlot{width:auto;min-height:32px;}
+  .chipRow{flex-wrap:nowrap;gap:2px;}
+  .buildChip{flex:1 1 0;min-height:44px;padding:2px;gap:2px;}
+  .buildChip .chipGlyph{flex-basis:15px;width:15px;height:15px;font-size:9px;}
+  .buildChip .chipName{font-size:7px;}
+  .buildChip .chipCount{font-size:6px;}
+  #sideBtns{gap:2px;}
+  #sideBtns .btn{min-width:0;min-height:44px;padding:2px;font-size:7px;}
+}
+
+/* 只有窄手机横屏再缩左栏并轻微叠边，844×390 不改变手牌间距。 */
+@media (max-width:720px) and (max-height:470px) and (min-aspect-ratio:0.951){
+  #side{width:116px;flex-basis:116px;gap:3px;}
+  #slotBar{min-height:68px;gap:4px;padding:4px;border-width:3px;}
+  .slot{min-height:58px;padding:3px;}
+  .slot.filled{grid-template-columns:minmax(32px,42px) minmax(0,1fr);gap:3px;padding:3px;border-top-width:3px;}
+  .slot .slotArtwork{max-width:42px;}
+  .slot .charmName{font-size:9px;}
+  .slot .charmTier{font-size:7px;}
+  #actionRow{padding:0 0 2px;}
+  #actionRow .btn{min-width:104px;min-height:44px;}
+  #handZone{flex-wrap:nowrap;gap:0;padding:1px 2px 0;overflow:visible;}
+  #handZone .tile + .tile{margin-left:-7px;}
+}
+
+/* 0029 · 被动签效收进摘要，顶部只保留三格可主动使用的锦囊。 */
+#passiveSummary{
+  width:100%;min-height:48px;margin-top:5px;padding:4px 7px;display:flex;align-items:center;gap:7px;
+  color:#b8b09d;background:#24241f;border:2px dashed #514b3e;border-radius:4px;
+  font:inherit;text-align:left;cursor:pointer;
+}
+#passiveSummary .passiveGlyph{
+  flex:0 0 28px;width:28px;height:28px;display:grid;place-items:center;
+  color:#eee1c0;background:#3d3a31;border:1px solid #716652;font:900 17px/1 "Kaiti SC","STKaiti","KaiTi",serif;
+}
+#passiveSummary .passiveBody{display:flex;flex-direction:column;min-width:0;line-height:1.15;}
+#passiveName{font-size:9px;color:#eee5d0;}
+#passiveCount{font-size:8px;color:#9e9788;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#passiveSummary.filled{border-style:solid;border-color:#9b7935;background:linear-gradient(150deg,#4c4537,#302e27);}
+#passiveSummary.filled .passiveGlyph{color:#40231d;background:#d7bd7c;border-color:#8b6330;}
+#passiveSummary:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
+
+#slotBar{
+  display:grid;grid-template-columns:minmax(112px,.72fr) repeat(3,minmax(0,1fr));
+  align-items:stretch;min-height:126px;
+}
+.fortuneMeter{
+  min-width:0;padding:10px 8px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;
+  color:#2b2921;background:linear-gradient(150deg,#eee1c2,#cbb78d);border:2px solid #4d4230;
+  box-shadow:inset 0 0 0 2px rgba(255,250,228,.36);text-align:center;
+}
+.fortuneEyebrow{font-size:8px;letter-spacing:2px;color:#665e4c;}
+.fortuneValue{font:900 20px/1 "Kaiti SC","STKaiti","KaiTi",serif;color:#8e352b;white-space:nowrap;}
+.fortuneRule{font-size:8px;color:#534c3d;white-space:nowrap;}
+.fortunePips{display:flex;gap:4px;justify-content:center;}
+.fortunePips i{width:10px;height:4px;background:#566f60;border:1px solid #2f4137;}
+.fortunePips i.spent{background:#938b78;border-color:#6e6657;opacity:.5;}
+
+.satchelSlot{
+  min-width:0;min-height:106px;padding:7px;display:flex;align-items:center;justify-content:center;gap:9px;
+  color:#5f5848;background:linear-gradient(145deg,#d9cfb7,#b4aa92);border:2px dashed #6c624f;
+  font:inherit;text-align:left;position:relative;overflow:hidden;
+}
+button.satchelSlot{cursor:pointer;border-style:solid;border-color:#30281b;border-top:5px solid #a9aca4;color:#27251e;background:linear-gradient(150deg,#f0e3c5,#cdb88e);box-shadow:0 3px 0 rgba(21,18,12,.42),inset 0 0 0 1px rgba(255,251,232,.55);}
+button.satchelSlot.tier-gold{border-top-color:#b28b39;background:linear-gradient(150deg,#f0e2bb,#c8ae72);}
+button.satchelSlot.tier-rainbow{border-top-color:#81584d;background:linear-gradient(150deg,#e8dcc1,#b9aa91);}
+.satchelSlot:focus-visible{outline:3px solid var(--chipL);outline-offset:2px;}
+.satchelEmptyGlyph{font:900 24px/1 "Kaiti SC","STKaiti","KaiTi",serif;color:#756c5a;}
+.satchelEmptyText{font-size:9px;color:#6b6353;}
+.satchelArtwork{width:min(72px,42%);max-height:94px;border:1px solid #3b3020;box-shadow:0 3px 0 rgba(35,28,18,.35);filter:sepia(.12) saturate(.86) contrast(1.04);}
+.art-satchel{background:radial-gradient(circle at 42% 34%,#e7d39c,#806a43 58%,#3c3021);}
+.art-satchel .artObject{
+  width:72%;height:66%;top:8%;background:linear-gradient(145deg,#6b4730,#36261e);
+  border:3px solid #24170f;border-radius:48% 48% 34% 34% / 38% 38% 62% 62%;
+  box-shadow:inset 0 0 0 3px #9d7546,0 5px 0 rgba(35,24,15,.35);
+}
+.art-satchel .artObject::before{left:12%;right:12%;top:-18%;height:24%;border:3px solid #372319;border-bottom-color:#c59a59;border-radius:50%;}
+.art-satchel .artObject::after{left:18%;right:18%;top:18%;height:2px;background:#d3ad69;box-shadow:0 5px 0 #6e382a;}
+.art-satchel .artMark{color:#f0d59b;font-size:22px;text-shadow:2px 2px #4b201b;}
+.satchelBody{display:flex;flex-direction:column;min-width:0;line-height:1.18;}
+.satchelName{font:900 15px/1.12 "Kaiti SC","STKaiti","KaiTi","Songti SC",serif;color:#29271f;}
+.satchelAction{font-size:9px;color:#6a332b;margin-top:4px;}
+
+.charmPick .cResolve{
+  position:absolute;right:9px;top:9px;padding:3px 8px;border:1px solid rgba(255,239,190,.72);
+  background:#7d332b;color:#fff0d4;font-size:10px;letter-spacing:1px;z-index:3;
+}
+.satchelConfirm{width:min(780px,100%);margin:auto;display:grid;grid-template-columns:minmax(120px,220px) 1fr;gap:22px;align-items:center;padding:18px;background:linear-gradient(150deg,#e6d8b7,#bca77a);border:3px solid #332a1c;color:#2c2921;}
+.satchelConfirmArt{width:100%;max-height:260px;border:2px solid #3b3020;}
+.satchelConfirmBody{display:flex;flex-direction:column;gap:10px;}
+.satchelConfirmName{font:900 30px/1.15 "Kaiti SC","STKaiti","KaiTi",serif;}
+.satchelConfirmText{font-size:15px;line-height:1.6;}
+.satchelPreviewLine{padding:8px 12px;background:#2c2a23;border:1px solid #17150f;color:#f2dfad;font-size:13px;text-align:center;}
+.stonePreview{display:flex;align-items:center;justify-content:center;gap:16px;}
+.stonePreview canvas{height:92px;width:auto;}
+.pointStoneTargets{grid-template-columns:repeat(9,minmax(58px,1fr));max-height:min(380px,48dvh);overflow:auto;padding:3px;}
+#draftLayer[data-mode="satchel"] #draftCards,
+#draftLayer[data-mode="satchel-replace"] #draftCards{display:block;overflow:auto;}
+.fateOption.improves{border-color:#a78335;box-shadow:inset 0 0 0 1px rgba(238,205,116,.42);}
+.satchelReplaceGrid{width:min(900px,100%);margin:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+.satchelReplaceCard{min-height:230px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;background:linear-gradient(155deg,#e6d9b9,#bca779);border:3px solid #3d3221;color:#2b2921;font:inherit;cursor:pointer;}
+.satchelReplaceCard:focus-visible{outline:3px solid var(--gold);outline-offset:2px;}
+.satchelReplaceArt{width:min(120px,70%);max-height:150px;border:2px solid #3b3020;}
+.satchelReplaceName{font:900 18px/1.15 "Kaiti SC","STKaiti","KaiTi",serif;}
+.satchelReplaceMeta{font-size:10px;color:#7e2f29;}
+.passiveRow{align-items:center;}
+.passiveArtwork{flex:0 0 54px;width:54px;max-height:68px;border:1px solid #8a7148;}
+
+@media (max-height:470px){
+  #passiveSummary{min-height:44px;margin-top:2px;padding:2px 3px;gap:3px;}
+  #passiveSummary .passiveGlyph{flex-basis:20px;width:20px;height:20px;font-size:12px;}
+  #passiveName{font-size:7px;}
+  #passiveCount{font-size:6px;}
+  #slotBar{grid-template-columns:minmax(92px,.7fr) repeat(3,minmax(0,1fr));min-height:82px;}
+  .fortuneMeter{padding:4px 3px;gap:2px;}
+  .fortuneEyebrow,.fortuneRule{font-size:6px;letter-spacing:0;}
+  .fortuneValue{font-size:14px;}
+  .fortunePips{gap:2px;}.fortunePips i{width:7px;height:3px;}
+  .satchelSlot{min-height:72px;padding:4px;gap:4px;}
+  .satchelArtwork{width:min(48px,40%);max-height:62px;}
+  .satchelName{font-size:10px;}.satchelAction{font-size:7px;}
+  .satchelEmptyGlyph{font-size:18px;}.satchelEmptyText{font-size:7px;}
+  .satchelConfirm{grid-template-columns:90px 1fr;gap:10px;padding:8px;}
+  .satchelConfirmArt{max-height:122px;}
+  .satchelConfirmName{font-size:20px;}.satchelConfirmText{font-size:11px;line-height:1.4;}
+  /* 矮横屏要给标题、原牌和确认按钮留出空间；目标牌种在自己的网格内滚动。 */
+  .pointStoneTargets{grid-template-columns:repeat(9,minmax(48px,1fr));max-height:140px;}
+  .satchelReplaceCard{min-height:150px;padding:6px;}
+  .satchelReplaceArt{width:min(64px,58%);max-height:82px;}
+}
+
+@media (max-aspect-ratio:0.95){
+  #slotBar{grid-template-columns:repeat(3,minmax(0,1fr));}
+  .fortuneMeter{grid-column:1 / -1;min-height:44px;display:grid;grid-template-columns:auto auto 1fr;column-gap:8px;padding:4px 8px;text-align:left;}
+  .fortunePips{grid-column:1 / -1;justify-content:flex-start;}
+  .satchelSlot{min-height:64px;padding:4px;gap:4px;}
+  .satchelArtwork{width:min(44px,38%);max-height:56px;}
+  .satchelName{font-size:10px;}.satchelAction{font-size:7px;}
+  .satchelConfirm{grid-template-columns:90px 1fr;gap:10px;padding:10px;}
+  .satchelConfirmName{font-size:20px;}.satchelConfirmText{font-size:11px;}
+  .pointStoneTargets{grid-template-columns:repeat(5,minmax(58px,1fr));}
+}
+
+@media (max-width:720px) and (max-height:470px) and (min-aspect-ratio:0.951){
+  #slotBar{grid-template-columns:minmax(74px,.62fr) repeat(3,minmax(0,1fr));min-height:68px;}
+  .fortuneValue{font-size:12px;}.fortuneRule{white-space:normal;text-align:center;line-height:1.1;}
+  .satchelSlot{min-height:58px;padding:3px;gap:3px;border-top-width:3px;}
+  .satchelArtwork{width:min(38px,38%);max-height:50px;}
+  .satchelName{font-size:9px;}.satchelAction{font-size:6px;}
+}
+
+/* ---------- 教学关引导层 ---------- */
+/* 四块遮罩围出一个洞：洞里那一处照常可点，其余全挡掉，
+   所以教学脚本不会被玩家点歪。跳过按钮在说明卡里，永远在最上层。 */
+#coach{position:fixed;inset:0;z-index:880;pointer-events:none;}
+.coachMask{
+  position:fixed;background:rgba(8,10,9,.72);pointer-events:auto;
+  transition:opacity .2s ease;
+}
+#coach.waiting .coachMask{opacity:0;pointer-events:none;}
+#coach.waiting .coachRing{opacity:0;}
+#coach.waiting .coachCard{opacity:0;}
+.coachRing{
+  position:fixed;border:3px solid var(--gold);border-radius:10px;pointer-events:none;
+  box-shadow:0 0 0 3px rgba(240,192,74,.28), 0 0 22px 6px rgba(240,192,74,.35);
+  animation:coachRing 1.5s ease-in-out infinite;transition:opacity .2s ease;
+}
+@keyframes coachRing{
+  0%,100%{box-shadow:0 0 0 3px rgba(240,192,74,.26), 0 0 18px 4px rgba(240,192,74,.28);}
+  50%{box-shadow:0 0 0 5px rgba(240,192,74,.42), 0 0 30px 10px rgba(240,192,74,.48);}
+}
+.coachCard{
+  position:fixed;z-index:2;pointer-events:auto;width:min(360px,86vw);
+  background:linear-gradient(180deg,rgba(38,36,30,.97),rgba(22,21,18,.97));
+  border:3px solid var(--edge);border-radius:12px;padding:12px 14px;
+  box-shadow:0 8px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08);
+  transition:opacity .2s ease;
+}
+.coachStep{font-size:10px;color:var(--dim);letter-spacing:1px;}
+.coachTitle{font-size:17px;color:var(--gold);margin:2px 0 6px;text-shadow:2px 2px 0 rgba(0,0,0,.55);}
+.coachBody{font-size:13px;line-height:1.65;color:#efe7d6;font-weight:700;}
+.coachActions{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;}
+/* 教学的两个按钮也要守 44px 触控下限——.btn.sm 默认只有 34px 高 */
+.coachActions .btn{min-height:44px;min-width:88px;padding:8px 14px;font-size:13px;border-width:2px;}
+.coachActions .btn[hidden]{display:none;}
+/* 教学期间不要让牌桌上的提示条抢注意力 */
+body.coaching #actionHint{opacity:.35;}
+
+@media (max-height:470px){
+  .coachCard{width:min(320px,58vw);padding:8px 10px;}
+  .coachTitle{font-size:14px;margin:1px 0 4px;}
+  .coachBody{font-size:11px;line-height:1.5;}
+  .coachActions{margin-top:6px;}
+  .coachActions .btn{min-height:44px;min-width:80px;padding:6px 10px;font-size:12px;}
+}
+@media (max-width:420px){
+  .coachCard{width:calc(100vw - 24px);}
 }

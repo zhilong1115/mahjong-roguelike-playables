@@ -9,47 +9,10 @@
  * - `settle`  成胡结算时
  */
 
-function seal(spec) {
-  return Object.freeze({
-    family: 'seal',
-    duration: '本局',
-    glyph: '印',
-    perHandLimit: 1,
-    ...spec,
-  });
-}
+import { listContentItems } from './library.mjs';
 
-export const SEALS = Object.freeze({
-  returnWind: seal({
-    id: 'returnWind',
-    name: '回风印',
-    trigger: 'swapOut',
-    price: 6,
-    rarity: 'common',
-    text: '本副第一次换出此牌时，返还 1 次换牌；每副最多一次。',
-    effect: { kind: 'refundSwap', value: 1 },
-  }),
-  askOracle: seal({
-    id: 'askOracle',
-    name: '问签印',
-    trigger: 'reveal',
-    price: 7,
-    rarity: 'uncommon',
-    text: '本副第一次用此牌亮组时，本次三签免费重抽一次；每副最多一次。',
-    effect: { kind: 'rerollDraft', value: 1 },
-  }),
-  gateKeeper: seal({
-    id: 'gateKeeper',
-    name: '守门印',
-    trigger: 'settle',
-    price: 6,
-    rarity: 'common',
-    text: '此牌未被亮出而参与胡牌时，+1 待结算金币；每副最多一次。',
-    effect: { kind: 'goldIfConcealedTile', value: 1 },
-  }),
-});
-
-export const SEAL_LIST = Object.freeze(Object.values(SEALS));
+export const SEAL_LIST = Object.freeze(listContentItems('seal', { pool: 'shop' }));
+export const SEALS = Object.freeze(Object.fromEntries(SEAL_LIST.map((item) => [item.id, item])));
 
 export const SEALS_BY_TRIGGER = Object.freeze({
   swapOut: SEAL_LIST.filter((item) => item.trigger === 'swapOut'),

@@ -5,7 +5,7 @@ import { ANTES, CONFIG, getItem } from '../src/content/index.mjs';
 import { Run } from '../src/core/run.mjs';
 import { playHand } from './helpers/auto-play.mjs';
 
-/** 固定 seed 打完整局：三圈 × 三关 × 两副，每个过关点进入百宝阁。 */
+/** 固定 seed 打标准短局：东南两圈 × 三关 × 一副，每个过关点进入百宝阁。 */
 function playRun(seed, { revealTarget = 0, buy = true } = {}) {
   const run = new Run({ seed });
   const log = [];
@@ -75,10 +75,11 @@ test('买到的长期内容确实改变了后续结算', () => {
   }
   assert.equal(run.status, 'shop');
   run.gold += 100;
-  for (const offer of [...run.shop.items]) {
-    const result = run.buy(offer.slotIndex);
-    if (result.needsKind) run.confirmKind('man:5');
-  }
+  const reliableGeneral = run.shop.items.find(
+    (offer) => getItem('general', offer.id)?.archetype === 'pairs',
+  );
+  assert.ok(reliableGeneral, '第一家请将台应当包含七巧起势福将');
+  assert.equal(run.buy(reliableGeneral.slotIndex).ok, true);
   const owned = {
     generals: [...run.generalIds],
     codex: { ...run.codexLevels },

@@ -33,6 +33,20 @@ function runToShop(seed = SEED, options = {}) {
   return run;
 }
 
+function runToSupportShop(seed = SEED, options = {}) {
+  const run = runToShop(seed, options);
+  run.gold += 100;
+  const general = run.shop.items.find((item) => item.family === 'general');
+  assert.equal(run.buy(general.slotIndex).ok, true);
+  run.leaveShop();
+  startSelectedBlind(run);
+  playHand(run, options);
+  run.advance();
+  assert.equal(run.status, 'shop');
+  assert.equal(run.shop.kind, 'shop');
+  return run;
+}
+
 test('每副开局：14 张结构牌、6 个开运位、5 次换牌', () => {
   const run = new Run({ seed: SEED });
   assert.equal(run.status, 'blind-select', '新局必须先停在选关屏');
@@ -44,6 +58,28 @@ test('每副开局：14 张结构牌、6 个开运位、5 次换牌', () => {
   assert.equal(state.swapsRemaining, CONFIG.swapsPerHand);
   assert.equal(state.status, 'playing');
   assert.ok(state.distance >= 1);
+});
+
+test('跳过闲局和庄局会逐关推进，圈主保持不可跳', () => {
+  const run = new Run({ seed: SEED });
+
+  assert.equal(run.blindKind, 'small');
+  assert.equal(run.skipBlind().ok, true);
+  let state = run.snapshot();
+  assert.equal(state.status, 'blind-select');
+  assert.equal(state.blindKind, 'big');
+  assert.equal(state.blindCards.find((card) => card.kind === 'small')?.outcome, 'skipped');
+  assert.equal(state.blindCards.find((card) => card.kind === 'big')?.current, true);
+
+  assert.equal(run.skipBlind().ok, true);
+  state = run.snapshot();
+  assert.equal(state.status, 'blind-select');
+  assert.equal(state.blindKind, 'boss');
+  assert.equal(state.blindCards.find((card) => card.kind === 'big')?.outcome, 'skipped');
+  assert.equal(state.blindCards.find((card) => card.kind === 'boss')?.current, true);
+
+  assert.deepEqual(run.skipBlind(), { ok: false, reason: '圈主不能跳' });
+  assert.equal(run.blindKind, 'boss');
 });
 
 test('完全不亮牌：满额空位金币 + 门清标签', () => {
@@ -106,6 +142,9 @@ test('灵签只在本副生效，下一副清空', () => {
   playHand(run, { revealTarget: 1 });
   assert.ok(run.charmIds.length >= 1);
   run.advance();
+  assert.equal(run.status, 'shop');
+  run.leaveShop();
+  startSelectedBlind(run);
   assert.deepEqual(run.charmIds, []);
   assert.deepEqual(run.revealedGroups, []);
   assert.equal(run.swapsRemaining, CONFIG.swapsPerHand);
@@ -163,8 +202,16 @@ test('牌印 · 亮组触发：问签印给一次整组重抽，重抽结果由 
   }
 });
 
-test('百宝阁：货位类别固定，番谱定向匹配下一轮预告', () => {
-  const run = runToShop();
+test('百宝阁：请将台与长期货架按固定节奏轮换', () => {
+  const first = runToShop();
+  assert.equal(first.shop.kind, 'general-draft');
+  assert.deepEqual(first.shop.items.map((item) => item.family), ['general', 'general', 'general']);
+  assert.deepEqual(
+    first.shop.items.map((offer) => getItem('general', offer.id).archetype).sort(),
+    ['dragon', 'pairs', 'thunder'],
+  );
+
+  const run = runToSupportShop();
   assert.equal(run.status, 'shop');
   const families = run.shop.items.map((item) => item.family);
   assert.deepEqual(families, shelfFor(run.shopIndex()));
@@ -185,7 +232,7 @@ test('百宝阁：货位类别固定，番谱定向匹配下一轮预告', () =>
 });
 
 test('牌骨 / 牌印要先选牌种才扣钱，覆盖旧改造会被记录', () => {
-  const run = runToShop();
+  const run = runToSupportShop();
   const boneOffer = run.shop.items.find((item) => item.family === 'bone');
   const goldBefore = run.gold;
 
@@ -216,7 +263,7 @@ test('牌骨 / 牌印要先选牌种才扣钱，覆盖旧改造会被记录', ()
 });
 
 test('买到的牌骨在下一副真的出现在手上', () => {
-  const run = runToShop();
+  const run = runToSupportShop();
   const boneOffer = run.shop.items.find((item) => item.family === 'bone');
   run.buy(boneOffer.slotIndex);
   run.confirmKind('sou:3');
@@ -227,7 +274,7 @@ test('买到的牌骨在下一副真的出现在手上', () => {
 });
 
 test('番谱可以累计升级，满级后不再出现在货架', () => {
-  const run = runToShop();
+  const run = runToSupportShop();
   const codexOffer = run.shop.items.find((item) => item.family === 'codex');
   const book = getItem('codex', codexOffer.id);
   run.gold += 100;
@@ -252,7 +299,7 @@ test('福将占将位，位满不能再买', () => {
   assert.match(result.reason, /将位/);
 });
 
-test('两副达标金币入账，未达标不入账且重试会清空本关进度', () => {
+test('单副达标金币入账，未达标不入账且重试会清空本关进度', () => {
   const run = runToShop();
   assert.equal(run.pendingGold, 0);
   assert.equal(run.gold, CONFIG.startingGold + run.completedBlinds[0].banked);
@@ -273,17 +320,14 @@ test('两副达标金币入账，未达标不入账且重试会清空本关进�
   assert.equal(failing.selectBlind().ok, true);
 });
 
-test('流局只吃掉本副，之前的分数保留', () => {
+test('单副流局直接结束本关且不入账', () => {
   const run = startSelectedBlind(new Run({ seed: SEED }));
-  playHand(run);
-  const firstScore = run.blindScore;
-  assert.ok(firstScore > 0);
-  run.advance();
   run.swapsRemaining = 0;
   run.refreshStatus();
   if (run.status === 'hand-failed') {
     run.advance();
-    assert.equal(run.blindScore, firstScore);
+    assert.equal(run.status, 'run-over');
+    assert.equal(run.gold, CONFIG.startingGold);
   }
 });
 
@@ -307,7 +351,7 @@ test('签气在下一关首副发牌后消耗', () => {
   assert.ok(!run.tags.includes('charm'));
 });
 
-test('顺气覆盖整关两副，并在本关结束后消耗', () => {
+test('顺气覆盖整关一副，并在本关结束后消耗', () => {
   const run = new Run({ seed: SEED });
   run.applyTag('swap');
   assert.ok(run.tags.includes('swap'));
@@ -321,6 +365,51 @@ test('顺气覆盖整关两副，并在本关结束后消耗', () => {
   assert.equal(run.status, 'shop');
   assert.equal(run.pendingExtraSwaps, 0);
   assert.ok(!run.tags.includes('swap'));
+});
+
+test('标准局六关五店，通关后可进入西圈三关加赛', () => {
+  const run = new Run({ seed: SEED });
+  let standardClears = 0;
+  let standardShops = 0;
+
+  while (run.status !== 'run-complete') {
+    assert.equal(run.status, 'blind-select');
+    run.selectBlind();
+    run.blindScore = run.blindTarget();
+    run.status = 'hand-won';
+    run.advance();
+    standardClears += 1;
+    if (run.status === 'shop') {
+      standardShops += 1;
+      run.leaveShop();
+    }
+  }
+
+  assert.equal(standardClears, 6);
+  assert.equal(standardShops, 5);
+  assert.equal(run.snapshot().challengeAvailable, true);
+  assert.equal(run.continueChallenge().ok, true);
+  assert.equal(run.anteIndex, 2);
+  assert.equal(run.status, 'blind-select');
+
+  let challengeClears = 0;
+  let challengeShops = 0;
+  while (run.status !== 'run-complete') {
+    run.selectBlind();
+    run.blindScore = run.blindTarget();
+    run.status = 'hand-won';
+    run.advance();
+    challengeClears += 1;
+    if (run.status === 'shop') {
+      challengeShops += 1;
+      run.leaveShop();
+    }
+  }
+
+  assert.equal(challengeClears, 3);
+  assert.equal(challengeShops, 2);
+  assert.equal(run.snapshot().challengeAvailable, false);
+  assert.equal(run.continueChallenge().ok, false);
 });
 
 test('免单气在免费购买第一件商品后消耗', () => {

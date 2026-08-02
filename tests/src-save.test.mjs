@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ANTES } from '../src/content/index.mjs';
+import { ANTES, getItem } from '../src/content/index.mjs';
 import { Run } from '../src/core/run.mjs';
 import { tileKey } from '../src/core/tiles.mjs';
 import { SCHEMA_VERSION, createLocalStorage, migrate, restoreRun, serializeRun } from '../src/state/save.mjs';
@@ -79,6 +79,90 @@ test('从半副恢复后继续打，结算结果与原局完全一致', () => {
   assert.equal(restored.pendingGold, run.pendingGold);
   assert.deepEqual(restored.lastHandResult?.patterns, run.lastHandResult?.patterns);
   assert.equal(restored.lastHandResult?.score, run.lastHandResult?.score);
+});
+
+test('南西圈三张牌墙预览在存档恢复后保持不变', () => {
+  const run = new Run({ seed: 20260726 });
+  run.anteIndex = 1;
+  assert.equal(run.selectBlind().ok, true);
+  assert.equal(run.previewCount, 3);
+
+  const saved = serializeRun(run);
+  const restored = new Run({ seed: 1 });
+  assert.equal(restoreRun(restored, clone(saved)).ok, true);
+  assert.equal(restored.previewCount, 3);
+  assert.equal(restored.snapshot().upcomingTiles.length, 3);
+
+  delete saved.hand.previewCount;
+  const legacyV4 = new Run({ seed: 1 });
+  assert.equal(restoreRun(legacyV4, clone(saved)).ok, true);
+  assert.equal(legacyV4.previewCount, 3, '旧 v4 存档按圈数补出预览张数');
+});
+
+test('短局圈数往返，并让已经进入西圈的旧 v4 存档继续加赛', () => {
+  const run = new Run({ seed: 20260726 });
+  const saved = serializeRun(run);
+  assert.equal(saved.activeAnteCount, 2);
+
+  const restored = new Run({ seed: 1 });
+  assert.equal(restoreRun(restored, clone(saved)).ok, true);
+  assert.equal(restored.activeAnteCount, 2);
+
+  delete saved.activeAnteCount;
+  saved.anteIndex = 2;
+  const oldWestRun = new Run({ seed: 1 });
+  assert.equal(restoreRun(oldWestRun, clone(saved)).ok, true);
+  assert.equal(oldWestRun.activeAnteCount, 3);
+});
+
+test('schema v5 往返保留三格锦囊、点石选择中间态与额外换牌分账', () => {
+  const run = new Run({ seed: 20260731 });
+  run.selectBlind();
+  const charm = getItem('charm', 'turnStone');
+  run.satchel = [{
+    instanceId: 'save:turnStone', charmId: charm.id, tier: charm.tier, role: 'active', source: 'test',
+  }];
+  run.bonusSwapsRemaining = 1;
+  run.swapsRemaining += 1;
+  assert.equal(run.beginSatchelUse('save:turnStone').ok, true);
+  const source = run.activeChoice.choices[0];
+  assert.equal(run.selectSatchelTile(source.tileId).ok, true);
+
+  const restored = new Run({ seed: 1 });
+  assert.equal(restoreRun(restored, clone(serializeRun(run))).ok, true);
+  assert.equal(restored.satchel[0].charmId, 'turnStone');
+  assert.equal(restored.activeChoice.mode, 'target');
+  assert.equal(restored.activeChoice.selectedTileId, source.tileId);
+  assert.ok(restored.activeChoice.choices.length > 0);
+  assert.equal(restored.bonusSwapsRemaining, 1);
+  assert.equal(restored.rewardableSwapsRemaining(), run.rewardableSwapsRemaining());
+});
+
+test('v4 → v5 迁移为空锦囊并保持原有换牌都可兑换', () => {
+  const saved = clone(serializeRun(new Run({ seed: 20260731 })));
+  saved.schemaVersion = 4;
+  delete saved.hand.bonusSwapsRemaining;
+  delete saved.hand.satchel;
+  delete saved.hand.activeChoice;
+  delete saved.hand.fateSatchelUsed;
+  delete saved.hand.wallShuffleCount;
+  const migrated = migrate(saved);
+  assert.equal(migrated.schemaVersion, 5);
+  assert.equal(migrated.hand.bonusSwapsRemaining, 0);
+  assert.deepEqual(migrated.hand.satchel, []);
+  assert.equal(migrated.hand.activeChoice, null);
+});
+
+test('旧两副制存档恢复时不会显示第 2/1 副', () => {
+  const saved = serializeRun(new Run({ seed: 20260726 }));
+  delete saved.activeAnteCount;
+  saved.handIndex = 1;
+
+  const restored = new Run({ seed: 1 });
+  assert.equal(restoreRun(restored, clone(saved)).ok, true);
+  assert.equal(restored.handIndex, 0);
+  assert.equal(restored.snapshot().handNumber, 1);
+  assert.equal(restored.snapshot().handCount, 1);
 });
 
 test('v1 → v2 迁移：tileMods 拆成 bones 与 seals', () => {

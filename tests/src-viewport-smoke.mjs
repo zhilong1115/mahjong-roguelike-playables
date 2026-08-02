@@ -15,6 +15,10 @@ const VIEWPORTS = [
   { id: 'square-embed', width: 960, height: 960 },
   { id: 'desktop-hd', width: 1280, height: 720 },
 ];
+const COMPACT_LANDSCAPES = [
+  // 真人手机反馈来自比 required 844×390 更窄的横屏；这一档专门防止第 14 张掉到第二行。
+  { id: 'phone-compact-landscape', width: 667, height: 375 },
+];
 
 const MIME = Object.freeze({
   '.css': 'text/css; charset=utf-8',
@@ -24,6 +28,7 @@ const MIME = Object.freeze({
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
 });
 
 function getFreePort() {
@@ -171,19 +176,74 @@ const METRICS_EXPRESSION = `(() => {
       height: Math.round(rect.height * 10) / 10,
     };
   };
+  const intersect = (a, b) => ({
+    left: Math.max(a.left, b.left),
+    top: Math.max(a.top, b.top),
+    right: Math.min(a.right, b.right),
+    bottom: Math.min(a.bottom, b.bottom),
+  });
+  const visibleRatio = (element) => {
+    const original = element.getBoundingClientRect();
+    let clipped = intersect(original, { left: 0, top: 0, right: innerWidth, bottom: innerHeight });
+    let ancestor = element.parentElement;
+    while (ancestor) {
+      const style = getComputedStyle(ancestor);
+      if (/(hidden|clip|auto|scroll)/.test(style.overflow + style.overflowX + style.overflowY)) {
+        clipped = intersect(clipped, ancestor.getBoundingClientRect());
+      }
+      ancestor = ancestor.parentElement;
+    }
+    const width = Math.max(0, clipped.right - clipped.left);
+    const height = Math.max(0, clipped.bottom - clipped.top);
+    const area = Math.max(1, original.width * original.height);
+    return (width * height) / area;
+  };
+  const centerIsReachable = (element) => {
+    const rect = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return Boolean(hit && (hit === element || element.contains(hit)));
+  };
+  const describeBlocked = (element) => {
+    const rect = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return {
+      ...describe(element),
+      text: element.textContent?.trim() ?? '',
+      hit: hit ? (hit.id ? '#' + hit.id : '.' + [...hit.classList].join('.')) : null,
+      hitText: hit?.textContent?.trim() ?? '',
+    };
+  };
   const screen = document.querySelector('#screen');
-  const critical = screen
-    ? [...document.querySelectorAll('#screen .screenBox, #screen .rowBtns, #screen .shopCard, #screen .blindCard')]
-    : [...document.querySelectorAll('#app, #side, #slotBar, #table, #handZone, #actionRow')];
-  const clipped = critical.filter(visible).map(describe).filter((rect) => (
-    rect.left < -1 || rect.top < -1 || rect.right > innerWidth + 1 || rect.bottom > innerHeight + 1
-  ));
-  const primary = screen
-    ? [...document.querySelectorAll('#screen .rowBtns .btn, #screen .shopCard, #screen .kindBtn, #screen .blindActions .btn')]
-    : [...document.querySelectorAll('#handZone .tile, #btnAct, #btnHu, .charmPick')];
-  const touchTargets = primary.filter(visible).map(describe);
+  const draftLayer = document.querySelector('#draftLayer');
+  const draftOpen = draftLayer && !draftLayer.hidden;
+  const critical = draftOpen
+    ? [...document.querySelectorAll('#draftLayer, #draftPanel, #draftTitle, #draftNotice:not([hidden]), #draftCards, .charmPick, .omenCompare, .fateChooser, .fateHand, .fateTargetGrid, #draftActions, #draftActions .btn')]
+    : screen
+    ? [...document.querySelectorAll('#screen .screenBox, #screen .rowBtns, #screen .shopCard, #screen .blindCard, #screen .libraryTabs, #screen .libraryGrid')]
+    : [...document.querySelectorAll('#app, #side, #buildPanel, #slotBar, #fortuneMeter, .satchelSlot, #table, #handZone, #actionRow, #omenSlot, #passiveSummary')];
+  const clipped = critical.filter(visible).filter((element) => visibleRatio(element) < .98).map(describe);
+  const primary = draftOpen
+    ? [...document.querySelectorAll('#draftLayer .charmPick, #draftLayer .fateOption, #draftActions .btn')]
+    : screen
+    ? [...document.querySelectorAll('#screen .rowBtns .btn, #screen .shopCard, #screen .kindBtn, #screen .blindActions .btn, #screen .libraryTab')]
+    : [...document.querySelectorAll('#handZone .tile, #btnSwap, #btnReveal, #btnHu, #omenSlot, #passiveSummary, button.satchelSlot')];
+  // 滚动容器里暂时在视口外的选项不算当前可操作目标；否则会把正常的面板内
+  // 滚动误报为「按钮被遮挡」。一旦滚入可见范围，它仍会参与触控与命中检测。
+  const actionable = primary
+    .filter((element) => !element.disabled && !element.classList.contains('cant') && !element.classList.contains('sold'))
+    .filter((element) => visibleRatio(element) >= .98);
+  const touchTargets = actionable.filter(visible).map(describe);
+  const blockedTargets = actionable.filter(visible).filter((element) => !centerIsReachable(element)).map(describeBlocked);
   const tileRects = [...document.querySelectorAll('#handZone .tile canvas')].filter(visible).map(describe);
   const handZone = document.querySelector('#handZone');
+  const main = document.querySelector('#main');
+  const side = document.querySelector('#side');
+  const sortedTileTops = tileRects.map((rect) => rect.top).sort((a, b) => a - b);
+  const handRowTops = [];
+  for (const top of sortedTileTops) {
+    if (!handRowTops.length || top - handRowTops.at(-1) > 20) handRowTops.push(top);
+  }
+  const charmCards = [...document.querySelectorAll('.charmPick')];
   return {
     viewport: { width: innerWidth, height: innerHeight },
     pageScroll: document.documentElement.scrollWidth > innerWidth + 1
@@ -191,6 +251,7 @@ const METRICS_EXPRESSION = `(() => {
       || document.body.scrollWidth > innerWidth + 1
       || document.body.scrollHeight > innerHeight + 1,
     clipped,
+    blockedTargets,
     smallestTouchWidth: Math.min(...touchTargets.map((rect) => rect.width)),
     smallestTouchHeight: Math.min(...touchTargets.map((rect) => rect.height)),
     tileCount: tileRects.length,
@@ -198,13 +259,36 @@ const METRICS_EXPRESSION = `(() => {
     handOverflow: handZone ? handZone.scrollWidth > handZone.clientWidth + 1 : false,
     handScrollWidth: handZone?.scrollWidth ?? 0,
     handClientWidth: handZone?.clientWidth ?? 0,
-    slotCount: document.querySelectorAll('#slotBar .slot').length,
+    handRows: handRowTops.length,
+    mainWidth: Math.round((main?.getBoundingClientRect().width ?? 0) * 10) / 10,
+    sideWidth: Math.round((side?.getBoundingClientRect().width ?? 0) * 10) / 10,
+    hudStatCount: document.querySelectorAll('#statPanel .stat').length,
+    buildPanelParent: document.querySelector('#buildPanel')?.parentElement?.id ?? null,
+    slotCount: document.querySelectorAll('#slotBar .satchelSlot').length,
+    slotBarHeight: Math.round((document.querySelector('#slotBar')?.getBoundingClientRect().height ?? 0) * 10) / 10,
+    smallestSlotHeight: Math.min(...[...document.querySelectorAll('#slotBar .satchelSlot')]
+      .filter(visible).map((slot) => slot.getBoundingClientRect().height)),
+    fortuneMeter: document.querySelector('#fortuneMeter')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+    passiveCount: document.querySelector('#passiveCount')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
     buildCards: document.querySelectorAll('#buildBar .buildCard').length,
     selectedCount: document.querySelectorAll('#handZone .tile.sel').length,
     screenTitle: screen?.querySelector('.title')?.textContent ?? null,
-    draftOpen: !document.querySelector('#draftLayer').hidden,
-    charmCards: document.querySelectorAll('.charmPick').length,
+    draftOpen,
+    draftParent: draftLayer?.parentElement?.id ?? null,
+    charmCards: charmCards.length,
+    tierLabels: charmCards.map((card) => card.querySelector('.tierName')?.textContent ?? ''),
+    tierMarks: charmCards.map((card) => card.querySelector('.tierMarks')?.textContent?.length ?? 0),
+    offerCount: Number(draftLayer?.dataset.offerCount ?? 0),
+    fateMode: draftLayer?.dataset.mode === 'fate',
+    satchelMode: draftLayer?.dataset.mode === 'satchel',
+    fateOptions: document.querySelectorAll('#draftCards .fateOption').length,
+    fateTargets: document.querySelectorAll('#draftCards .fateTarget').length,
+    satchelFilled: document.querySelectorAll('#slotBar .satchelSlot.filled').length,
+    omenText: document.querySelector('#omenSlot')?.textContent?.replace(/\\s+/g, ' ').trim() ?? '',
+    omenInsideSlots: Boolean(document.querySelector('#slotBar #omenSlot')),
     kindButtons: document.querySelectorAll('#kindGrid .kindBtn').length,
+    libraryCards: document.querySelectorAll('#screen .libraryCard').length,
+    activeLibraryFamily: document.querySelector('#screen .libraryTab.active')?.dataset.family ?? null,
   };
 })()`;
 
@@ -217,6 +301,7 @@ function assertMetrics(metrics, viewport, label, { expectTiles = true, tileCount
   assert.deepEqual(metrics.viewport, { width: viewport.width, height: viewport.height }, `${label}: viewport`);
   assert.equal(metrics.pageScroll, false, `${label}: 页面级滚动`);
   assert.deepEqual(metrics.clipped, [], `${label}: 关键区域被裁切`);
+  assert.deepEqual(metrics.blockedTargets, [], `${label}: 关键操作被遮挡`);
   assert.equal(metrics.handOverflow, false,
     `${label}: 手牌溢出 ${metrics.handScrollWidth}/${metrics.handClientWidth}`);
   assert.ok(metrics.smallestTouchWidth >= 43.5, `${label}: 触控宽度 ${metrics.smallestTouchWidth}`);
@@ -224,7 +309,21 @@ function assertMetrics(metrics, viewport, label, { expectTiles = true, tileCount
   if (expectTiles) {
     assert.equal(metrics.tileCount, tileCount, `${label}: 手牌数量`);
     assert.ok(metrics.smallestTileWidth >= 33.5, `${label}: 牌面宽度 ${metrics.smallestTileWidth}`);
-    assert.equal(metrics.slotCount, 6, `${label}: 6 个开运位`);
+    assert.equal(metrics.slotCount, 3, `${label}: 3 个主动锦囊位`);
+    assert.match(metrics.fortuneMeter, /签缘 \d+\/\d+/, `${label}: 签缘计数`);
+  }
+}
+
+/**
+ * 等一个条件成立。结算动画的时长会随手感调整，测试不能写死 sleep，
+ * 否则每次改节奏都要回来改测试。
+ */
+async function waitUntil(client, expression, { timeout = 20000, step = 150, label = '条件' } = {}) {
+  const deadline = Date.now() + timeout;
+  for (;;) {
+    if (await evaluate(client, expression)) return true;
+    if (Date.now() > deadline) throw new Error(`等待超时：${label}`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, step));
   }
 }
 
@@ -237,6 +336,22 @@ async function click(client, selector) {
   })()`);
   assert.equal(clicked, true, `missing clickable ${selector}`);
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 60));
+}
+
+async function pressKey(client, key) {
+  const code = /^[1-4]$/.test(key) ? `Digit${key}` : key;
+  const windowsVirtualKeyCode = key === 'Enter'
+    ? 13
+    : key === 'Escape'
+      ? 27
+      : key.charCodeAt(0);
+  await client.send('Input.dispatchKeyEvent', {
+    type: 'keyDown', key, code, windowsVirtualKeyCode, nativeVirtualKeyCode: windowsVirtualKeyCode,
+  });
+  await client.send('Input.dispatchKeyEvent', {
+    type: 'keyUp', key, code, windowsVirtualKeyCode, nativeVirtualKeyCode: windowsVirtualKeyCode,
+  });
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 40));
 }
 
 async function startCurrentBlind(client, label) {
@@ -349,26 +464,243 @@ try {
   await client.send('Page.enable');
   await client.send('Runtime.enable');
 
-  // seed 1 能让测试玩家稳定打过东圈闲局，便于覆盖两副制结算与商店流程。
-  const baseUrl = `http://127.0.0.1:${serverPort}/src/?seed=1`;
+  // seed 1 能让测试玩家稳定打过东圈闲局，便于覆盖单副结算与商店流程。
+  // tutorial=0：教学关会在「无存档 + 没看过」时自动接管首屏，这里要显式关掉
+  const baseUrl = `http://127.0.0.1:${serverPort}/src/?seed=1&tutorial=0`;
   const url = `${baseUrl}&intro=0`;
   const results = [];
 
+  // 首次进入流程：加载先看标题；点开始才教学；教学结束后直接开局。
+  // 同时覆盖“旧玩家有存档但没有本机教学标记”时开始新局不再被教学截断。
+  const onboardingUrl = `http://127.0.0.1:${serverPort}/src/?onboarding=1`;
+  await setViewport(client, VIEWPORTS[0]);
+  await client.send('Page.navigate', { url: onboardingUrl });
+  await waitForPage(client);
+  await evaluate(client, `localStorage.clear()`);
+  // 不在页面里 location.reload()：CDP 可能在旧 document 销毁前就读到旧的 __tianhu，
+  // 随后的点击会被导航吞掉。换一个可核对的 URL，确保测到的是新 document。
+  const freshOnboardingUrl = `${onboardingUrl}&fresh=1`;
+  await client.send('Page.navigate', { url: freshOnboardingUrl });
+  await waitUntil(client, `location.search.includes('fresh=1')`, { label: '首次进入测试的新页面' });
+  await waitForPage(client);
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#screen .titleMenu'))`), true,
+    '首次加载必须先显示标题菜单');
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#coach'))`), false,
+    '首次加载不能自动用教学接管首屏');
+  await click(client, '#screen .titleMenu > .btn.big');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+  const firstStart = await evaluate(client, `(() => ({
+    coach: Boolean(document.querySelector('#coach .coachCard')),
+    status: globalThis.__tianhu.run.status,
+    tutorial: localStorage.getItem('tianhu.tutorial.v1'),
+    save: Boolean(localStorage.getItem('tianhu.run.v5')),
+    screenTitle: document.querySelector('#screen .title')?.textContent ?? null,
+  }))()`);
+  assert.equal(firstStart.coach, true,
+    `首次点击开始后必须进入教学：${JSON.stringify(firstStart)}`);
+  assert.equal(await evaluate(client, `globalThis.__tianhu.run.status`), 'playing',
+    '首次点击开始应进入教学牌局');
+  await click(client, '#coach .coachActions .btn.grey');
+  await waitUntil(client, `!document.querySelector('#coach') && globalThis.__tianhu.run.status === 'blind-select'`, {
+    label: '跳过教学后直接开始新局',
+  });
+  assert.equal(await evaluate(client, `localStorage.getItem('tianhu.tutorial.v1')`), 'done',
+    '跳过教学也应记录已经处理过首次引导');
+  await waitUntil(client, `Boolean(localStorage.getItem('tianhu.run.v5'))`, { label: '教学后新局存档' });
+
+  // 模拟旧玩家换设备 / 清掉本机教学标记，但仍有云端或本地 Run 存档。
+  await evaluate(client, `localStorage.removeItem('tianhu.tutorial.v1')`);
+  await client.send('Page.navigate', { url: onboardingUrl });
+  await waitForPage(client);
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#screen .titleMenu'))`), true,
+    '旧玩家加载后也先显示标题菜单');
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#coach'))`), false,
+    '旧玩家不能因为缺少教学标记而自动进教学');
+  assert.equal(await evaluate(client, `(() => {
+    const start = [...document.querySelectorAll('#screen .titleMenu > .btn.big')]
+      .find((button) => button.textContent.includes('开始新局'));
+    start?.click();
+    return Boolean(start);
+  })()`), true, '旧玩家应能点开始新局');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#coach'))`), false,
+    '有旧存档的玩家点开始应直接开局');
+  assert.equal(await evaluate(client, `globalThis.__tianhu.run.status`), 'blind-select',
+    '旧玩家开始新局应直接进入选关');
   // 标题页不应为背景 Run 自动造存档；点「开始新局」后应立即订阅并落档。
   await setViewport(client, VIEWPORTS[0]);
   await client.send('Page.navigate', { url: baseUrl });
   await waitForPage(client);
+  // 上一个真实 Run 会在导航离开时按生命周期要求落档；进入 seed 测试页后再清理，
+  // 才能单独验证当前标题背景不会自行造档。
+  await evaluate(client, `localStorage.clear()`);
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 460));
   const titleMetrics = await evaluate(client, METRICS_EXPRESSION);
   assertMetrics(titleMetrics, VIEWPORTS[0], 'title-mobile-narrow', { expectTiles: false });
-  assert.equal(await evaluate(client, `localStorage.getItem('tianhu.run.v3')`), null,
+  await capture(client, artifactDir, 'title-mobile-narrow-portrait');
+  assert.equal(await evaluate(client, `localStorage.getItem('tianhu.run.v5')`), null,
     '标题背景不应自动生成存档');
   await click(client, '#screen .titleMenu > .btn.big');
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 460));
-  const newRunSave = await evaluate(client, `JSON.parse(localStorage.getItem('tianhu.run.v3') ?? 'null')`);
+  const newRunSave = await evaluate(client, `JSON.parse(localStorage.getItem('tianhu.run.v5') ?? 'null')`);
   assert.equal(newRunSave?.status, 'blind-select', '开始新局应当自动保存');
   const firstSelect = await evaluate(client, METRICS_EXPRESSION);
   assert.equal(firstSelect.screenTitle, '东圈', '新局先进入东圈选关');
   assertMetrics(firstSelect, VIEWPORTS[0], 'blind-select-mobile-narrow', { expectTiles: false });
+
+  // 存档若停在求签，标题 / 帮助只能覆盖它，不能靠快捷键暗中选签或取消状态。
+  await startCurrentBlind(client, 'covered-draft');
+  await evaluate(client, INSTALL_AUTOPLAY);
+  assert.equal(await evaluate(client, `(() => { globalThis.__playToHu(); return globalThis.__revealOne(); })()`), true,
+    'covered-draft: 应当先构造出求签状态');
+  const savedDraft = await evaluate(client, `(async () => {
+    const { serializeRun } = await import('/src/state/save.mjs');
+    const run = globalThis.__tianhu.run;
+    run.pendingOmen = {
+      omenId: 'luckyTier', sourceCharmId: 'luckyOmen',
+      acquiredAtBlind: 'covered-draft', consumeOn: 'nextCharmDraft'
+    };
+    run.emit();
+    localStorage.setItem('tianhu.run.v5', JSON.stringify(serializeRun(run)));
+    return JSON.stringify({
+      status: run.status,
+      draft: run.draft,
+      pendingOmen: run.pendingOmen,
+      charmIds: run.charmIds,
+      charmInstances: run.charmInstances,
+    });
+  })()`);
+  // 这一段测的是存档恢复，不是教学；教学现在只看「有没有看过」，所以要显式关掉
+  const restoreUrl = `http://127.0.0.1:${serverPort}/src/?tutorial=0`;
+  await client.send('Page.navigate', { url: restoreUrl });
+  await waitForPage(client);
+  const covered = await evaluate(client, `(() => ({
+    status: globalThis.__tianhu.run.status,
+    screen: Boolean(document.querySelector('#screen')),
+    draftHidden: document.querySelector('#draftLayer').hidden,
+    draftInert: document.querySelector('#draftLayer').inert,
+    focusInsideDraft: document.querySelector('#draftLayer').contains(document.activeElement),
+  }))()`);
+  assert.equal(covered.status, 'charm-draft', '应恢复到求签状态');
+  assert.equal(covered.screen, true, '恢复求签存档时仍应先显示标题');
+  assert.equal(covered.draftHidden, true, '标题覆盖时求签层必须隐藏');
+  assert.equal(covered.draftInert, true, '标题覆盖时求签层必须不可交互');
+  assert.equal(covered.focusInsideDraft, false, '隐藏求签不能从标题抢走焦点');
+
+  for (const key of ['1', 'Escape', 'Enter']) await pressKey(client, key);
+  const afterTitleKeys = await evaluate(client, `(() => {
+    const run = globalThis.__tianhu.run;
+    return JSON.stringify({
+      status: run.status,
+      draft: run.draft,
+      pendingOmen: run.pendingOmen,
+      charmIds: run.charmIds,
+      charmInstances: run.charmInstances,
+    });
+  })()`);
+  assert.equal(afterTitleKeys, savedDraft, '标题覆盖时 1 / Esc / Enter 不得改变求签或待缘状态');
+
+  assert.equal(await evaluate(client, `(() => {
+    const help = [...document.querySelectorAll('#screen .btn')].find((node) => node.textContent.trim() === '玩法');
+    help?.click();
+    return Boolean(help);
+  })()`), true, '标题页应能打开玩法帮助');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+  for (const key of ['1', 'Escape', 'Enter']) await pressKey(client, key);
+  const afterHelpKeys = await evaluate(client, `(() => {
+    const run = globalThis.__tianhu.run;
+    return JSON.stringify({
+      status: run.status,
+      draft: run.draft,
+      pendingOmen: run.pendingOmen,
+      charmIds: run.charmIds,
+      charmInstances: run.charmInstances,
+    });
+  })()`);
+  assert.equal(afterHelpKeys, savedDraft, '帮助覆盖时 1 / Esc / Enter 不得改变求签或待缘状态');
+  await click(client, '#screen .rowBtns .btn.green.big');
+  await click(client, '#screen .titleMenu > .btn.green.big');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+  assert.equal(await evaluate(client, `Boolean(document.querySelector('#screen'))`), false,
+    '点继续后应关闭标题覆盖');
+  assert.equal(await evaluate(client, `document.querySelector('#draftLayer').hidden`), false,
+    '点继续后应恢复求签层');
+  assert.equal(await evaluate(client, `document.activeElement?.classList.contains('charmPick') ?? false`), true,
+    '点继续后焦点应进入求签选项');
+  const firstRestoredCharm = await evaluate(client, `globalThis.__tianhu.run.draft.offers[0].charmId`);
+  await pressKey(client, '1');
+  const restoredPick = await evaluate(client, `(() => ({
+    draftClosed: globalThis.__tianhu.run.draft === null,
+    picked: globalThis.__tianhu.run.charmInstances.at(-1)?.charmId,
+    focus: document.activeElement?.id ?? '',
+  }))()`);
+  assert.equal(restoredPick.draftClosed, true, '点继续后数字键 1 应能完成选签');
+  assert.equal(restoredPick.picked, firstRestoredCharm, '数字键 1 应选择恢复签局的第一张');
+  assert.ok(['btnHu', 'btnReveal', 'btnSwap'].includes(restoredPick.focus), '恢复签局选完后焦点应回到主要操作');
+
+  // 教学关：说明卡在每个视口都必须完整在屏内，跳过按钮必须点得到。
+  // 卡片是按锚点算位置的，最容易在窄屏上被顶出可视区。
+  const tutorialUrl = `http://127.0.0.1:${serverPort}/src/?tutorial=1`;
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url: tutorialUrl });
+    await waitForPage(client);
+    await waitUntil(client, "Boolean(document.querySelector('#coach .coachCard'))", {
+      label: `${viewport.id}: 教学层`,
+    });
+    // 走到第一个需要动手的步骤，那一步的说明卡贴着底部按钮，最容易溢出
+    await evaluate(client, `(() => {
+      for (let i = 0; i < 3; i += 1) {
+        const next = document.querySelector('#coach .coachActions .btn.green');
+        if (next && !next.hidden) next.click();
+      }
+      return true;
+    })()`);
+    const coach = await evaluate(client, `(() => {
+      const card = document.querySelector('#coach .coachCard');
+      const skip = document.querySelector('#coach .coachActions .btn.grey');
+      const rect = card.getBoundingClientRect();
+      const skipRect = skip.getBoundingClientRect();
+      return {
+        step: document.querySelector('#coach .coachStep')?.textContent ?? '',
+        inView: rect.left >= -1 && rect.top >= -1
+          && rect.right <= innerWidth + 1 && rect.bottom <= innerHeight + 1,
+        skipWidth: skipRect.width,
+        skipHeight: skipRect.height,
+        ringed: Boolean(document.querySelector('#coach .coachRing')),
+        tiles: document.querySelectorAll('#handZone .tile').length,
+        selected: document.querySelectorAll('#handZone .tile.sel').length,
+      };
+    })()`);
+    assert.equal(coach.tiles, 14, `${viewport.id}: 教学固定牌谱应发 14 张`);
+    assert.equal(coach.selected, 3, `${viewport.id}: 亮组那一步应替玩家选好三张一萬`);
+    assert.ok(coach.inView, `${viewport.id}: 教学说明卡必须完整在屏内（${coach.step}）`);
+    assert.ok(coach.skipWidth >= 44 && coach.skipHeight >= 44,
+      `${viewport.id}: 跳过按钮太小 ${coach.skipWidth}×${coach.skipHeight}`);
+    results.push({ id: `tutorial-${viewport.id}`, viewport: { width: viewport.width, height: viewport.height }, ...coach });
+  }
+
+  // 百牌谱：五系页签在 required 六视口都可见、可点，卡牌列表只在面板内滚动。
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url: baseUrl });
+    await waitForPage(client);
+    await click(client, '#screen .titleMenu .libraryOpen');
+    const charmLibrary = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(charmLibrary.screenTitle, '百牌谱', `${viewport.id}: 应打开功能牌图鉴`);
+    assert.equal(charmLibrary.activeLibraryFamily, 'charm', `${viewport.id}: 默认显示灵签`);
+    assert.equal(charmLibrary.libraryCards, 22, `${viewport.id}: 应显示 22 张灵签与锦囊`);
+    assertMetrics(charmLibrary, viewport, `library-charm-${viewport.id}`, { expectTiles: false });
+    await click(client, '#screen .libraryTab[data-family="general"]');
+    const generalLibrary = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(generalLibrary.activeLibraryFamily, 'general', `${viewport.id}: 福将页签应切换`);
+    assert.equal(generalLibrary.libraryCards, 11, `${viewport.id}: 应显示 11 位福将`);
+    assertMetrics(generalLibrary, viewport, `library-general-${viewport.id}`, { expectTiles: false });
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `library-${viewport.id}`);
+    }
+    results.push({ id: `library-${viewport.id}`, ...generalLibrary });
+  }
 
   for (const viewport of VIEWPORTS) {
     await setViewport(client, viewport);
@@ -380,12 +712,43 @@ try {
     await startCurrentBlind(client, viewport.id);
     const metrics = await evaluate(client, METRICS_EXPRESSION);
     assertMetrics(metrics, viewport, viewport.id);
+    assert.equal(metrics.hudStatCount, 4, `${viewport.id}: 恢复四项资源状态`);
+    assert.equal(metrics.buildPanelParent, 'side', `${viewport.id}: 本局构筑应回到左栏`);
+    if (viewport.width / viewport.height >= .95) {
+      assert.equal(metrics.handRows, 1, `${viewport.id}: 横屏 14 张手牌必须单排`);
+    } else {
+      assert.ok(metrics.handRows <= 2, `${viewport.id}: 竖屏手牌最多两排`);
+    }
+    const expectedSlotHeight = viewport.id === 'mobile-landscape' ? 71.5
+      : viewport.width <= 420 ? 55.5
+        : viewport.width / viewport.height < .95 ? 63.5 : 105.5;
+    assert.ok(metrics.smallestSlotHeight >= expectedSlotHeight,
+      `${viewport.id}: 大开运位高度 ${metrics.smallestSlotHeight}/${expectedSlotHeight}`);
     await capture(client, artifactDir, viewport.id);
     results.push({ id: viewport.id, ...metrics });
   }
 
-  // 三签选一：最窄竖屏与主横屏都要完整可点
-  for (const viewport of [VIEWPORTS[0], VIEWPORTS[2]]) {
+  // 紧凑真机横屏：不是 required 平台矩阵，但直接覆盖本次真人反馈。
+  for (const viewport of COMPACT_LANDSCAPES) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await startCurrentBlind(client, viewport.id);
+    const metrics = await evaluate(client, METRICS_EXPRESSION);
+    assertMetrics(metrics, viewport, viewport.id);
+    assert.equal(metrics.handRows, 1, `${viewport.id}: 14 张手牌必须单排`);
+    assert.equal(metrics.hudStatCount, 4, `${viewport.id}: 不为换行问题删除状态`);
+    assert.equal(metrics.buildPanelParent, 'side', `${viewport.id}: 构筑仍在左栏`);
+    assert.ok(metrics.sideWidth <= 116.5, `${viewport.id}: 左栏应进入紧凑档 ${metrics.sideWidth}`);
+    assert.ok(metrics.mainWidth >= 535, `${viewport.id}: 主牌区应得到足够宽度 ${metrics.mainWidth}`);
+    assert.ok(metrics.smallestSlotHeight >= 57.5,
+      `${viewport.id}: 紧凑开运位仍要可读 ${metrics.smallestSlotHeight}`);
+    await capture(client, artifactDir, viewport.id);
+    results.push({ id: viewport.id, ...metrics });
+  }
+
+  // 普通三签：required 六视口都要完整可点，且签阶不能只靠颜色。
+  for (const viewport of VIEWPORTS) {
     await setViewport(client, viewport);
     await client.send('Page.navigate', { url });
     await waitForPage(client);
@@ -393,13 +756,301 @@ try {
     await evaluate(client, INSTALL_AUTOPLAY);
     const opened = await evaluate(client, `(() => { globalThis.__playToHu(); return globalThis.__revealOne(); })()`);
     assert.equal(opened, true, `${viewport.id}: 应当能亮出一组`);
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 600));
     const metrics = await evaluate(client, METRICS_EXPRESSION);
     assert.equal(metrics.draftOpen, true, `${viewport.id}: 三签选一应当展开`);
     assert.equal(metrics.charmCards, 3, `${viewport.id}: 必须有三张灵签`);
+    assert.equal(metrics.offerCount, 3, `${viewport.id}: 普通签局必须三选一`);
+    assert.equal(metrics.draftParent, 'app', `${viewport.id}: 求签层必须是 #app 根级子层`);
+    assert.equal(metrics.tierLabels.every((label) => ['银签', '金签', '彩签'].includes(label)), true,
+      `${viewport.id}: 每张签必须写明签阶`);
+    assert.equal(metrics.tierMarks.every((count, index) => (
+      count === ({ 银签: 1, 金签: 2, 彩签: 3 })[metrics.tierLabels[index]]
+    )), true, `${viewport.id}: 签纹数量必须匹配签阶`);
     assertMetrics(metrics, viewport, `draft-${viewport.id}`, { tileCount: metrics.tileCount });
-    await capture(client, artifactDir, `draft-${viewport.id}`);
+    assert.ok(metrics.smallestTouchWidth >= 47.5, `${viewport.id}: 灵签触控宽度`);
+    assert.ok(metrics.smallestTouchHeight >= 47.5, `${viewport.id}: 灵签触控高度`);
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `draft-${viewport.id}`);
+    }
     results.push({ id: `draft-${viewport.id}`, ...metrics });
+
+    // 视觉夹具：被动签进摘要；顶部仍只有三格主动锦囊；中央亮组只放一张代表牌与水墨字标。
+    const meldFixture = await evaluate(client, `(() => {
+      const run = globalThis.__tianhu.run;
+      const group = run.revealedGroups[0];
+      group.charmId = 'doubleJoy';
+      group.charmTier = 'gold';
+      group.charmInstanceId = 'fixture-passive';
+      run.charmIds = ['doubleJoy'];
+      run.charmInstances = [{ instanceId:'fixture-passive', charmId:'doubleJoy', tier:'gold', role:'momentum', source:'fixture' }];
+      run.draft = null;
+      run.status = 'playing';
+      run.emit();
+      return true;
+    })()`);
+    assert.equal(meldFixture, true, `${viewport.id}: 应能建立亮组视觉夹具`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+    const compactMeld = await evaluate(client, `(() => ({
+      melds: document.querySelectorAll('#revealZone .meld').length,
+      heroTiles: document.querySelectorAll('#revealZone .meldHeroTile canvas').length,
+      ink: document.querySelector('#revealZone .meldInkText')?.textContent?.trim() ?? '',
+      satchelSlots: document.querySelectorAll('#slotBar .satchelSlot').length,
+      passiveCount: document.querySelector('#passiveCount')?.textContent?.trim() ?? '',
+    }))()`);
+    assert.deepEqual(compactMeld, { melds: 1, heroTiles: 1, ink: '对', satchelSlots: 3, passiveCount: '1 张 · 点开看叠加' },
+      `${viewport.id}: 被动签进摘要，中央一组只显示一张代表牌与水墨字标`);
+    const meldMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assertMetrics(meldMetrics, viewport, `meld-${viewport.id}`, { tileCount: meldMetrics.tileCount });
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `meld-${viewport.id}`);
+    }
+    results.push({ id: `meld-${viewport.id}`, ...meldMetrics });
+  }
+
+  // 金色改命：required 六视口都要完成「选原牌 → 选目标牌」，并可用 Esc 返回上一步。
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await startCurrentBlind(client, `fate-${viewport.id}`);
+    const began = await evaluate(client, `(async () => {
+      const { makeTile, parseTileNotation, sortTiles } = await import('/src/core/tiles.mjs');
+      const run = globalThis.__tianhu.run;
+      run.looseTiles = sortTiles(parseTileNotation('123m 456m 789m 111p 2s 3s')
+        .map((spec, index) => makeTile('fate-' + index, spec.suit, spec.rank)));
+      run.revealedGroups = [];
+      run.status = 'charm-draft';
+      run.draft = {
+        draftId: 'viewport-fate', groupId: 'missing', offerCount: 1,
+        offers: [{ offerId: 'viewport-fate:o0', charmId: 'thunderGather', tier: 'gold', role: 'fate' }],
+        charmIds: ['thunderGather'], tierSlots: ['gold'],
+        pendingOmenReplacement: null, pendingFateChoice: null,
+      };
+      run.emit();
+      return run.chooseDraftOffer('viewport-fate:o0');
+    })()`);
+    assert.equal(began.needsFateChoice, true, `${viewport.id}: 聚雷签应进入目标选择`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));
+
+    const sourceMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(sourceMetrics.fateMode, true, `${viewport.id}: 改命层应标记 fate mode`);
+    assert.equal(sourceMetrics.fateOptions, 14, `${viewport.id}: 应重画完整 14 张未亮手牌`);
+    assert.equal(sourceMetrics.fateTargets, 0, `${viewport.id}: 第一步不应提前显示目标牌`);
+    assertMetrics(sourceMetrics, viewport, `fate-source-${viewport.id}`);
+    assert.ok(sourceMetrics.smallestTouchWidth >= 47.5, `${viewport.id}: 改命原牌触控宽度`);
+    assert.ok(sourceMetrics.smallestTouchHeight >= 47.5, `${viewport.id}: 改命原牌触控高度`);
+
+    await click(client, '#draftCards .fateSource:not(:disabled)');
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+    const targetMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.ok(targetMetrics.fateTargets > 0, `${viewport.id}: 选原牌后应显示合法目标牌`);
+    assertMetrics(targetMetrics, viewport, `fate-target-${viewport.id}`);
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `fate-target-${viewport.id}`);
+    }
+
+    await pressKey(client, 'Escape');
+    assert.equal(await evaluate(client, `globalThis.__tianhu.run.draft.pendingFateChoice.selectedTileId`), null,
+      `${viewport.id}: 目标步骤按 Esc 应返回原牌步骤`);
+    await click(client, '#draftCards .fateSource:not(:disabled)');
+    await click(client, '#draftCards .fateTarget');
+    const finished = await evaluate(client, `(() => ({
+      draftClosed: globalThis.__tianhu.run.draft === null,
+      picked: globalThis.__tianhu.run.charmIds.at(-1),
+      distance: globalThis.__tianhu.run.distance(),
+    }))()`);
+    assert.equal(finished.draftClosed, true, `${viewport.id}: 选择目标后应提交并关闭签局`);
+    assert.equal(finished.picked, 'thunderGather', `${viewport.id}: 应取得聚雷签`);
+    assert.ok(finished.distance < 1, `${viewport.id}: 目标选择应真实改善成胡距离`);
+    results.push({ id: `fate-${viewport.id}`, ...targetMetrics });
+  }
+
+  // 主动锦囊：点石必须在 required 六视口完成「选原牌 → 选任意合法牌种 → 预览确认」。
+  // 这里直接装入测试锦囊，不依赖随机求签，确保 34 牌种长列表和确认层都被覆盖。
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await startCurrentBlind(client, `satchel-${viewport.id}`);
+    const began = await evaluate(client, `(() => {
+      const run = globalThis.__tianhu.run;
+      run.satchel = [{
+        instanceId: 'fixture:turnStone', charmId: 'turnStone', tier: 'rainbow',
+        role: 'active', source: 'viewport-fixture'
+      }];
+      run.emit();
+      return run.beginSatchelUse('fixture:turnStone');
+    })()`);
+    assert.equal(began.needsTarget, true, `${viewport.id}: 点石锦囊应进入原牌选择`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));
+
+    const sourceMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(sourceMetrics.satchelMode, true, `${viewport.id}: 锦囊层应标记 satchel mode`);
+    assert.equal(sourceMetrics.fateOptions, 14, `${viewport.id}: 点石应重画完整 14 张未亮手牌`);
+    assert.equal(sourceMetrics.fateTargets, 0, `${viewport.id}: 第一步不应提前显示目标牌`);
+    assert.equal(sourceMetrics.satchelFilled, 1, `${viewport.id}: 顶部应显示一格已装锦囊`);
+    assertMetrics(sourceMetrics, viewport, `satchel-source-${viewport.id}`);
+
+    await click(client, '#draftCards .fateSource:not(:disabled)');
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+    const targetMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.ok(targetMetrics.fateTargets >= 30, `${viewport.id}: 点石应提供全部合法目标牌种`);
+    assertMetrics(targetMetrics, viewport, `satchel-target-${viewport.id}`);
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `satchel-target-${viewport.id}`);
+    }
+
+    await click(client, '#draftCards .fateTarget');
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+    const previewMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(previewMetrics.satchelMode, true, `${viewport.id}: 点石预览仍在锦囊层`);
+    assertMetrics(previewMetrics, viewport, `satchel-preview-${viewport.id}`);
+    const confirmed = await evaluate(client, `(() => {
+      const before = globalThis.__tianhu.run.looseTiles
+        .map((tile) => tile.id + ':' + tile.suit + ':' + tile.rank).join('|');
+      document.querySelector('#draftActions .btn.gold')?.click();
+      const run = globalThis.__tianhu.run;
+      return {
+        before,
+        after: run.looseTiles.map((tile) => tile.id + ':' + tile.suit + ':' + tile.rank).join('|'),
+        choiceClosed: run.activeChoice === null,
+        satchelCount: run.satchel.length,
+        used: run.fateSatchelUsed,
+      };
+    })()`);
+    assert.equal(confirmed.choiceClosed, true, `${viewport.id}: 确认后应关闭锦囊层`);
+    assert.equal(confirmed.satchelCount, 0, `${viewport.id}: 点石锦囊应消耗`);
+    assert.equal(confirmed.used, true, `${viewport.id}: 本副应记录已用点石`);
+    assert.notEqual(confirmed.after, confirmed.before, `${viewport.id}: 点石必须真实改牌`);
+    results.push({ id: `satchel-${viewport.id}`, ...targetMetrics });
+  }
+
+  // 广缘签兆：下一次求签变成四选一，第四张固定银签；数字键 4 能真正选中。
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await startCurrentBlind(client, `wide-draft-${viewport.id}`);
+    await evaluate(client, INSTALL_AUTOPLAY);
+    const opened = await evaluate(client, `(() => {
+      const run = globalThis.__tianhu.run;
+      run.pendingOmen = {
+        omenId: 'extraChoice', sourceCharmId: 'wideOmen',
+        acquiredAtBlind: 'test', consumeOn: 'nextCharmDraft'
+      };
+      run.emit();
+      globalThis.__playToHu();
+      return globalThis.__revealOne();
+    })()`);
+    assert.equal(opened, true, `${viewport.id}: 广缘后应当能打开求签`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 600));
+    const draftState = await evaluate(client, `(() => {
+      const draft = globalThis.__tianhu.run.draft;
+      return {
+        draftId: draft.draftId,
+        offerCount: draft.offerCount,
+        tiers: draft.offers.map((offer) => offer.tier),
+        appliedOmen: draft.appliedOmen?.omenId,
+        fourth: draft.offers[3]?.charmId,
+      };
+    })()`);
+    assert.equal(draftState.offerCount, 4, `${viewport.id}: 广缘必须四选一`);
+    assert.equal(draftState.tiers[3], 'silver', `${viewport.id}: 加签位固定银签`);
+    assert.equal(draftState.appliedOmen, 'extraChoice', `${viewport.id}: 签局要记录已应验签兆`);
+    const metrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(metrics.charmCards, 4, `${viewport.id}: 必须显示四张灵签`);
+    assert.equal(metrics.offerCount, 4, `${viewport.id}: UI 必须进入四签布局`);
+    assertMetrics(metrics, viewport, `wide-draft-${viewport.id}`, { tileCount: metrics.tileCount });
+    assert.ok(metrics.smallestTouchWidth >= 47.5, `${viewport.id}: 四签触控宽度`);
+    assert.ok(metrics.smallestTouchHeight >= 47.5, `${viewport.id}: 四签触控高度`);
+    if (viewport.id === 'mobile-narrow-portrait' || viewport.id === 'mobile-landscape') {
+      await capture(client, artifactDir, `wide-draft-${viewport.id}`);
+    }
+    const picked = await evaluate(client, `(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: '4', bubbles: true }));
+      const run = globalThis.__tianhu.run;
+      return {
+        draftClosed: run.draft === null,
+        picked: run.charmInstances.at(-1)?.charmId,
+      };
+    })()`);
+    assert.equal(picked.draftClosed, true, `${viewport.id}: 数字键 4 应关闭签局`);
+    assert.equal(picked.picked, draftState.fourth, `${viewport.id}: 数字键 4 应选第四张`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 40));
+    assert.ok(
+      ['btnHu', 'btnReveal', 'btnSwap'].includes(await evaluate(client, `document.activeElement?.id ?? ''`)),
+      `${viewport.id}: 选签关闭后焦点应回到主要操作`,
+    );
+    results.push({ id: `wide-draft-${viewport.id}`, ...metrics });
+  }
+
+  // 待缘已有内容时不能静默覆盖；竖屏和主横屏都要能取消并确认替换。
+  for (const viewport of [VIEWPORTS[0], VIEWPORTS[2]]) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await startCurrentBlind(client, `omen-replacement-${viewport.id}`);
+    await evaluate(client, INSTALL_AUTOPLAY);
+    assert.equal(await evaluate(client, `(() => { globalThis.__playToHu(); return globalThis.__revealOne(); })()`), true);
+    const replacementSetup = await evaluate(client, `(() => {
+      const run = globalThis.__tianhu.run;
+      const draft = run.draft;
+      const index = draft.offers.length - 1;
+      const offer = { ...draft.offers[index], charmId: 'wideOmen', tier: 'gold', role: 'omen' };
+      const offers = draft.offers.map((item, itemIndex) => itemIndex === index ? offer : item);
+      run.draft = {
+        ...draft,
+        offers,
+        charmIds: offers.map((item) => item.charmId),
+        tierSlots: offers.map((item) => item.tier),
+      };
+      run.pendingOmen = {
+        omenId: 'luckyTier', sourceCharmId: 'luckyOmen',
+        acquiredAtBlind: 'test', consumeOn: 'nextCharmDraft'
+      };
+      run.emit();
+      const result = run.chooseDraftOffer(offer.offerId);
+      return { draftId: draft.draftId, offerId: offer.offerId, offers: JSON.stringify(offers), needs: result.needsOmenReplace };
+    })()`);
+    assert.equal(replacementSetup.needs, true, `${viewport.id}: 待缘位已满时必须进入替换确认`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));
+    const replacementMetrics = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(replacementMetrics.draftOpen, true, `${viewport.id}: 替换确认仍属于同一个求签层`);
+    assertMetrics(replacementMetrics, viewport, `omen-replacement-${viewport.id}`, {
+      tileCount: replacementMetrics.tileCount,
+    });
+    assert.ok(replacementMetrics.smallestTouchHeight >= 47.5, `${viewport.id}: 替换按钮触控高度`);
+    await capture(client, artifactDir, `omen-replacement-${viewport.id}`);
+    const cancelled = await evaluate(client, `(() => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      const run = globalThis.__tianhu.run;
+      return {
+        draftId: run.draft?.draftId,
+        offers: JSON.stringify(run.draft?.offers),
+        replacement: run.draft?.pendingOmenReplacement,
+        pending: run.pendingOmen?.sourceCharmId,
+      };
+    })()`);
+    assert.equal(cancelled.draftId, replacementSetup.draftId, `${viewport.id}: Esc 不能重抽签局`);
+    assert.equal(cancelled.offers, replacementSetup.offers, `${viewport.id}: Esc 不能改变签内容或签阶`);
+    assert.equal(cancelled.replacement, null, `${viewport.id}: Esc 应返回原选签`);
+    assert.equal(cancelled.pending, 'luckyOmen', `${viewport.id}: 取消替换必须保留旧缘`);
+
+    assert.equal(await evaluate(client, `globalThis.__tianhu.run.chooseDraftOffer('${replacementSetup.offerId}').needsOmenReplace`), true);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+    await click(client, '#draftActions .btn.gold');
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+    const confirmed = await evaluate(client, `(() => ({
+      draftClosed: globalThis.__tianhu.run.draft === null,
+      pending: globalThis.__tianhu.run.pendingOmen?.sourceCharmId,
+      focus: document.activeElement?.id ?? '',
+      announcement: document.querySelector('#toast')?.textContent ?? '',
+    }))()`);
+    assert.equal(confirmed.draftClosed, true, `${viewport.id}: 确认替换后签局应关闭`);
+    assert.equal(confirmed.pending, 'wideOmen', `${viewport.id}: 确认替换后应保留新缘`);
+    assert.ok(['btnHu', 'btnReveal', 'btnSwap'].includes(confirmed.focus), `${viewport.id}: 替换后焦点应回到主要操作`);
+    assert.match(confirmed.announcement, /广缘签/, `${viewport.id}: 替换结果应通过 live toast 宣告`);
   }
 
   // 选牌状态要撑过 resize
@@ -414,18 +1065,49 @@ try {
   assert.equal(resized.selectedCount, 1, 'resize 后仍然保持已选牌');
   assertMetrics(resized, VIEWPORTS[1], 'resize-state');
 
-  // 选关 → 两副结算 → 百宝阁 → 选牌种 → 下一关选关
+  // 短局通关页在全部 required 视口都要能看到西圈加赛入口
+  for (const viewport of VIEWPORTS) {
+    await setViewport(client, viewport);
+    await client.send('Page.navigate', { url });
+    await waitForPage(client);
+    await evaluate(client, `(() => {
+      const run = globalThis.__tianhu.run;
+      run.anteIndex = 1;
+      run.blindKind = 'boss';
+      run.activeAnteCount = 2;
+      run.totalScore = 4321;
+      run.completedBlinds = [];
+      run.status = 'run-complete';
+      run.lastEvent = { type: 'run-complete', text: '短局通关' };
+      run.emit();
+    })()`);
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 180));
+    const complete = await evaluate(client, METRICS_EXPRESSION);
+    assert.equal(complete.screenTitle, '短局通关', `${viewport.id}: 应显示短局通关页`);
+    assert.equal(
+      await evaluate(client, `Boolean([...document.querySelectorAll('#screen button')]
+        .find((button) => button.textContent.includes('西圈加赛')))`),
+      true,
+      `${viewport.id}: 应显示西圈加赛入口`,
+    );
+    assertMetrics(complete, viewport, `short-complete-${viewport.id}`, { expectTiles: false });
+    results.push({ id: `short-complete-${viewport.id}`, ...complete });
+  }
+
+  // 选关 → 单副结算 → 请将三选一 → 下一关 → 普通百宝阁 → 选牌种
   await setViewport(client, VIEWPORTS.at(-1));
   await client.send('Page.navigate', { url });
   await waitForPage(client);
   await startCurrentBlind(client, 'settlement-flow');
   await evaluate(client, INSTALL_AUTOPLAY);
   const handsPerBlind = await evaluate(client, 'globalThis.__tianhu.app.state.handCount');
-  assert.equal(handsPerBlind, 2, '当前每关应当打两副');
+  assert.equal(handsPerBlind, 1, '当前每关应当只打一副');
   for (let index = 0; index < handsPerBlind; index += 1) {
     const status = await evaluate(client, 'globalThis.__autoHand(0)');
     assert.ok(['hand-won', 'hand-failed'].includes(status), `第 ${index + 1} 副异常状态 ${status}`);
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 4200));
+    await waitUntil(client, "Boolean(document.querySelector('#screen .title')?.textContent)", {
+      label: `第 ${index + 1} 副结算屏`,
+    });
     const settled = await evaluate(client, METRICS_EXPRESSION);
     assert.ok(settled.screenTitle, `第 ${index + 1} 副结束后应当出现结算屏`);
     if (index === 0) {
@@ -437,18 +1119,45 @@ try {
   }
 
   const shop = await evaluate(client, METRICS_EXPRESSION);
-  assert.equal(shop.screenTitle, '百宝阁', '两副过关后进入百宝阁');
+  assert.equal(shop.screenTitle, '请将台 · 三选一', '第一家店应当进入阶段 1 请将台');
   for (const viewport of [VIEWPORTS[2], VIEWPORTS[1]]) {
     await setViewport(client, viewport);
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));
     const metrics = await evaluate(client, METRICS_EXPRESSION);
-    assertMetrics(metrics, viewport, `shop-${viewport.id}`, { expectTiles: false });
-    await capture(client, artifactDir, `shop-${viewport.id}`);
-    results.push({ id: `shop-${viewport.id}`, ...metrics });
+    assertMetrics(metrics, viewport, `general-draft-${viewport.id}`, { expectTiles: false });
+    await capture(client, artifactDir, `general-draft-${viewport.id}`);
+    results.push({ id: `general-draft-${viewport.id}`, ...metrics });
   }
 
-  // 锻牌位要能走完「选牌种」这一步
+  // 请将台只能买一位；购买后回到庄局选关，再打进第二家普通百宝阁。
   await setViewport(client, VIEWPORTS.at(-1));
+  const pickedGeneral = await evaluate(client, `(() => {
+    const run = globalThis.__tianhu.run;
+    run.gold += 50;
+    const offer = run.shop.items[0];
+    const result = run.buy(offer.slotIndex);
+    return { ok: result.ok, picked: run.shop.generalPicked, allSold: run.shop.items.every((item) => item.sold) };
+  })()`);
+  assert.equal(pickedGeneral.ok, true, '请将台应当能购买一位福将');
+  assert.equal(Boolean(pickedGeneral.picked), true, '请将台应记录已选福将');
+  assert.equal(pickedGeneral.allSold, true, '选择一位后另外两位应一起锁定');
+  await click(client, '#screen .rowBtns .btn.green.big');
+  let nextBlind = await evaluate(client, METRICS_EXPRESSION);
+  assert.equal(nextBlind.screenTitle, '东圈', '离开请将台后回到东圈选关');
+  assert.equal(await evaluate(client, 'globalThis.__tianhu.run.blindKind'), 'big', '下一关应为庄局');
+
+  await startCurrentBlind(client, 'support-shop-flow');
+  const secondStatus = await evaluate(client, 'globalThis.__autoHand(0)');
+  assert.ok(['hand-won', 'hand-failed'].includes(secondStatus), `庄局异常状态 ${secondStatus}`);
+  await waitUntil(client, "Boolean(document.querySelector('#screen .title')?.textContent)", {
+    label: '庄局结算屏',
+  });
+  await click(client, '#screen .rowBtns .btn');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 200));
+  const supportShop = await evaluate(client, METRICS_EXPRESSION);
+  assert.equal(supportShop.screenTitle, '百宝阁', '第二家店应当恢复长期商品百宝阁');
+
+  // 锻牌位要能走完「选牌种」这一步
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 160));
   const opened = await evaluate(client, `(() => {
     const run = globalThis.__tianhu.run;
@@ -465,14 +1174,62 @@ try {
   await capture(client, artifactDir, 'kind-picker');
   results.push({ id: 'kind-picker', ...picker });
 
-  // 完成改造并离店后，要回到当前圈的下一关，不能直接发牌。
+  // 完成改造并离店后，要回到圈主选关，不能直接发牌。
   await click(client, '#kindGrid .kindBtn');
   await click(client, '#screen .rowBtns .btn.green.big');
-  const nextBlind = await evaluate(client, METRICS_EXPRESSION);
+  nextBlind = await evaluate(client, METRICS_EXPRESSION);
   assert.equal(nextBlind.screenTitle, '东圈', '离店后应当回到东圈选关');
-  assert.equal(await evaluate(client, 'globalThis.__tianhu.run.blindKind'), 'big',
-    '闲局之后应当轮到庄局');
+  assert.equal(await evaluate(client, 'globalThis.__tianhu.run.blindKind'), 'boss',
+    '庄局之后应当轮到圈主');
   assertMetrics(nextBlind, VIEWPORTS.at(-1), 'next-blind-select', { expectTiles: false });
+
+  // 独立重开后先跳闲局，再跳庄局；虽然 status 始终是 blind-select，屏幕也必须立即
+  // 重绘到圈主；旧的「跳局」按钮不能留在 DOM 中继续接受点击。
+  await evaluate(client, `globalThis.__tianhu.app.startRun({ seed: 20260728 })`);
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 120));
+  const skippedSmall = await evaluate(client, `(() => {
+    const current = document.querySelector('#screen .blindCard.current');
+    const skip = [...(current?.querySelectorAll('.blindActions .btn') ?? [])]
+      .find((button) => button.textContent.trim() === '跳局');
+    if (!skip) return false;
+    skip.click();
+    return true;
+  })()`);
+  assert.equal(skippedSmall, true, '闲局应当可以跳过');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+  const skippedBig = await evaluate(client, `(() => {
+    const current = document.querySelector('#screen .blindCard.current');
+    const skip = [...(current?.querySelectorAll('.blindActions .btn') ?? [])]
+      .find((button) => button.textContent.trim() === '跳局');
+    if (!skip) return false;
+    globalThis.__oldBigSkipButton = skip;
+    skip.click();
+    return true;
+  })()`);
+  assert.equal(skippedBig, true, '庄局选关卡应当提供跳局按钮');
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, 80));
+  const afterBigSkip = await evaluate(client, `(() => {
+    const current = document.querySelector('#screen .blindCard.current');
+    const currentButtons = [...(current?.querySelectorAll('.blindActions .btn') ?? [])];
+    const oldSkip = globalThis.__oldBigSkipButton;
+    return {
+      runBlindKind: globalThis.__tianhu.run.blindKind,
+      screenShowsBoss: current?.classList.contains('kind-boss') ?? false,
+      currentName: current?.querySelector('.cName')?.textContent?.trim() ?? null,
+      currentHasSkip: currentButtons.some((button) => button.textContent.trim() === '跳局'),
+      focusIsCurrentStart: document.activeElement === currentButtons
+        .find((button) => button.textContent.trim() === '开打'),
+      oldSkipStillClickable: Boolean(oldSkip?.isConnected && !oldSkip.disabled),
+    };
+  })()`);
+  assert.deepEqual(afterBigSkip, {
+    runBlindKind: 'boss',
+    screenShowsBoss: true,
+    currentName: '圈主',
+    currentHasSkip: false,
+    focusIsCurrentStart: true,
+    oldSkipStillClickable: false,
+  }, '跳过庄局后选关屏必须立即刷新到圈主，且移除旧跳局按钮');
 
   console.log(JSON.stringify({ ok: true, artifactDir, results }, null, 2));
 } finally {

@@ -6,11 +6,19 @@
 import {
   ANTES,
   BLIND_KINDS,
+  CONTENT_COUNTS,
   DECK_LIST,
   FAMILIES,
+  FAMILY_ORDER,
   getItem,
+  listItems,
 } from '../content/index.mjs';
-import { createTileBackCanvas, createTileCanvas, pixelText } from '../render/pixel.mjs';
+import {
+  createLogoCanvas,
+  createTileBackCanvas,
+  createTileCanvas,
+} from '../render/pixel.mjs';
+import { createCardArtwork } from '../render/card-art.mjs';
 
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -29,6 +37,11 @@ const button = (className, label, onClick) => {
 /** 所有覆盖屏共用的外壳。 */
 export function makeScreen(extraClass = '') {
   document.querySelector('#screen')?.remove();
+  // 明细弹层是局内的轻量浮层，任何覆盖屏出现时都不该压在它下面
+  document.querySelector('#sheet')?.remove();
+  // 标题页有独立水墨扉页，但仍留少量透明度给动态墨色；底下牌桌必须压暗，
+  // 否则 HUD 和开运位会从册页后面透出来。
+  document.body.classList.toggle('atTitle', extraClass.includes('titleScreen'));
   const screen = el('div', `screen ${extraClass}`.trim());
   screen.id = 'screen';
   const box = el('div', 'screenBox');
@@ -39,16 +52,30 @@ export function makeScreen(extraClass = '') {
 
 export function closeScreen() {
   document.querySelector('#screen')?.remove();
+  document.body.classList.remove('atTitle');
 }
 
 /* ---------------- 开始界面 ---------------- */
 
-export function showTitle({ deckId, hasSave, onStart, onContinue, onDeck, onSettings, onHelp }) {
+/** 标题页专属背景：水墨山月留白，Logo 与菜单由代码另外叠上。 */
+function titleBackdrop() {
+  const stage = el('div', 'titleBg');
+  stage.setAttribute('aria-hidden', 'true');
+  stage.append(el('div', 'titleGrain'));
+  return stage;
+}
+
+export function showTitle({
+  deckId, hasSave, onStart, onContinue, onDeck, onSettings, onHelp, onLibrary, onTutorial,
+}) {
   const box = makeScreen('titleScreen');
+  const deck = getItem('deck', deckId);
+  box.parentElement.prepend(titleBackdrop());
+
   const logo = el('div', 'titleLogo');
-  logo.append(pixelText('天胡', 22, '#f0c04a', '#7a3020', 0, 3));
+  logo.append(createLogoCanvas(3));
   box.append(logo);
-  box.append(el('div', 'subtitle', 'TIANHU · 麻将构筑肉鸽'));
+  box.append(el('div', 'subtitle titleTagline', '麻将构筑肉鸽 · 亮组求签 · 一路胡到西圈'));
 
   const fan = el('div', 'titleFan');
   for (const [suit, rank] of [['man', 1], ['pin', 5], ['sou', 1], ['honor', 5], ['honor', 6]]) {
@@ -61,12 +88,77 @@ export function showTitle({ deckId, hasSave, onStart, onContinue, onDeck, onSett
   menu.append(button(`btn ${hasSave ? 'play' : 'green'} big`, '开始新局 NEW RUN', onStart));
   const row = el('div', 'rowBtns');
   row.append(
-    button('btn grey', `牌组：${getItem('deck', deckId)?.name ?? '素面'}`, onDeck),
+    button('btn grey', `牌组：${deck?.name ?? '素面'}`, onDeck),
+    button('btn grey libraryOpen', '百牌谱', onLibrary),
+    button('btn grey tutorialOpen', '教学', onTutorial),
     button('btn grey', '设置', onSettings),
     button('btn grey', '玩法', onHelp),
   );
   menu.append(row);
   box.append(menu);
+  return box;
+}
+
+/* ---------------- 功能牌图鉴 ---------------- */
+
+const CHARM_TIER_NAMES = Object.freeze({ silver: '银签', gold: '金签', rainbow: '彩签' });
+const CHARM_ROLE_NAMES = Object.freeze({ momentum: '助势', fate: '改命', omen: '奇缘' });
+
+export function showLibrary({ initialFamily = 'charm', onBack }) {
+  const box = makeScreen('libraryScreen');
+  box.append(el('div', 'title sh', '百牌谱'));
+  const total = Object.values(CONTENT_COUNTS).reduce((sum, count) => sum + count, 0);
+  box.append(el('div', 'subtitle', `现行测试池 · ${total} 张功能牌 · 点按五系分类查看`));
+
+  const tabs = el('div', 'libraryTabs');
+  tabs.setAttribute('role', 'tablist');
+  const grid = el('div', 'libraryGrid');
+  grid.setAttribute('role', 'tabpanel');
+
+  const renderFamily = (family) => {
+    for (const tab of tabs.querySelectorAll('.libraryTab')) {
+      const active = tab.dataset.family === family;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
+    }
+    grid.replaceChildren();
+    grid.dataset.family = family;
+    grid.setAttribute('aria-label', `${FAMILIES[family].name}卡牌`);
+    for (const item of listItems(family)) {
+      const card = el('article', `card libraryCard family-${family}`);
+      card.dataset.libraryCard = `${family}:${item.id}`;
+      card.append(createCardArtwork(family, item));
+      card.append(el('div', 'cName', item.name));
+      card.append(el('div', 'cText', item.text));
+      let meta = `${FAMILIES[family].name} · ${item.duration}`;
+      if (family === 'charm') {
+        meta = `${CHARM_TIER_NAMES[item.tier]} · ${CHARM_ROLE_NAMES[item.functionRole]} · ${item.duration}`;
+      } else if (Number.isFinite(item.price)) {
+        meta = `${FAMILIES[family].name} · ${item.price} 金 · ${item.duration}`;
+      }
+      card.append(el('div', 'cMeta', meta));
+      card.append(el('div', 'libraryStatus', '测试池'));
+      grid.append(card);
+    }
+  };
+
+  for (const family of FAMILY_ORDER) {
+    const info = FAMILIES[family];
+    const tab = button('btn grey libraryTab', `${info.glyph} ${info.name} ${CONTENT_COUNTS[family]}`, () => {
+      renderFamily(family);
+    });
+    tab.dataset.family = family;
+    tab.setAttribute('role', 'tab');
+    tabs.append(tab);
+  }
+
+  box.append(tabs, grid);
+  const row = el('div', 'rowBtns');
+  row.append(button('btn green big', '返回', onBack));
+  box.append(row);
+  renderFamily(FAMILIES[initialFamily] ? initialFamily : 'charm');
+  box.querySelector('.libraryTab.active')?.focus({ preventScroll: true });
   return box;
 }
 
@@ -206,14 +298,19 @@ export function showHelp({ state, onBack }) {
   box.append(el('div', 'subtitle', 'TIANHU · 麻将构筑肉鸽'));
   const text = el('div', 'helpText');
   text.innerHTML = `
-    <p>一局打 <b>三圈</b>（东 / 南 / 西），每圈三关：<b>闲局 → 庄局 → 圈主</b>。
+    <p>标准短局打 <b>东 / 南两圈</b>，每圈三关：<b>闲局 → 庄局 → 圈主</b>；通关后可选西圈加赛。
        闲局和庄局可以<b>跳局</b>换一张手气，圈主必须打，而且带一条特殊规则。</p>
-    <p>每关 <b>${state.handCount} 副</b>牌打一个累计目标。手上永远 14 张，
+    <p>每关只打 <b>${state.handCount} 副</b>牌，过关后立即进百宝阁。手上永远 14 张，
        凑成<b>四组面子 + 一对将</b>或<b>七个对子</b>就能胡。</p>
+    <p><b>怎么出牌</b>：点手牌选中，再按上方的按钮；或者<b>直接拖起手牌往上拖</b>——
+       松手落在按钮上就执行那个动作，落在牌桌上会执行默认动作（能亮组就亮组，否则换牌）。
+       拖一张没选中的牌只出这一张，拖一张已选中的牌则出整组选择。</p>
     <p><b>换牌</b>：选中几张就一次换掉几张，只消耗 1 次换牌机会，每副 ${state.swapsPerHand} 次。
        <b>没用完的换牌，胡牌时每次换 ${state.goldPerUnusedSwap} 金。</b></p>
     <p><b>亮组</b>：选 2–4 张合法组合，花掉一个<b>开运位</b>，立刻三签选一。
        开运位每个留空给 +${state.emptySlotChips} 牌值和 +${state.goldPerEmptySlot} 金。</p>
+    <p>灵签同时有<b>银 / 金 / 彩</b>签阶和<b>助势 / 奇缘</b>职责。部分奇缘会留在待缘位，
+       在下一次求签时自动应验一次；广缘会把下一次求签变成四选一。</p>
     <p>得分 = <b>牌值 × 番势</b>。过关拿金币，进百宝阁买长期构筑。</p>
   `;
   const families = el('div', '');
@@ -226,7 +323,7 @@ export function showHelp({ state, onBack }) {
     families.append(line);
   }
   text.append(families);
-  text.append(el('p', 'lbl', '快捷键：Enter 换牌 · R 亮组 · H 胡牌 · Esc 取消 · 1/2/3 选灵签 · 结算时点一下快进'));
+  text.append(el('p', 'lbl', '快捷键：Enter 换牌 · R 亮组 · H 胡牌 · Esc 取消 · 1/2/3/4 选灵签 · 结算时点一下快进（胡牌按钮只在能胡时出现）'));
   box.append(text);
   const row = el('div', 'rowBtns');
   row.append(button('btn green big', '返回', onBack));

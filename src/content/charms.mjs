@@ -1,118 +1,141 @@
-/**
- * 灵签：亮组后三选一取得，只在本副生效。
- *
- * 三个位置固定承担三种角色：
- * - `group` 本组签：强化刚亮出的组合，保证下限。
- * - `pattern` 牌型签：强化本副某类结构或番种，上限更高。
- * - `wild` 奇签 / 财签：高波动、剩余资源或少量待结算金币。
- *
- * 框架期只做 6 张，够覆盖三种角色与三类效果（牌值 / 番势 / 金币）。
- */
+import { listContentItems, pickContentItem } from './library.mjs';
 
 /**
- * @param {object} spec
- * @returns {import('../core/scoring.mjs').ContentItem}
+ * 灵签内容与求签选池。
+ *
+ * `draftRole` 保留 V3 的本组 / 牌型 / 奇签三个固定货位；
+ * `functionRole` 是新卡面使用的助势 / 改命 / 奇缘职责；
+ * `tier` 是每个签名固定的银 / 金 / 彩签阶。
  */
-function charm(spec) {
-  return Object.freeze({
-    family: 'charm',
-    duration: '本副',
-    match: null,
-    ...spec,
-    effects: Object.freeze(spec.effects),
-  });
-}
 
-export const CHARMS = Object.freeze({
-  tailwind: charm({
-    id: 'tailwind',
-    name: '顺风签',
-    glyph: '顺',
-    role: 'group',
-    match: ['chow'],
-    text: '本副每个顺子 +20 牌值。',
-    effects: [{ kind: 'chipsPerGroup', groupKinds: ['chow'], value: 20 }],
-  }),
-  carving: charm({
-    id: 'carving',
-    name: '刻福签',
-    glyph: '刻',
-    role: 'group',
-    match: ['pung', 'kong'],
-    text: '本副每个刻子或杠 +28 牌值。',
-    effects: [{ kind: 'chipsPerGroup', groupKinds: ['pung', 'kong'], value: 28 }],
-  }),
-  doubleJoy: charm({
-    id: 'doubleJoy',
-    name: '双喜签',
-    glyph: '喜',
-    role: 'group',
-    match: ['pair'],
-    text: '本副每个对子 +20 牌值。',
-    effects: [{ kind: 'chipsPerGroup', groupKinds: ['pair'], value: 20 }],
-  }),
-  dragonVein: charm({
-    id: 'dragonVein',
-    name: '龙脉签',
-    glyph: '龙',
-    role: 'pattern',
-    match: ['chow'],
-    text: '本副顺子达到 3 组时，番势 +1。',
-    effects: [{ kind: 'multIfGroupCount', groupKinds: ['chow'], min: 3, value: 1 }],
-  }),
-  honorSeal: charm({
-    id: 'honorSeal',
-    name: '镇字签',
-    glyph: '字',
-    role: 'pattern',
-    text: '本副每张字牌 +9 牌值。',
-    effects: [{ kind: 'chipsPerTile', suit: 'honor', value: 9 }],
-  }),
-  doubleBless: charm({
-    id: 'doubleBless',
-    name: '倍喜签',
-    glyph: '倍',
-    role: 'wild',
-    text: '本副番势 +1。',
-    effects: [{ kind: 'multFlat', value: 1 }],
-  }),
-  wealth: charm({
-    id: 'wealth',
-    name: '财神签',
-    glyph: '财',
-    role: 'wild',
-    text: '立刻 +1 待结算金币。',
-    effects: [{ kind: 'goldNow', value: 1 }],
-  }),
-  reserve: charm({
-    id: 'reserve',
-    name: '余裕签',
-    glyph: '余',
-    role: 'wild',
-    text: '胡牌时每个剩余换牌 +20 牌值。',
-    effects: [{ kind: 'chipsPerRemainingSwap', value: 20 }],
-  }),
+export const CHARM_TIERS = Object.freeze({
+  silver: Object.freeze({ id: 'silver', name: '银签', rank: 1 }),
+  gold: Object.freeze({ id: 'gold', name: '金签', rank: 2 }),
+  rainbow: Object.freeze({ id: 'rainbow', name: '彩签', rank: 3 }),
 });
 
-export const CHARM_LIST = Object.freeze(Object.values(CHARMS));
+export const CHARM_FUNCTION_ROLES = Object.freeze({
+  momentum: Object.freeze({ id: 'momentum', name: '助势' }),
+  fate: Object.freeze({ id: 'fate', name: '改命' }),
+  omen: Object.freeze({ id: 'omen', name: '奇缘' }),
+});
+
+export const OMEN_IDS = Object.freeze({
+  luckyTier: 'luckyTier',
+  extraChoice: 'extraChoice',
+});
+
+export const CHARM_LIST = Object.freeze(listContentItems('charm', { pool: 'charm-draft' }));
+export const CHARMS = Object.freeze(Object.fromEntries(CHARM_LIST.map((item) => [item.id, item])));
+
+const TIER_FALLBACKS = Object.freeze({
+  silver: Object.freeze(['silver']),
+  gold: Object.freeze(['gold', 'silver']),
+  rainbow: Object.freeze(['rainbow', 'gold', 'silver']),
+});
+
+function isDelayedOmen(item) {
+  return Boolean(item.omen?.consumeOn === 'nextCharmDraft');
+}
+
+function rolePool(draftRole, revealedKind, { excludeDelayedOmens = false, excludeCharmIds = [] } = {}) {
+  const excluded = new Set(excludeCharmIds);
+  let pool = CHARM_LIST.filter((item) => !excluded.has(item.id));
+  if (excludeDelayedOmens) pool = pool.filter((item) => !isDelayedOmen(item));
+  if (draftRole === 'extra') return pool;
+  pool = pool.filter((item) => item.draftRole === draftRole);
+  if (draftRole !== 'group') return pool;
+  const matching = pool.filter((item) => item.match?.includes(revealedKind));
+  return matching.length ? matching : pool;
+}
 
 /**
- * 三签选一：固定给出 本组签 / 牌型签 / 奇签 各一张。
- * @param {ReturnType<import('../core/tiles.mjs').createSeededRng>} rng
- * @param {string} revealedKind 刚亮出的组合类型
- * @returns {string[]} 三个灵签 id
+ * 先抽整局签阶版式，再把唯一高阶位放进确实有对应内容的前三个职责位。
+ * 普通局概率固定为银 72% / 金 25% / 彩 3%；第四个加签位始终为银。
  */
-export function draftCharms(rng, revealedKind) {
-  const byRole = (role) => CHARM_LIST.filter((item) => item.role === role);
-  const groupPool = byRole('group').filter((item) => item.match?.includes(revealedKind));
+export function rollCharmTierSlots(rng, revealedKind, {
+  offerCount = 3,
+  minimumTier = null,
+  rainbowChance = 0,
+  excludeDelayedOmens = false,
+  excludeCharmIds = [],
+} = {}) {
+  let highTier = null;
+  if (minimumTier === 'gold') {
+    highTier = rng.next() < rainbowChance ? 'rainbow' : 'gold';
+  } else {
+    const roll = rng.next();
+    if (roll >= 0.97) highTier = 'rainbow';
+    else if (roll >= 0.72) highTier = 'gold';
+  }
+
+  const tierSlots = new Array(offerCount).fill('silver');
+  if (!highTier) return tierSlots;
+
+  const slotRoles = ['group', 'pattern', 'wild'];
+  for (const candidateTier of TIER_FALLBACKS[highTier]) {
+    if (candidateTier === 'silver') return tierSlots;
+    const eligible = slotRoles
+      .map((draftRole, index) => ({ draftRole, index }))
+      .filter(({ draftRole }) => rolePool(draftRole, revealedKind, {
+        excludeDelayedOmens,
+        excludeCharmIds,
+      }).some((item) => item.tier === candidateTier));
+    if (!eligible.length) continue;
+    tierSlots[rng.pick(eligible).index] = candidateTier;
+    return tierSlots;
+  }
+  return tierSlots;
+}
+
+/**
+ * 按已经锁定的签阶位置抽取内容。返回的卡牌 tier 永远等于对应 tierSlot；
+ * 若内容池不足则返回不足数量，让调用方决定保留签兆并回退普通签局。
+ */
+export function draftCharmOffers(rng, revealedKind, {
+  offerCount = 3,
+  tierSlots = new Array(offerCount).fill('silver'),
+  excludeDelayedOmens = false,
+  excludeCharmIds = [],
+  preferredArchetype = null,
+} = {}) {
+  const slotRoles = ['group', 'pattern', 'wild', 'extra'];
   const chosen = [];
-  const take = (pool) => {
-    const candidates = pool.filter((item) => !chosen.some((picked) => picked.id === item.id));
-    if (candidates.length) chosen.push(rng.pick(candidates));
-  };
-  take(groupPool.length ? groupPool : byRole('group'));
-  take(byRole('pattern'));
-  take(byRole('wild'));
-  while (chosen.length < 3) take(CHARM_LIST);
-  return chosen.map((item) => item.id);
+
+  for (let index = 0; index < offerCount; index += 1) {
+    const draftRole = slotRoles[index] ?? 'extra';
+    const tier = tierSlots[index] ?? 'silver';
+    let pool = rolePool(draftRole, revealedKind, {
+      excludeDelayedOmens,
+      excludeCharmIds,
+    }).filter((item) => item.tier === tier && !chosen.some((picked) => picked.id === item.id));
+    if (draftRole === 'pattern' && preferredArchetype) {
+      const matching = pool.filter((item) => item.archetype === preferredArchetype);
+      if (matching.length) pool = matching;
+    }
+    if (!pool.length) break;
+    chosen.push(pickContentItem(rng, pool));
+  }
+
+  return chosen.map((item, index) => Object.freeze({
+    charmId: item.id,
+    tier: item.tier,
+    role: item.functionRole,
+    draftRole: item.draftRole,
+    slotRole: slotRoles[index] ?? 'extra',
+  }));
+}
+
+/**
+ * 兼容旧调用点的简化接口。新 Run 使用 `rollCharmTierSlots + draftCharmOffers`。
+ * @returns {string[]}
+ */
+export function draftCharms(rng, revealedKind, options = {}) {
+  const offerCount = options.offerCount ?? 3;
+  const tierSlots = options.tierSlots ?? rollCharmTierSlots(rng, revealedKind, {
+    ...options,
+    offerCount,
+  });
+  return draftCharmOffers(rng, revealedKind, { ...options, offerCount, tierSlots })
+    .map((offer) => offer.charmId);
 }

@@ -15,7 +15,7 @@
 src/
 ├── core/          # 牌型、距离、发牌、五系效果、结算流水线、一局状态机
 ├── content/       # 五系内容表与关卡表
-├── state/         # 存档序列化与版本迁移
+├── state/         # 存档序列化、版本迁移与有序写入协调
 ├── ui/            # 界面、动画、音效
 ├── render/        # 麻将牌与像素图形
 ├── platforms/     # web / youtube / tiktok / meta 适配层
@@ -57,11 +57,13 @@ interface PlatformAdapter {
 
 每个版本提供显式迁移函数，不直接覆盖无法解析的旧存档。
 
+所有平台的真实 `save` 调用必须严格串行：普通状态可短暂防抖，只保留尚未入队的最新快照；求签打开、重抽、选择、签兆替换和生命周期暂停等关键点立即入队。单次平台写入失败不能堵死后续保存，也不能允许旧请求晚完成后覆盖新状态。
+
 ## 测试边界
 
 - 牌型识别：表驱动单元测试。
 - 计分：固定 seed 的结果测试。
-- 存档：往返序列化和旧版本迁移测试。
+- 存档：往返序列化、旧版本迁移、异步写入顺序与失败恢复测试。
 - UI：视口矩阵截图和关键按钮可达性。
 - 平台：SDK mock 与官方 test suite。
 
@@ -70,8 +72,13 @@ interface PlatformAdapter {
 - 原生 ES Module + JSDoc，零依赖；不引入 TypeScript 与打包器，等内容规模或协作人数上来再迁移。
 - 保留像素 Canvas 牌面渲染器：34 个牌种运行时自绘并缓存，零外部请求。
 - 内容配置就是 `src/content/` 下的纯数据模块，不额外引入 JSON 或代码生成。
+- 五系功能卡由 `src/content/library.mjs` 的单一 `CONTENT_LIBRARY` 管理；抽签、商店、计分和百牌谱共用同一数据对象。下架使用 `enabled: false`，无存档迁移不硬删 id。见 `decisions/0018-unified-content-library.md`。
 - 结算流水线输出有序 steps，动画照着播，不参与算分。
 - 存档存完整手内状态 + `schemaVersion`，不用 seed 重放。
+- 当前正式切片使用 schema v5：除 v4 状态外，保存三格`satchel`、主动目标选择`activeChoice`、
+  奖励型 / 额外换牌分账、洗壁次数与本副改命限制；v4 → v5 显式迁移为空锦囊且保留旧换牌收益。
+- 灵签数据以`resolution: immediate | reserve`区分选中即生效与收入锦囊，主动规则挂在 Library 的`active`描述；
+  `core/run.mjs`执行规则，`ui/app.mjs`只根据快照渲染确认与目标流程。
 
 ## 待定技术决定
 
