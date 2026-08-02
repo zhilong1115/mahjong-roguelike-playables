@@ -72,28 +72,18 @@ export function showTitle({
   const deck = getItem('deck', deckId);
   box.parentElement.prepend(titleBackdrop());
 
-  const hero = el('div', 'titleHero');
-  const identity = el('div', 'titleIdentity');
-  identity.append(el('div', 'titleKicker', 'TIANHU · MAHJONG ROGUELIKE'));
   const logo = el('div', 'titleLogo');
   logo.append(createLogoCanvas(3));
-  identity.append(logo);
-  identity.append(el('div', 'subtitle titleTagline', '亮组求签 · 养成牌势 · 一路胡到西圈'));
+  box.append(logo);
+  box.append(el('div', 'subtitle titleTagline', '麻将构筑肉鸽 · 亮组求签 · 一路胡到西圈'));
 
   const fan = el('div', 'titleFan');
   for (const [suit, rank] of [['man', 1], ['pin', 5], ['sou', 1], ['honor', 5], ['honor', 6]]) {
     fan.append(createTileCanvas({ id: `t-${suit}-${rank}`, suit, rank }, 2));
   }
-  identity.append(fan);
+  box.append(fan);
 
   const menu = el('div', 'titleMenu');
-  const menuHead = el('div', 'titleMenuHead');
-  menuHead.append(el('span', 'titleMenuSeal', '局'));
-  const menuCopy = el('span', 'titleMenuCopy');
-  menuCopy.append(el('b', '', hasSave ? '牌局未完' : '开一局天胡'));
-  menuCopy.append(el('small', '', hasSave ? '继续原局，或另起新局' : '短局构筑 · 随开随玩'));
-  menuHead.append(menuCopy);
-  menu.append(menuHead);
   if (hasSave) menu.append(button('btn green big', '继续上局 CONTINUE', onContinue));
   menu.append(button(`btn ${hasSave ? 'play' : 'green'} big`, '开始新局 NEW RUN', onStart));
   const row = el('div', 'rowBtns');
@@ -105,8 +95,7 @@ export function showTitle({
     button('btn grey', '玩法', onHelp),
   );
   menu.append(row);
-  hero.append(identity, menu);
-  box.append(hero);
+  box.append(menu);
   return box;
 }
 
@@ -253,22 +242,13 @@ export function showSettings({ settings, seed, onChange, onClearSave, onBack }) 
 export function showBlindSelect({ state, onSelect, onSkip, onTitle }) {
   const box = makeScreen('blindScreen');
   const ante = state.ante;
-  const header = el('div', 'blindHeader');
-  header.append(el('div', 'blindKicker', `牌局路线 · 第 ${state.anteNumber} / ${state.anteCount} 圈`));
-  header.append(el('div', 'title sh', `${ante.name}`));
-  header.append(el('div', 'subtitle',
-    `现有 ${state.gold} 金 · 本圈预告：${ante.announced.join(' / ')} · 过关后进入百宝阁`));
-  box.append(header);
+  box.append(el('div', 'title sh', `${ante.name}`));
+  box.append(el('div', 'subtitle',
+    `第 ${state.anteNumber} / ${state.anteCount} 圈 · 现有 ${state.gold} 金 · 预告番种：${ante.announced.join(' / ')}`));
 
   const grid = el('div', 'blindGrid');
-  grid.setAttribute('aria-label', `${ante.name}路线`);
-  for (const [index, card] of state.blindCards.entries()) {
+  for (const card of state.blindCards) {
     const node = el('div', `blindCard kind-${card.kind}${card.current ? ' current' : ''}${card.outcome ? ` done-${card.outcome}` : ''}`);
-    node.style.setProperty('--route-index', index);
-    const status = card.outcome
-      ? (card.outcome === 'cleared' ? '已过' : '已跳')
-      : (card.current ? '当前关' : '待战');
-    node.append(el('div', 'blindState', status));
     const chip = el('div', 'blindChip', card.label);
     chip.style.background = card.chip;
     node.append(chip);
@@ -292,7 +272,6 @@ export function showBlindSelect({ state, onSelect, onSkip, onTitle }) {
     grid.append(node);
   }
   box.append(grid);
-  box.append(el('div', 'blindRouteNote', '闲局 → 庄局 → 圈主 · 越过前关，方见后局'));
 
   if (state.tags.length) {
     const tags = el('div', 'tagRow');
